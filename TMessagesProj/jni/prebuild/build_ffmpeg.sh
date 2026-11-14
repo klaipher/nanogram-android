@@ -53,7 +53,8 @@ INSTALL_DIR="$BUILD_ROOT/install"
 
 # Nanogram: speed over size; --enable-small made FFmpeg compile with -Os and pick size-first code paths.
 ENABLE_SMALL="${ENABLE_SMALL:-0}"
-FFMPEG_OPTFLAGS="${FFMPEG_OPTFLAGS--O2}"
+# Empty = FFmpeg's own default (-O3), the same as Nanogram iOS and macOS.
+FFMPEG_OPTFLAGS="${FFMPEG_OPTFLAGS:-}"
 FFMPEG_LIBVPX_VP8="${FFMPEG_LIBVPX_VP8:-1}"
 FFMPEG_PARSERS="${FFMPEG_PARSERS:-1}"
 
