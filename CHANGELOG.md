@@ -5,6 +5,10 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-MANIFEST-1: drop dead permissions and legacy storage flags (cleartext kept)
+- `READ_EXTERNAL_STORAGE` now `maxSdkVersion=32` (Android 13+ uses READ_MEDIA_*). Removed `MANAGE_ACCOUNTS`, `READ_PROFILE`, `AUTHENTICATE_ACCOUNTS` (no-ops at minSdk 24), `USE_FINGERPRINT` (BiometricPrompt + `USE_BIOMETRIC` stay; no FingerprintManager use left), `requestLegacyExternalStorage` and `preserveLegacyExternalStorage` (ignored at targetSdk 30+). `GET_ACCOUNTS` stays for the sync adapter.
+- Owner decision: global `usesCleartextTraffic` stays as upstream (in-app http links); no network_security_config. `INSTALL_SHORTCUT` stays (not in the verified change list).
+- Check: `aapt dump permissions` before/after on the release APK; smoke test contact sync, biometric unlock and gallery on API 28 and 35.
 ### ANDROID-LOCALE-1: system App languages entry (Android 13+)
 - `res/xml/locales_config.xml` (the bundled UI languages: en, ar, de, es, it, ko, nl, pt-BR, ru, uk) and `android:localeConfig`, so Settings > System > Languages > App languages lists Nanogram. When the system locale changes on API 33+ and the user has not picked an in-app language, `LocaleController.onDeviceConfigurationChange` maps it to a language pack (`NanogramLocaleMap`: language_script_region, language_script, language_region, language) and applies it without saving an override; server language packs and the in-app choice are untouched. Downloaded packs are not listed in the system screen.
 - Tests: `NanogramLocaleMapTest` (JVM).
