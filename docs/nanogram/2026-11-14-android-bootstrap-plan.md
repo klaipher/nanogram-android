@@ -24,7 +24,7 @@ master, and only when the owner asks.
 2. Version follows upstream (13.2.2); our build number is the versionCode base like upstream (7303) — only the build number changes.
 3. ABIs: `arm64-v8a` only by default for dev and release (like "Apple Silicon only" on Mac).
    A full `-Pnanogram.abis=all` build stays possible.
-4. minSdk stays 23 (upstream). This keeps Firebase BoM at 34.x (35.x needs minSdk 24).
+4. minSdk was 23 here; it is now 31 (Android 12), owner decision 2026-11-14 (Firebase BoM 35 needs 24).
    targetSdk stays 36 (upstream); compileSdk moves to the newest stable platform.
 5. Own api_id: the same one as iOS, read by the tools from `~/.config/telegram-ios/api-credentials.json`
    at build time, never committed.

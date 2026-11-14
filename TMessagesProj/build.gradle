@@ -163,20 +163,18 @@ android {
     }
 
     defaultConfig {
-        minSdk 24
+        minSdk 31
         targetSdk 36
 
         // Own api_id/api_hash come from Tools/dev/ng (environment); plain Gradle builds keep upstream's public values.
         buildConfigField "int", "NANOGRAM_API_ID", (findProperty('nanogramApiId') ?: '4').toString()
         buildConfigField "String", "NANOGRAM_API_HASH", "\"" + (findProperty('nanogramApiHash') ?: '014b35b6184100b085b0d0572f9b5103') + "\""
 
-        vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
-        multiDexEnabled true
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-24', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-31', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                         "-DNANOGRAM_CCACHE=${providers.environmentVariable('NANOGRAM_CCACHE').getOrElse('')}",
                         "-DNANOGRAM_THINLTO_CACHE_DIR=${providers.environmentVariable('NANOGRAM_THINLTO_CACHE_DIR').getOrElse('')}",
                         "-DNANOGRAM_PREBUILD_DIR=${findProperty('nanogramPrebuildDir') ?: ''}"
@@ -196,7 +194,6 @@ android {
         debug {
             jniDebuggable true
             shrinkResources false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"" + getProps("BETA_PRIVATE_URL") + "\""
@@ -209,7 +206,6 @@ android {
         HA_private {
             matchingFallbacks = ['release']
             jniDebuggable false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"" + getProps("BETA_PRIVATE_URL") + "\""
@@ -222,7 +218,6 @@ android {
         HA_public {
             matchingFallbacks = ['release']
             jniDebuggable false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"" + getProps("BETA_PUBLIC_URL") + "\""
@@ -235,7 +230,6 @@ android {
         HA_hardcore {
             matchingFallbacks = ['release']
             jniDebuggable false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"" + getProps("BETA_HARDCORE_URL") + "\""
@@ -248,7 +242,6 @@ android {
         standalone {
             matchingFallbacks = ['release']
             jniDebuggable false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"\""
@@ -261,7 +254,6 @@ android {
         release {
             jniDebuggable false
             shrinkResources false
-            multiDexEnabled true
             ndk.debugSymbolLevel = 'FULL'
             buildConfigField "String", "BUILD_VERSION_STRING", "\"" + APP_VERSION_NAME + "\""
             buildConfigField "String", "BETA_URL", "\"\""

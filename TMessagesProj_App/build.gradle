@@ -95,7 +95,6 @@ android {
             applicationIdSuffix ".beta"
             minifyEnabled false
             shrinkResources false
-            multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
@@ -107,7 +106,6 @@ android {
             applicationIdSuffix ".web"
             minifyEnabled true
             shrinkResources true
-            multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
@@ -118,7 +116,6 @@ android {
             signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
-            multiDexEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), '../TMessagesProj/proguard-rules.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
@@ -173,13 +170,11 @@ android {
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
 
     defaultConfig {
-        minSdk 24
+        minSdk 31
         targetSdk 36
         versionName APP_VERSION_NAME
 
-        multiDexEnabled true
 
-        vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
     }
 

@@ -1,6 +1,6 @@
 # Android specs
 
-Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `main` (fdd4407; `perf-core`, `perf-ui`, `profiles`, `ffmpeg-9` and `native-opt` are merged). `nanogram/build-modernize` is still unmerged and owns `TMessagesProj/build.gradle`, `jni/CMakeLists.txt` and `jni/prebuild/*`: any spec that adds a Gradle dependency waits for it. minSdk is 24 in the Gradle files (the bootstrap plan text still says 23; fix the doc). targetSdk 36. The team has no Android device, so device-only measurements are owner-dependent; such changes ship behind default-off flags.
+Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `main` (fdd4407; `perf-core`, `perf-ui`, `profiles`, `ffmpeg-9` and `native-opt` are merged). `nanogram/build-modernize` is still unmerged and owns `TMessagesProj/build.gradle`, `jni/CMakeLists.txt` and `jni/prebuild/*`: any spec that adds a Gradle dependency waits for it. minSdk is 31 in the Gradle files (owner decision 2026-11-14, was 24). targetSdk 36. The team has no Android device, so device-only measurements are owner-dependent; such changes ship behind default-off flags.
 
 ---
 

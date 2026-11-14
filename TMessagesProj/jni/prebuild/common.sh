@@ -22,7 +22,7 @@ toolchain_property() {
 NDK_VERSION="${NDK_VERSION:-$(toolchain_property ndk)}"
 NDK_VERSION="${NDK_VERSION:-30.0.16248370}"
 API="${API:-$(toolchain_property prebuildApi)}"
-API="${API:-24}"
+API="${API:-31}"
 ABIS="${ABIS:-arm64-v8a armeabi-v7a x86_64 x86}"
 
 host_os="$(uname -s)"

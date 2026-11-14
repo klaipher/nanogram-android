@@ -351,7 +351,7 @@ def prebuild_key(abis: list[str]) -> str:
     for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
         if p.is_file():
             h.update(p.name.encode() + p.read_bytes())
-    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')};rust={TC.get('rust', '')}".encode())
+    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '31')};rust={TC.get('rust', '')}".encode())
     h.update(json.dumps(build_tool_versions(abis), sort_keys=True).encode())
     return h.hexdigest()[:16]
 
@@ -374,7 +374,7 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
     env.update({
         "ABIS": " ".join(abis),
         "NDK_VERSION": TC["ndk"],
-        "API": TC.get("prebuildApi", "23"),
+        "API": TC.get("prebuildApi", "31"),
         "ANDROID_SDK_ROOT": str(sdk_root()),
         "LIB_DIR": str(tmp / "lib"),
         "INCLUDE_DIR": str(tmp / "include"),

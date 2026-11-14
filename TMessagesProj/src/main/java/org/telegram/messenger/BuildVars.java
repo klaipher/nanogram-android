@@ -23,7 +23,7 @@ public class BuildVars {
     public static boolean DEBUG_PRIVATE_VERSION = BuildConfig.DEBUG_PRIVATE_VERSION;
     public static boolean USE_CLOUD_STRINGS = true;
     public static boolean CHECK_UPDATES = true;
-    public static boolean NO_SCOPED_STORAGE = Build.VERSION.SDK_INT <= 29;
+    public static boolean NO_SCOPED_STORAGE = false;
     public static String BUILD_VERSION_STRING = BuildConfig.BUILD_VERSION_STRING;
 
     public static int APP_ID = BuildConfig.NANOGRAM_API_ID;

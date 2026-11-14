@@ -32,7 +32,7 @@
 #   ANDROID_NDK_HOME=/path/to/ndk
 #   ANDROID_SDK_ROOT=/path/to/sdk
 #   NDK_VERSION=27.2.12479018
-#   API=21
+#   API=31
 #   ABIS="arm64-v8a armeabi-v7a x86_64 x86"
 #   JOBS=16
 
