@@ -111,7 +111,6 @@ public class StatsController extends BaseController {
                 }
                 statsFile.seek(0);
                 statsFile.write(byteArrayOutputStream.buf, 0, byteArrayOutputStream.count());
-                statsFile.getFD().sync();
             } catch (Exception ignore) {
 
             }

@@ -287,15 +287,19 @@ public final class WidgetSandboxSession {
      * switch is on. Background thread.
      */
     public static void prewarmEngine(Context context) {
-        if (!WidgetEngine.isolated || disabledByConfig()) return;
+        if (!WidgetEngine.isolated || disabledByConfig() || !usedRecently()) return;
         android.app.ActivityManager activityManager = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         if (activityManager == null || activityManager.isLowRamDevice()) return;
-        try {
-            WidgetRemoteEngine.INSTANCE.prewarm(context);
-        } catch (Exception e) {
-            org.telegram.messenger.FileLog.e(e);
+        // A push-woken or just-backgrounded process never gets onBecameBackground again, so it must not take the hold.
+        org.telegram.ui.Components.ForegroundDetector foreground = org.telegram.ui.Components.ForegroundDetector.getInstance();
+        if (foreground != null && !foreground.isBackground()) {
+            try {
+                WidgetRemoteEngine.INSTANCE.prewarm(context);
+            } catch (Exception e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
         }
-        // An engine that died while the app was in the background is bound again when it comes back.
+        // The hold is given up in the background and taken again here, also after an engine that died meanwhile.
         if (!foregroundWatched) {
             org.telegram.ui.Components.ForegroundDetector detector = org.telegram.ui.Components.ForegroundDetector.getInstance();
             if (detector != null) {
@@ -308,6 +312,7 @@ public final class WidgetSandboxSession {
 
                     @Override
                     public void onBecameBackground() {
+                        org.telegram.messenger.Utilities.globalQueue.postRunnable(WidgetRemoteEngine.INSTANCE::release);
                     }
                 });
             }
@@ -315,6 +320,25 @@ public final class WidgetSandboxSession {
     }
 
     private static boolean foregroundWatched;
+
+    // The engine process is only kept for users who open widgets; the first widget of anyone else binds it on demand.
+    private static final String LAST_USE_KEY = "nanogram_widget_last_use";
+    private static final long RECENT_USE_MS = 14L * 24 * 60 * 60 * 1000;
+
+    private static boolean usedRecently() {
+        long last = org.telegram.messenger.MessagesController.getGlobalMainSettings().getLong(LAST_USE_KEY, 0);
+        long now = System.currentTimeMillis();
+        return last != 0 && now - last < RECENT_USE_MS && now >= last;
+    }
+
+    private static void noteUsed() {
+        android.content.SharedPreferences settings = org.telegram.messenger.MessagesController.getGlobalMainSettings();
+        long now = System.currentTimeMillis();
+        long last = settings.getLong(LAST_USE_KEY, 0);
+        if (last == 0 || now < last || now - last > 24L * 60 * 60 * 1000) {
+            settings.edit().putLong(LAST_USE_KEY, now).apply();
+        }
+    }
 
     /**
      * The kill switch (AppGlobalConfig#widgetsDisabled): true when the config of any logged-in account turns
@@ -338,6 +362,7 @@ public final class WidgetSandboxSession {
             throw new IllegalStateException("Start WidgetSandboxSession off UI");
         // The last gate before any widget code runs: every session, the chat's and the debug runners', comes here.
         if (disabledByConfig()) throw new IllegalStateException("Widgets are disabled by the app config");
+        noteUsed();
         // Set before the session exists: nothing reads it until the creator hands this object over.
         if (this.widthPx == 0) this.widthPx = widthPx;
         Trace.beginSection("WidgetSandbox:Create");

@@ -59,7 +59,18 @@ final class WidgetRemoteEngine extends WidgetEngine {
         }
     }
 
-    // Guarded by `lock`: the app's own hold on `binding` (prewarm), never released, so no idle unbind.
+    /** Gives up the app's hold (prewarm) when the app goes to the background: the idle unbind then ends the process. */
+    void release() {
+        synchronized (lock) {
+            kept = false;
+            Connection binding = connection;
+            if (binding == null || !binding.held) return;
+            binding.held = false;
+            released(binding);
+        }
+    }
+
+    // Guarded by `lock`: the app's own hold on `binding` (prewarm), kept until release().
     private void hold(Connection binding) {
         if (binding.held) return;
         binding.held = true;

@@ -327,6 +327,7 @@ public class MessagesStorage extends BaseController {
             database.executeFast("PRAGMA secure_delete = ON").stepThis().dispose();
             database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
             database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
+            database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
             database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
 
             if (createTable) {
@@ -440,6 +441,7 @@ public class MessagesStorage extends BaseController {
                 database.executeFast("PRAGMA secure_delete = ON").stepThis().dispose();
                 database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
                 database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
+                database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
                 database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
             } catch (SQLiteException e) {
                 FileLog.e(new Exception(e));
@@ -1644,7 +1646,13 @@ public class MessagesStorage extends BaseController {
                 state6 = null;
                 database.commitTransaction();
                 database.executeFast("PRAGMA journal_size_limit = 0").stepThis().dispose();
-                database.executeFast("VACUUM").stepThis().dispose();
+                // temp_store = MEMORY would build the whole compacted copy in RAM.
+                database.executeFast("PRAGMA temp_store = FILE").stepThis().dispose();
+                try {
+                    database.executeFast("VACUUM").stepThis().dispose();
+                } finally {
+                    database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
+                }
                 database.executeFast("PRAGMA journal_size_limit = -1").stepThis().dispose();
 
                 getMessagesController().getTopicsController().databaseCleared();

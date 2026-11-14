@@ -1084,6 +1084,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private SparseArray<MessageObject> voiceMessagesPlaylistMap;
 
     private static Runnable refreshGalleryRunnable;
+    // A MediaStore change while the app is in the background only sets this; checkGallery() reloads once on return.
+    private static volatile boolean galleryChangedWhilePaused;
     public static AlbumEntry allMediaAlbumEntry;
     public static AlbumEntry allPhotosAlbumEntry;
     public static AlbumEntry allVideosAlbumEntry;
@@ -1101,6 +1103,21 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private int playerNum;
     private String shouldSavePositionForCurrentAudio;
     private long lastSaveTime;
+    private volatile long lastHiddenProgressTick;
+    private String pendingSavedPositionKey;
+    private float pendingSavedPosition;
+
+    // Main thread. Written every 5 s while playing and at pause/stop, so a normal stop resumes at the exact second.
+    private void flushSavedPosition() {
+        final String key = pendingSavedPositionKey;
+        if (key == null) {
+            return;
+        }
+        final float position = pendingSavedPosition;
+        pendingSavedPositionKey = null;
+        lastSaveTime = SystemClock.elapsedRealtime();
+        Utilities.globalQueue.postRunnable(() -> ApplicationLoader.applicationContext.getSharedPreferences("media_saved_pos", Activity.MODE_PRIVATE).edit().putFloat(key, position).apply());
+    }
     private float currentPlaybackSpeed = 1.0f;
     private float currentMusicPlaybackSpeed = 1.0f;
     private float fastPlaybackSpeed = 1.0f;
@@ -1343,6 +1360,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
+            if (ApplicationLoader.mainInterfacePaused) {
+                galleryChangedWhilePaused = true;
+                return;
+            }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
@@ -1358,6 +1379,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
+            if (ApplicationLoader.mainInterfacePaused) {
+                galleryChangedWhilePaused = true;
+                return;
+            }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
@@ -1370,6 +1395,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     public static void checkGallery() {
         if (Build.VERSION.SDK_INT < 24 || allPhotosAlbumEntry == null) {
+            return;
+        }
+        if (galleryChangedWhilePaused) {
+            galleryChangedWhilePaused = false;
+            if (refreshGalleryRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
+                refreshGalleryRunnable = null;
+            }
+            loadGalleryPhotosAlbums(0);
             return;
         }
         final int prevSize = allPhotosAlbumEntry.photos.size();
@@ -1695,6 +1729,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 @Override
                 public void run() {
                     synchronized (sync) {
+                        // Screen off: nothing draws the progress, so audio-only playback ticks once a second.
+                        if (audioPlayer != null && videoPlayer == null && !ApplicationLoader.isScreenOn) {
+                            final long tick = SystemClock.elapsedRealtime();
+                            if (tick - lastHiddenProgressTick < 1000) {
+                                return;
+                            }
+                            lastHiddenProgressTick = tick;
+                        }
                         AndroidUtilities.runOnUIThread(() -> {
                             if ((audioPlayer != null || videoPlayer != null) && !isPaused) {
                                 try {
@@ -1727,13 +1769,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                                     currentPlayingMessageObject.audioProgress = value;
                                     currentPlayingMessageObject.audioProgressSec = (int) (lastProgress / 1000);
                                     currentPlayingMessageObject.bufferedProgress = bufferedValue;
-                                    if (value >= 0 && shouldSavePositionForCurrentAudio != null && SystemClock.elapsedRealtime() - lastSaveTime >= 1000) {
-                                        final String saveFor = shouldSavePositionForCurrentAudio;
-                                        lastSaveTime = SystemClock.elapsedRealtime();
-                                        Utilities.globalQueue.postRunnable(() -> {
-                                            SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("media_saved_pos", Activity.MODE_PRIVATE).edit();
-                                            editor.putFloat(saveFor, value).commit();
-                                        });
+                                    if (value >= 0 && shouldSavePositionForCurrentAudio != null) {
+                                        pendingSavedPositionKey = shouldSavePositionForCurrentAudio;
+                                        pendingSavedPosition = value;
+                                        if (SystemClock.elapsedRealtime() - lastSaveTime >= 5000) {
+                                            flushSavedPosition();
+                                        }
                                     }
                                     NotificationCenter.getInstance(currentPlayingMessageObject.currentAccount).postNotificationName(NotificationCenter.messagePlayingProgressDidChanged, currentPlayingMessageObject.getId(), value);
                                 } catch (Exception e) {
@@ -2553,6 +2594,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if (stopService && restoreMusicPlaylistState()) {
             return;
         }
+        flushSavedPosition();
 
         if (audioPlayer != null) {
             if (reporter != null) {
@@ -4410,6 +4452,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             return false;
         }
         stopProgressTimer();
+        flushSavedPosition();
         try {
             if (audioPlayer != null) {
                 if (smoothFade && !CastSync.isActive() && !playingMessageObject.isVoice() && (playingMessageObject.getDuration() * (1f - playingMessageObject.audioProgress) > 1) && LaunchActivity.isResumed) {

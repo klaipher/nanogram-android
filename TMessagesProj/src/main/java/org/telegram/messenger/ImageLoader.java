@@ -2794,6 +2794,24 @@ public class ImageLoader {
         }
     }
 
+    // Main thread. Eviction runs entryRemoved, which only recycles entries nobody uses, like normal LRU eviction.
+    public static void onTrimMemory(int level) {
+        final ImageLoader loader = Instance;
+        if (loader == null) {
+            return;
+        }
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE || level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            loader.clearMemory();
+            loader.wallpaperMemCache.evictAll();
+        } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            loader.lottieMemCache.evictAll();
+            loader.memCache.trimToSize(loader.memCache.maxSize() / 2);
+            loader.smallImagesMemCache.trimToSize(loader.smallImagesMemCache.maxSize() / 2);
+        } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            loader.memCache.trimToSize(loader.memCache.maxSize() / 2);
+        }
+    }
+
     public void clearMemory() {
         smallImagesMemCache.evictAll();
         memCache.evictAll();

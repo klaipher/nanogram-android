@@ -77,6 +77,29 @@ Newest first: version, build number, date, commit; what changed and how.
 - BATTERY-7: Theme.onAppPaused()/onAppResumed() release and re-register the ambient light sensor (Automatic night mode)
   from LaunchActivity.onPause/onResume; lastBrightnessValue is kept to avoid a flicker. Re-registration is direct, not via
   checkAutoNightThemeConditions, so no theme change is evaluated on resume.
+### Performance: core pass (branch nanogram/perf-core)
+Commit ids are in `git log nanogram/perf-core`; each message starts with the finding id. Details and how to measure:
+docs/nanogram/performance.md.
+- UI-2: FileLog opens and prunes its files on `logQueue`; the start line and the app label (binder call) leave the main
+  thread; the crash handler resolves the label when it writes.
+- UI-4, MEMORY-2: the `:widgets` process is prewarmed only for users with a widget session in the last 14 days, and its
+  hold is released in the background (30 s idle unbind), taken again in the foreground.
+- BATTERY-1: `updateTimerProc` at most every 250 ms per account instead of every network loop wake-up.
+- BATTERY-2, BATTERY-6: audio-only progress ticks 1/s with the screen off; long-audio position saved with `apply()`
+  every 5 s and on pause/stop.
+- BATTERY-3: a closed poll is applied to the queued message, so expired polls stop being re-fetched.
+- BATTERY-5: MediaStore observers do nothing in the background; one reload in `checkGallery()` on return.
+- MEMORY-1: `ImageLoader.onTrimMemory` frees caches by level. MEMORY-3: `VACUUM` uses a temp file.
+- IO-1: plain downloads without O_SYNC per chunk (ranges recorded after `force(false)`, one sync before the rename).
+  IO-2: `synchronous=NORMAL` for cache4.db. IO-3: files database in WAL, one transaction in `putPath`. IO-4: MP4 muxer
+  syncs once. IO-5: streaming reads cache the available window. IO-6: tgnet.dat writes coalesced (1 s). IO-7: no fsync
+  for the usage counters. IO-8: 128 KB copy buffers. IO-9: `sharing/` copies deleted after 30 days.
+- Review fixes: no engine hold in a background or push-woken process; `cleanup()` forces the data file before closing so
+  the newest ranges are recorded on pause; `clearAll` waits for log deletion (`FileLog.cleanupLogsSync`); the start line
+  is queued first again (the label follows as `build ...`); `fatal` exits in debug-private even if the log did not
+  open; docs list the power-loss trade-offs of IO-1 and IO-2 and the right file name for IO-3.
+- Not done: BATTERY-4 (port of tgcalls ad9aa93, b483fca, abbdaed, 67e8982 with `tools/dev/tgcalls-port` from the iOS
+  repo plus a pin bump) needs the shared fork and a native build; left for the main session.
 
 ### Native LTO for all code (ThinLTO)
 - voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose

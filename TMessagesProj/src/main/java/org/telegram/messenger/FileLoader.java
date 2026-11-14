@@ -1784,11 +1784,10 @@ public class FileLoader extends BaseController {
 
     public static boolean copyFile(InputStream sourceFile, File destFile, int maxSize) throws IOException {
         FileOutputStream out = new FileOutputStream(destFile);
-        byte[] buf = new byte[4096];
+        byte[] buf = new byte[128 * 1024];
         int len;
         int totalLen = 0;
-        while ((len = sourceFile.read(buf)) > 0) {
-            Thread.yield();
+        while ((len = sourceFile.read(buf, 0, maxSize > 0 ? Math.min(buf.length, maxSize - totalLen) : buf.length)) > 0) {
             out.write(buf, 0, len);
             totalLen += len;
             if (maxSize > 0 && totalLen >= maxSize) {

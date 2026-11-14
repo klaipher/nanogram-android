@@ -120,6 +120,10 @@ public class LruCache<T> {
         return previous;
     }
 
+    public final void trimToSize(int maxSize) {
+        trimToSize(maxSize, null);
+    }
+
     /**
      * @param maxSize the maximum size of the cache before returning. May be -1
      *     to evict even 0-sized elements.

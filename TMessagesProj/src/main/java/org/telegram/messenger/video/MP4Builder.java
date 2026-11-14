@@ -99,9 +99,6 @@ public class MP4Builder {
         mdat.setDataOffset(0);
         mdat.setContentSize(0);
         fos.flush();
-        if (allowSyncFiles) {
-            fos.getFD().sync();
-        }
     }
 
     public long writeSampleData(int trackIndex, ByteBuffer byteBuf, MediaCodec.BufferInfo bufferInfo, boolean writeLength) throws Exception {
@@ -173,10 +170,8 @@ public class MP4Builder {
         dataOffset += bufferInfo.size;
 
         if (flush) {
+            // No fsync per chunk: the upload reader in this process sees the written data; finishMovie syncs once.
             fos.flush();
-            if (allowSyncFiles) {
-                fos.getFD().sync();
-            }
             return fc.position();
         }
         return 0;
