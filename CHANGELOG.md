@@ -4,6 +4,18 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### In-app updates and release tooling
+- Updates come from GitHub: the app fetches `update.json` from `klaipher/nanogram-android-releases` (HTTPS, at most
+  every 6 hours, or from Settings > Check for updates), downloads the APK to its cache with progress, verifies SHA-256,
+  package name, versionCode and that the signing certificate equals the installed app's, then installs through a
+  PackageInstaller session (asks for "install unknown apps" first). `NanogramUpdater` plus copies of the beta update UI
+  (`NanogramUpdateLayout`, `NanogramUpdateAlertDialog`) are wired through upstream's custom-update hooks in
+  `ApplicationLoaderImpl`, so the existing "Update" bar and sheet are reused and `help.getAppUpdate` is never sent.
+  Off in debug builds unless the debug-menu toggle is on.
+- `ng release`: release build, `update.json` (versionCode from aapt2), private release (APK, mapping, native symbols,
+  CHANGELOG section) then public release marked latest; refuses dirty or unpushed trees; `--dry-run`. Helpers and tests in
+  `Tools/dev/ngrelease.py`, `Tools/dev/tests`. Guide: `docs/nanogram/releases.md`.
+
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),
   DrKLO/Telegram 21f7d109 (commit 406cbeb).
