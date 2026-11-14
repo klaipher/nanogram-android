@@ -980,8 +980,8 @@ public final class QrScanOverlay extends FrameLayout {
     @Nullable
     private static Scanned decode(Bitmap bitmap, @Nullable NanogramVision.Barcodes visionReader, @Nullable QRCodeReader zxingReader, Utilities.CallbackReturn<String, Boolean> accept) {
         final int w = bitmap.getWidth(), h = bitmap.getHeight();
-        if (visionReader != null && visionReader.isOperational()) {
-            final List<Barcode> codes = visionReader.detect(bitmap);
+        final List<Barcode> codes = visionReader != null && visionReader.isOperational() ? visionReader.detect(bitmap) : null;
+        if (NanogramVision.useDetectorResult(visionReader != null, visionReader != null && visionReader.isOperational())) {
             for (int i = 0; i < codes.size(); i++) {
                 final Barcode code = codes.get(i);
                 final String text = code.getRawValue() != null ? code.getRawValue().trim() : null;

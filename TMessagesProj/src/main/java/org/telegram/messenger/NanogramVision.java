@@ -2,11 +2,13 @@ package org.telegram.messenger;
 
 import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
+import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.tasks.Tasks;
+import com.google.mlkit.common.MlKitException;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
@@ -19,7 +21,9 @@ import com.google.mlkit.vision.face.FaceDetectorOptions;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Synchronous ML Kit barcode and face detection for background threads, replacing the retired Mobile Vision library.
@@ -29,8 +33,43 @@ import java.util.concurrent.TimeUnit;
 public final class NanogramVision {
 
     private static final long TIMEOUT_SECONDS = 10;
+    private static final long BACKOFF_MS = 30_000;
+    private static volatile long unavailableUntil;
 
     private NanogramVision() {
+    }
+
+    /** A detector that failed during the call has no say: its caller falls back to ZXing for the same frame. */
+    public static boolean useDetectorResult(boolean hasDetector, boolean operationalAfterDetect) {
+        return hasDetector && operationalAfterDetect;
+    }
+
+    static boolean inBackoff(long now, long until) {
+        return now < until;
+    }
+
+    private static boolean transientFailure(Throwable e) {
+        return e instanceof TimeoutException
+                || e instanceof ExecutionException && e.getCause() instanceof MlKitException && ((MlKitException) e.getCause()).getErrorCode() == MlKitException.UNAVAILABLE
+                || e instanceof MlKitException && ((MlKitException) e).getErrorCode() == MlKitException.UNAVAILABLE;
+    }
+
+    /** Returns true when the failure is permanent for this detector; transient ones (model still downloading, timeout) pause ML Kit process-wide and log once per pause. */
+    private static boolean onFailure(Throwable e) {
+        if (!transientFailure(e)) {
+            FileLog.e(e);
+            return true;
+        }
+        final long now = SystemClock.elapsedRealtime();
+        if (!inBackoff(now, unavailableUntil)) {
+            FileLog.e(e);
+        }
+        unavailableUntil = now + BACKOFF_MS;
+        return false;
+    }
+
+    private static boolean paused() {
+        return inBackoff(SystemClock.elapsedRealtime(), unavailableUntil);
     }
 
     public static int normalizeRotation(int degrees) {
@@ -60,7 +99,7 @@ public final class NanogramVision {
         }
 
         public boolean isOperational() {
-            return !broken;
+            return !broken && !paused();
         }
 
         @NonNull
@@ -75,7 +114,7 @@ public final class NanogramVision {
 
         @NonNull
         private List<Barcode> run(InputImage image) {
-            if (broken || scanner == null) {
+            if (broken || scanner == null || paused()) {
                 return Collections.emptyList();
             }
             try {
@@ -85,8 +124,9 @@ public final class NanogramVision {
                 Thread.currentThread().interrupt();
                 return Collections.emptyList();
             } catch (Throwable e) {
-                broken = true;
-                FileLog.e(e);
+                if (onFailure(e)) {
+                    broken = true;
+                }
                 return Collections.emptyList();
             }
         }
@@ -122,12 +162,12 @@ public final class NanogramVision {
         }
 
         public boolean isOperational() {
-            return !broken;
+            return !broken && !paused();
         }
 
         @Nullable
         public List<Face> detect(@NonNull Bitmap bitmap, int rotationDegrees) {
-            if (broken || detector == null) {
+            if (broken || detector == null || paused()) {
                 return null;
             }
             try {
@@ -136,8 +176,9 @@ public final class NanogramVision {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (Throwable e) {
-                broken = true;
-                FileLog.e(e);
+                if (onFailure(e)) {
+                    broken = true;
+                }
                 return null;
             }
         }

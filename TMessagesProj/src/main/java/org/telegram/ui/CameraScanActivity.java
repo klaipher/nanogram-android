@@ -1252,8 +1252,8 @@ public class CameraScanActivity extends BaseFragment {
             RectF bounds = new RectF();
             PointF[] cornerPoints = null;
             int width = 1, height = 1;
+            List<Barcode> codes = null;
             if (visionQrReader != null && visionQrReader.isOperational()) {
-                List<Barcode> codes;
                 if (bitmap != null) {
                     width = bitmap.getWidth();
                     height = bitmap.getHeight();
@@ -1263,6 +1263,8 @@ public class CameraScanActivity extends BaseFragment {
                     height = size.getWidth();
                     codes = visionQrReader.detect(data, size.getWidth(), size.getHeight());
                 }
+            }
+            if (NanogramVision.useDetectorResult(visionQrReader != null, visionQrReader != null && visionQrReader.isOperational())) {
                 if (codes != null && codes.size() > 0) {
                     Barcode code = codes.get(0);
                     text = code.getRawValue();
