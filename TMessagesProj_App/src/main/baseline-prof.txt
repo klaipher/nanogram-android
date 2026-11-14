@@ -1,5 +1,6 @@
 # Hand-written post-login rules (the emulator cannot log in, so the generated profile cannot cover them).
-# Flags: H hot (compiled ahead of time), S startup (dex layout), P post-startup. Wildcards are expanded by AGP at build.
+# Flags: H hot (compiled ahead of time), S startup (ART startup methods), P post-startup. Wildcards are expanded by AGP at build.
+# The R8 dex layout reads only startup-prof.txt (src/main/baselineProfiles), not the S flags here.
 # Kept to the startup, chat-list scroll and open-chat paths; the generated profile adds the logged-out start flow.
 
 # Core runtime shared by every screen
@@ -178,6 +179,13 @@ HPLorg/telegram/messenger/FileLoader;->load*(**)**
 HPLorg/telegram/messenger/FileLoader;->get*Path(**)**
 HPLorg/telegram/ui/Components/BackupImageView;->*(**)**
 HPLorg/telegram/ui/Components/AvatarDrawable;->*(**)**
+
+# Logged-in root screen: LaunchActivity starts MainTabsActivity (glass tab bar) which hosts DialogsActivity
+HSPLorg/telegram/ui/MainTabsActivity;->*(**)**
+HSPLorg/telegram/ui/MainTabsActivity$*;->*(**)**
+HSPLorg/telegram/ui/MainTabsActivityController;->*(**)**
+HSPLorg/telegram/ui/MainTabsLayout;->*(**)**
+HSPLorg/telegram/ui/Components/glass/GlassTabView;->*(**)**
 
 # Chat list: DialogsActivity, DialogCell, adapter
 HSPLorg/telegram/ui/DialogsActivity;->createView(**)**
