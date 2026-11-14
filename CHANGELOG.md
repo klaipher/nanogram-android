@@ -5,6 +5,10 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-NET-1: network state from the default NetworkCallback (experimental, off)
+- Flag `net_callback` (`NanogramSystemFlags`, default off): the default `NetworkCallback` feeds `NanogramNetworkState` (internet capability, metered, roaming, transport), `isNetworkOnline*` answers from that cache after the first callback (legacy NetworkInfo path before it), and the CONNECTIVITY_ACTION receiver is not registered. Account checks (`checkConnection`, `FileLoader.onNetworkChanged`) run only when online/transport/metered/roaming changes, and a stale `onLost` of a replaced network is ignored. VALIDATED is deliberately not required (captive portals, VPN), as before.
+- Not changed: `isConnectionSlow` and the Wi-Fi/roaming helpers still read `currentNetworkInfo` (refreshed once per network change instead of by every broadcast); they need the telephony subtype.
+- Tests: `NanogramNetworkStateTest` (JVM).
 ### ANDROID-POWER-1: Lite mode follows system Battery Saver and thermal status
 - LiteMode's power saver now also applies while the system Battery Saver is on or the thermal status is SEVERE or worse (`NanogramPowerPolicy`, fed by a POWER_SAVE_MODE_CHANGED receiver and `PowerManager.addThermalStatusListener`, API 29+). Previously only the battery percent threshold applied. On by default (owner decision); flips go through the existing `onPowerSaverApplied` path.
 - Experimental flag `power_skip_charging` (`NanogramSystemFlags`, default off): ignore the percent trigger while charging.

@@ -37,6 +37,8 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
 import org.telegram.messenger.nanogram.NanogramDiagnostics;
+import org.telegram.messenger.nanogram.NanogramNetworkState;
+import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
@@ -204,24 +206,34 @@ public class ApplicationLoader extends Application {
 
         try {
             connectivityManager = (ConnectivityManager) ApplicationLoader.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
-            BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    try {
-                        currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
-                    } catch (Throwable ignore) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && NanogramSystemFlags.isEnabled(NanogramSystemFlags.NETWORK_CALLBACK)) {
+                registerNetworkStateCallback();
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
 
-                    }
+        try {
+            if (networkStateCallback == null) {
+                BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        try {
+                            currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
+                        } catch (Throwable ignore) {
 
-                    boolean isSlow = isConnectionSlow();
-                    for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                        ConnectionsManager.getInstance(a).checkConnection();
-                        FileLoader.getInstance(a).onNetworkChanged(isSlow);
+                        }
+
+                        boolean isSlow = isConnectionSlow();
+                        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                            ConnectionsManager.getInstance(a).checkConnection();
+                            FileLoader.getInstance(a).onNetworkChanged(isSlow);
+                        }
                     }
-                }
-            };
-            IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
-            ApplicationLoader.applicationContext.registerReceiver(networkStateReceiver, filter);
+                };
+                IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+                ApplicationLoader.applicationContext.registerReceiver(networkStateReceiver, filter);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -456,6 +468,53 @@ public class ApplicationLoader extends Application {
         return true;
     }
 
+    private static final NanogramNetworkState networkState = new NanogramNetworkState();
+    private static ConnectivityManager.NetworkCallback networkStateCallback;
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
+    private static void registerNetworkStateCallback() {
+        networkStateCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(@NonNull Network network) {
+                lastKnownNetworkType = -1;
+            }
+
+            @Override
+            public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
+                final int transport = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? 1 : capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? 2 : 3;
+                final boolean changed = networkState.onCapabilities(network, capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+                        !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED), !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING), transport);
+                if (changed) {
+                    onDefaultNetworkChanged();
+                }
+            }
+
+            @Override
+            public void onLost(@NonNull Network network) {
+                if (networkState.onLost(network)) {
+                    onDefaultNetworkChanged();
+                }
+            }
+        };
+        connectivityManager.registerDefaultNetworkCallback(networkStateCallback);
+    }
+
+    private static void onDefaultNetworkChanged() {
+        lastKnownNetworkType = -1;
+        try {
+            currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        } catch (Throwable ignore) {
+
+        }
+        AndroidUtilities.runOnUIThread(() -> {
+            final boolean isSlow = isConnectionSlow();
+            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                ConnectionsManager.getInstance(a).checkConnection();
+                FileLoader.getInstance(a).onNetworkChanged(isSlow);
+            }
+        });
+    }
+
     private static long lastNetworkCheck = -1;
     private static void ensureCurrentNetworkGet() {
         final long now = System.currentTimeMillis();
@@ -612,6 +671,9 @@ public class ApplicationLoader extends Application {
     }
 
     public static boolean isNetworkOnlineRealtime() {
+        if (networkStateCallback != null && networkState.isInitialized()) {
+            return networkState.isOnline();
+        }
         try {
             ConnectivityManager connectivityManager = (ConnectivityManager) ApplicationLoader.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connectivityManager.getActiveNetworkInfo();
