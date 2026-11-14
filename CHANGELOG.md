@@ -5,6 +5,14 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### libyuv: klaipher/libyuv nanogram (947f5326), the single source for iOS, macOS and Android (W1/W2)
+- `TMessagesProj/jni/third_party/libyuv` moves from chromium.googlesource.com 28ce69c2 to klaipher/libyuv branch `nanogram`
+  at 947f5326 (`.gitmodules` url and branch). The fork is upstream 0b8dd231 (version 1977, the version iOS ships) minus
+  `BUILD.bazel`, `WORKSPACE.bazel` and `libyuv.bzl`; every source file is byte-identical to upstream, so nothing local is lost.
+- No CMake change: `jni/CMakeLists.txt` still `add_subdirectory`s the upstream `CMakeLists.txt` and keeps
+  `CAN_COMPILE_SME FALSE`. Android gains the libyuv commits between 28ce69c2 and 0b8dd231 (scaling and ARM kernels).
+- Not built (agent rule): the main session's `ng check` confirms the new libyuv compiles with NDK r30 and the SME switch.
+
 ### Shared libraries: one manifest, one checker, one source per library (W0.4)
 - New submodule `shared/` = klaipher/nanogram-deps (branch main, shallow), pinned at 7d5bd332, the same commit as Nanogram
   iOS and macOS. It holds `shared-libraries.json` (every shared library with its single source and commit) and

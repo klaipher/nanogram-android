@@ -25,7 +25,8 @@
 	url = https://github.com/xiph/opus.git
 [submodule "TMessagesProj/jni/third_party/libyuv"]
 	path = TMessagesProj/jni/third_party/libyuv
-	url = https://chromium.googlesource.com/libyuv/libyuv
+	url = https://github.com/klaipher/libyuv.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/third_party/openh264"]
 	path = TMessagesProj/jni/third_party/openh264
 	url = https://github.com/cisco/openh264.git
