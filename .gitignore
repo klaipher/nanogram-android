@@ -20,3 +20,4 @@ build-output/
 TMessagesProj_App/google-services.json
 .kotlin/
 TMessagesProj/google-services.json
+__pycache__/
