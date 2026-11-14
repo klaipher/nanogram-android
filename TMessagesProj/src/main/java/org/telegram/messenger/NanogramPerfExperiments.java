@@ -86,6 +86,7 @@ public final class NanogramPerfExperiments {
 
     public static void setEnabled(Experiment experiment, boolean enabled) {
         NanogramPerfStats.reset(experiment.statKeys);
+        NanogramHealth.onSwitchChanged(experiment.id);
         switch (experiment) {
             case ADAPTIVE_REFRESH:
                 NanogramExperiments.setEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE, enabled);
@@ -135,14 +136,21 @@ public final class NanogramPerfExperiments {
     }
 
     public static String currentReport() {
+        if (ApplicationLoader.applicationContext != null) {
+            NanogramHealth.refreshBlocking(ApplicationLoader.applicationContext);
+        }
         java.util.EnumMap<Experiment, Boolean> states = new java.util.EnumMap<>(Experiment.class);
         for (Experiment experiment : Experiment.values()) {
             states.put(experiment, isEnabled(experiment));
         }
-        return report(deviceLine(), Build.VERSION.SDK_INT, states, NanogramPerfStats.snapshot());
+        return report(deviceLine(), Build.VERSION.SDK_INT, states, NanogramPerfStats.snapshot(), e -> NanogramHealth.experimentText(e.id));
     }
 
     public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot) {
+        return report(device, sdkInt, states, snapshot, null);
+    }
+
+    public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot, java.util.function.Function<Experiment, String> health) {
         StringBuilder sb = new StringBuilder("Performance experiments (since each switch last changed; durations only)\n");
         sb.append("device: ").append(device).append('\n');
         for (Experiment experiment : Experiment.values()) {
@@ -152,6 +160,11 @@ public final class NanogramPerfExperiments {
                     .append(!supported ? "not available (needs API " + experiment.minSdk + ")" : (state != null && state ? "ON" : "off") + (hasAuto(experiment) ? (isAutomatic(experiment) ? " (automatic)" : " (set by tester)") : "")).append('\n');
             for (String line : statsText(experiment, snapshot).split("\n")) {
                 sb.append("  ").append(line).append('\n');
+            }
+            if (health != null && supported) {
+                for (String line : health.apply(experiment).split("\n")) {
+                    sb.append("  ").append(line).append('\n');
+                }
             }
         }
         return sb.toString();

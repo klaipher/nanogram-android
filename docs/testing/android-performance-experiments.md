@@ -124,12 +124,33 @@ This switch has no measured numbers.
 3. Open your biggest chat and jump to the oldest message from the top bar or by scrolling for one minute.
 4. Search in the chat list for a common word. Write down if results appear fast or after a pause.
 
-## Battery and heat (every run)
+## Battery, CPU, energy and heat (every run)
 
 For each experiment and state (A, B) do one 10-minute session that repeats that test's script:
-- Write down the **battery % before and after** (whole percent: Settings > Battery).
+- The app measures the numbers itself (see below). Do not do anything else on the phone during the 10 minutes, keep the screen on and the brightness the same in A and B.
+- Only if the numbers below say "not available" (older phone or no power monitors): write down the **battery % before and after** (whole percent: Settings > Battery). Whole percent is rough, so it only counts as a fallback.
 - After the 10 minutes: is the phone **cool / warm / hot** at the top back?
 - If Android shows an overheating warning: stop the run and say so.
+
+### What the CPU and energy numbers mean
+
+Under every switch in the Debug Menu (and in the zip) you see two extra lines, counted since that switch last changed:
+
+- `CPU time 5200 ms (user ..., system ...) over 10.0 min: 520.0 ms/min, 1040.0 ms per minute on screen (5.0 min on screen)`.
+  This is the processor time Nanogram itself used, from the Android system's health statistics, for all Nanogram processes together.
+  **Lower is better.** `ms/min` is per minute of real time; `per minute on screen` is per minute Nanogram was in front, which is
+  the fairer one when you left the app for a while. Under 30 seconds no per-minute number is shown: wait longer.
+- `Energy, whole phone not only Nanogram: rails (14) 2400.0 mJ/min, avg 40.0 mW; modeled consumers (6) ...`.
+  This only exists on phones with **on-device power monitors** (Android 15 or newer, in practice Pixels). It is the energy of the **whole phone**
+  (screen, radios, everything), not only Nanogram, so it is only comparable when A and B are done the same way. **Lower is better.** `mJ/min` is millijoules per minute, `mW` the
+  average power. "Rails" are measured power rails; "modeled consumers" (CPU, GPU, modem) are the phone maker's estimates. On other phones the line says
+  `Energy: not available`; that is normal, then use the CPU line and the battery fallback.
+- The zip file `health-energy.txt` has the full detail: the same numbers since app start and since each switch change, every power monitor on its own,
+  wakelocks, background jobs and syncs, network bytes and packets (mobile and Wi-Fi), time in front and in the background, and the battery level,
+  temperature, current and the phone's heat state (`thermal status`, and `headroom`, where 1.0 means throttling starts). It holds only counts, durations and
+  the battery state; no names of other apps and no account data.
+
+Open the Debug Menu screen at the end of the run (the numbers are read when it opens) and take the zip right after.
 
 ## What to send
 
@@ -139,12 +160,13 @@ For each experiment, and for A and B separately, send the project owner (a messa
 - **Smoothness 1 to 5** (5 = perfectly smooth).
 - **Stutters:** yes or no (and where).
 - **Warm / hot** after the 10 minutes: cool, warm or hot.
-- **Battery drop** over the 10 minutes (e.g. 4%).
+- **CPU and energy lines** of that experiment from the Debug Menu or the zip, for A and B. If the phone has no energy line, send the **battery drop** over the 10 minutes (e.g. 4%) instead.
 - The extra checks for calls and camera (works / wrong / not tested).
 - The **diagnostics zip**, made right after finishing that run, **before** you flip the switch or restart: Settings > Help >
   **Send diagnostics** (or Debug Menu > Nanogram diagnostics) > **Share diagnostics**. It contains a file
   `performance-experiments.txt` with the state of every switch and the numbers since that switch last changed: count, average and
-  longest time per frame, per GIF frame, per camera start, per call setup. Only durations and the phone model are in that file. The zip also holds
+  longest time per frame, per GIF frame, per camera start, per call setup, plus the CPU and energy lines. A second file, `health-energy.txt`, has the detailed CPU,
+  wakelock, network, energy and heat numbers. Only durations, counts and the phone model are in these files. The zip also holds
   the normal diagnostic logs (device state, error log), so send it only if you are fine with that.
 
 The same numbers show in grey under the switches in the Debug Menu (close and reopen the screen to refresh). Numbers reset every time the app restarts or you flip that experiment's switch, so take the zip before either.
@@ -159,7 +181,7 @@ phone (at least 3 testers or 3 runs on at least 2 phone models):
    not worse than the cost it saves, `gifFrameDecode`) is not worse in B: average at most 5% higher and longest at most 25% higher,
    and for the experiments meant to be faster (images, GIFs, camera) at least 10% lower on average. For refresh rate `frameInterval` is only
    an observation: B is expected to be higher because content may draw below the top rate;
-3. median battery drop in B is at most 1 percentage point higher than in A, and no tester reports hot in B while cool or warm in A;
+3. CPU time per minute on screen in B is at most 5% higher than in A and, where the phone has power monitors, energy per minute in B is at most 5% higher than in A (the battery drop is at most 1 percentage point higher only where these numbers are missing), and no tester reports hot in B while cool or warm in A;
 4. for calls and camera: every extra check works in B. One wrong check (no sound, black camera, a call that cannot be hung up, framing that changes)
    keeps the experiment off.
 

@@ -26,6 +26,7 @@ import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.NanogramFrameStats;
+import org.telegram.messenger.NanogramHealth;
 import org.telegram.messenger.NanogramPerfExperiments;
 import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.FileLog;
@@ -254,6 +255,7 @@ public class DebugSettingsActivity extends UniversalFragment {
         if (LaunchActivity.instance != null) {
             LaunchActivity.instance.attachNanogramFrameStats();
         }
+        NanogramHealth.refreshAsync();
         items.add(UItem.asHeader("Performance experiments"));
         items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nSwitches start off, except the ones marked automatic (they follow this phone). Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
         final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();
@@ -263,6 +265,7 @@ public class DebugSettingsActivity extends UniversalFragment {
                 continue;
             }
             items.add(UItem.asCheck(ID_PERF_EXPERIMENT_BASE + experiment.ordinal(), experiment.title).setChecked(NanogramPerfExperiments.isEnabled(experiment)));
+            items.add(UItem.asShadow(experiment.description + " " + experiment.applyHint + (NanogramPerfExperiments.hasAuto(experiment) ? "\nFollows this phone automatically until you flip it." : "") + "\n" + NanogramPerfExperiments.statsText(experiment, snapshot) + "\n" + NanogramHealth.experimentText(experiment.id)));
             if (NanogramPerfExperiments.hasAuto(experiment) && !NanogramPerfExperiments.isAutomatic(experiment)) {
                 items.add(UItem.asButton(ID_PERF_EXPERIMENT_BASE + 20 + experiment.ordinal(), "Back to automatic: " + experiment.title));
             }
