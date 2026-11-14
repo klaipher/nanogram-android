@@ -5,6 +5,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- ANDROID-SEARCH-1: local dialog search (`MessagesStorage.localSearch`) tracks already-collected users, chats and secret
+  chats in hash sets instead of `ArrayList.contains` (up to 600x600/2 boxed compares), and transliterates every user and
+  chat name through a 4096-entry LRU (`NanogramTranslitCache`; transliteration is a pure function of the string, so no
+  invalidation). Result order is unchanged (list order still drives it). Deferred: narrowing from the previous
+  query and fixed-size IN-list chunking (pairs with ANDROID-DB-2). JVM test: `NanogramTranslitCacheTest`.
 - ANDROID-DB-2 (same flag as ANDROID-DB-1, default OFF): per-connection prepared-statement LRU (64, `NanogramStatementCache`)
   behind a new `SQLiteDatabase.queryCached()`. A cached statement is reset (not finalized) on `dispose()`, a statement
   still in use is never handed out twice (nested or concurrent callers get a fresh uncached one), cursor `dispose()`
