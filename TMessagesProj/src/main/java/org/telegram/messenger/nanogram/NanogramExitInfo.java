@@ -206,12 +206,12 @@ public final class NanogramExitInfo {
                 case ApplicationExitInfo.REASON_ANR:
                 case ApplicationExitInfo.REASON_CRASH:
                 case ApplicationExitInfo.REASON_CRASH_NATIVE:
-                case ApplicationExitInfo.REASON_LOW_MEMORY:
                 case ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE:
                 case ApplicationExitInfo.REASON_INITIALIZATION_FAILURE:
                 case ApplicationExitInfo.REASON_DEPENDENCY_DIED:
-                case ApplicationExitInfo.REASON_FREEZER:
                     return true;
+                case ApplicationExitInfo.REASON_LOW_MEMORY:
+                case ApplicationExitInfo.REASON_FREEZER:
                 case ApplicationExitInfo.REASON_SIGNALED:
                 case ApplicationExitInfo.REASON_OTHER:
                 case ApplicationExitInfo.REASON_UNKNOWN:
@@ -219,6 +219,13 @@ public final class NanogramExitInfo {
                 default:
                     return false;
             }
+        }
+    }
+
+    @RequiresApi(36)
+    private static final class Api36 {
+        static int startComponent(ApplicationStartInfo info) {
+            return info.getStartComponent();
         }
     }
 
@@ -241,13 +248,15 @@ public final class NanogramExitInfo {
                         .append(" process=").append(info.getProcessName())
                         .append(" type=").append(startType(info.getStartType()))
                         .append(" reason=").append(startReason(info.getReason()))
-                        .append(" component=").append(info.getStartComponent())
                         .append(" state=").append(startupState(info.getStartupState()))
                         .append(" forceStopped=").append(info.wasForceStopped());
                 if (launch != null) {
                     if (fork != null) sb.append(" fork+").append((fork - launch) / 1_000_000L).append("ms");
                     if (onCreate != null) sb.append(" onCreate+").append((onCreate - launch) / 1_000_000L).append("ms");
                     if (firstFrame != null) sb.append(" firstFrame+").append((firstFrame - launch) / 1_000_000L).append("ms");
+                }
+                if (Build.VERSION.SDK_INT >= 36) {
+                    sb.append(" component=").append(Api36.startComponent(info));
                 }
                 sb.append('\n');
             }

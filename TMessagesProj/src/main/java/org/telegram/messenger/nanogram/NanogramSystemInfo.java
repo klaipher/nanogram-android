@@ -128,8 +128,8 @@ public final class NanogramSystemInfo {
             if (Build.VERSION.SDK_INT >= 30) {
                 final android.content.pm.InstallSourceInfo source = pm.getInstallSourceInfo(context.getPackageName());
                 r.since("installing package", 30, source.getInstallingPackageName());
-                if (Build.VERSION.SDK_INT >= 33) {
-                    r.since("update ownership", 33, source.getUpdateOwnerPackageName());
+                if (Build.VERSION.SDK_INT >= 34) {
+                    r.since("update ownership", 34, source.getUpdateOwnerPackageName());
                 }
             } else {
                 r.line("installing package", pm.getInstallerPackageName(context.getPackageName()));
@@ -396,7 +396,7 @@ public final class NanogramSystemInfo {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED ? "granted" : "denied";
     }
 
-    private static final Pattern GLOBAL_CHANNEL = Pattern.compile("^\\d+channel_[A-Za-z_]+_-?\\d+$");
+    private static final Pattern GLOBAL_CHANNEL = Pattern.compile("^\\d+channel_(private|groups|channels|stories|reactions|silent)(_ia)?(_[0-9a-f]{1,5})?_-?\\d+$");
 
     private static void channels(Context context, Report r) {
         r.section("Notification channels (Android 8+)");
