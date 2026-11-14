@@ -296,6 +296,7 @@ public class ApplicationLoader extends Application {
         if (level == 10 || level == 15 || level >= 60) {
             FileLog.i("trim memory level " + level);
         }
+        ImageLoader.onTrimMemory(level);
     }
 
     @Override
