@@ -1,5 +1,6 @@
 package org.telegram.utils.recorder.round;
 
+import org.telegram.messenger.AudioInputPreference;
 import org.telegram.messenger.FileLog;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
@@ -338,9 +339,11 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
                 + ", minBufferSize=" + minBufferSize
                 + ", audioBufferSize=" + audioBufferSize);
         audioCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        AudioInputPreference.setBluetoothRouting(true);
         audioRecord = new AudioRecord(MediaRecorder.AudioSource.CAMCORDER, AUDIO_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioBufferSize);
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) throw new IllegalStateException("Unable to initialize AudioRecord");
+        AudioInputPreference.applyTo(audioRecord);
     }
 
     private void drainVideo() {
@@ -777,6 +780,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
         audioReadyListener = null;
         videoReadyListener = null;
         if (audioRecord != null) { audioRecord.release(); audioRecord = null; }
+        AudioInputPreference.setBluetoothRouting(false);
         if (videoInputSurface != null) { videoInputSurface.release(); videoInputSurface = null; }
         releaseCodec(videoCodec);
         releaseCodec(audioCodec);

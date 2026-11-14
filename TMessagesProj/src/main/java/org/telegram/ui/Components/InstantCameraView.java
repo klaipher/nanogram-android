@@ -71,6 +71,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.media3.exoplayer.ExoPlayer;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AudioInputPreference;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AutoDeleteMediaTask;
 import org.telegram.messenger.BuildVars;
@@ -93,8 +94,11 @@ import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.camera.CameraInfo;
 import org.telegram.messenger.camera.CameraSession;
 import org.telegram.messenger.camera.Size;
+import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.video.MP4Builder;
 import org.telegram.messenger.video.Mp4Movie;
+import org.telegram.messenger.video.RoundAudioTimeline;
+import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
@@ -785,7 +789,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (bothCameras) {
                 for (int a = 0; a < 2; ++a) {
                     if (camera2Sessions[a] == null) {
-                        camera2Sessions[a] = Camera2Session.create(a == 0, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                        camera2Sessions[a] = createRoundCamera2Session(a == 0);
                         if (camera2Sessions[a] != null) {
                             camera2Sessions[a].setRecordingVideo(true);
                             previewSize[a] = new Size(camera2Sessions[a].getPreviewWidth(), camera2Sessions[a].getPreviewHeight());
@@ -805,7 +809,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 if (camera2SessionCurrent == null) return;
             } else {
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = createRoundCamera2Session(isFrontface);
                 if (camera2SessionCurrent == null) return;
                 camera2SessionCurrent.setRecordingVideo(true);
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
@@ -1004,7 +1008,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                 videoEditedInfo.estimatedDuration = endTime - startTime;
                 videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                videoEditedInfo.bitrate = 1000000;
+                videoEditedInfo.bitrate = roundOutputBitrate();
                 if (videoEditedInfo.startTime > 0) {
                     videoEditedInfo.startTime *= 1000;
                 }
@@ -1178,7 +1182,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     camera2SessionCurrent = null;
                     camera2Sessions[isFrontface ? 1 : 0] = null;
                 }
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = createRoundCamera2Session(isFrontface);
                 if (camera2SessionCurrent == null) {
                     legacyCameraSwitchAwaitingFrame = false;
                     logLegacyCameraSwitchStage("failed: Camera2Session.create returned null");
@@ -1514,6 +1518,54 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
     private Bitmap firstFrameThumb;
     private volatile int surfaceIndex;
+
+    private boolean roundQualityBoosted() {
+        return RoundVideoEncodingPolicy.boosted(!NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_QUALITY_OFF), SharedConfig.getDevicePerformanceClass());
+    }
+
+    private int roundOutputSize() {
+        return RoundVideoEncodingPolicy.size(MessagesController.getInstance(currentAccount).roundVideoSize, roundQualityBoosted());
+    }
+
+    private int roundOutputBitrate() {
+        final MessagesController controller = MessagesController.getInstance(currentAccount);
+        final boolean boosted = roundQualityBoosted();
+        return RoundVideoEncodingPolicy.bitrate(controller.roundVideoBitrate * 1024, controller.roundVideoSize, RoundVideoEncodingPolicy.size(controller.roundVideoSize, boosted), boosted);
+    }
+
+    private Camera2Session createRoundCamera2Session(boolean front) {
+        final int serverSize = MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize;
+        final boolean boosted = roundQualityBoosted();
+        final int request = RoundVideoEncodingPolicy.cameraRequestSize(RoundVideoEncodingPolicy.size(serverSize, boosted), boosted);
+        return Camera2Session.create(front, request, request, boosted ? serverSize : 0);
+    }
+
+    private static void applyRoundQualityHints(MediaCodec encoder, MediaFormat format) {
+        try {
+            final MediaCodecInfo.CodecCapabilities capabilities = encoder.getCodecInfo().getCapabilitiesForType("video/avc");
+            final MediaCodecInfo.CodecProfileLevel[] profileLevels = capabilities.profileLevels;
+            final int[] profiles = new int[profileLevels.length];
+            final int[] levels = new int[profileLevels.length];
+            for (int a = 0; a < profileLevels.length; a++) {
+                profiles[a] = profileLevels[a].profile;
+                levels[a] = profileLevels[a].level;
+            }
+            final int[] high = RoundVideoEncodingPolicy.pickHighProfile(profiles, levels);
+            if (high != null) {
+                format.setInteger(MediaFormat.KEY_PROFILE, high[0]);
+                format.setInteger(MediaFormat.KEY_LEVEL, high[1]);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    // No B-frames: keeps timestamps monotonic for upload-while-recording and every client
+                    format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
+                }
+            }
+            if (capabilities.getEncoderCapabilities() != null && capabilities.getEncoderCapabilities().isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
+                format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
 
     public class CameraGLThread extends DispatchQueue {
 
@@ -2228,8 +2280,15 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private boolean skippedFirst;
 
         private long desyncTime;
+        private final boolean avSyncFix = !NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_AV_SYNC_OFF);
+        private boolean videoClockOffsetKnown;
+        private long videoClockOffsetNs;
+        private long audioWaitStartUs = -1;
         private long videoFirst = -1;
         private long videoLast;
+        // Unshifted (monotonic-corrected, before the pause videoDiff shift) copies: audio offsets are raw monotonic.
+        private long videoFirstRawUs = -1;
+        private long videoLastRawNs;
         private long videoLastDt;
         private long videoDiff;
         private long prevVideoLast = -1;
@@ -2273,6 +2332,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 boolean done = false;
                 AudioTimestamp audioTimestamp = new AudioTimestamp();
                 boolean shouldUseTimestamp = true;
+                final RoundAudioTimeline.AudioClock audioClock = new RoundAudioTimeline.AudioClock(audioSampleRate);
+                long framesRead = 0;
 
                 while (!done) {
                     if ((!running || pauseRecorder) && audioRecorder.getRecordingState() != AudioRecord.RECORDSTATE_STOPPED) {
@@ -2299,7 +2360,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     buffer.lastWroteBuffer = 0;
                     buffer.results = AudioBufferInfo.MAX_SAMPLES;
                     for (int a = 0; a < AudioBufferInfo.MAX_SAMPLES; a++) {
-                        if (audioPresentationTimeUs == -1 && !shouldUseTimestamp) {
+                        if (!avSyncFix && audioPresentationTimeUs == -1 && !shouldUseTimestamp) {
                             audioPresentationTimeUs = System.nanoTime() / 1000;
                         }
 
@@ -2325,7 +2386,17 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             break;
                         }
                         long timestamp;
-                        if (shouldUseTimestamp) {
+                        if (avSyncFix) {
+                            final int framesInBuffer = readResult / 2;
+                            boolean timestampValid = false;
+                            try {
+                                timestampValid = audioRecorder.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS;
+                            } catch (Exception e) {
+                                FileLog.e(e);
+                            }
+                            timestamp = audioClock.stampUs(framesRead, framesInBuffer, timestampValid, audioTimestamp.nanoTime, audioTimestamp.framePosition, System.nanoTime());
+                            framesRead += framesInBuffer;
+                        } else if (shouldUseTimestamp) {
                             try {
                                 audioRecorder.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC);
                                 timestamp = audioTimestamp.nanoTime / 1000;
@@ -2341,7 +2412,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
                         buffer.read[a] = readResult;
                         int bufferDurationUs = 1000000 * readResult / audioSampleRate / 2;
-                        if (!shouldUseTimestamp) {
+                        if (!avSyncFix && !shouldUseTimestamp) {
                             audioPresentationTimeUs += bufferDurationUs;
                         }
                     }
@@ -2382,8 +2453,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             started = true;
-            int resolution = MessagesController.getInstance(currentAccount).roundVideoSize;
-            int bitrate = MessagesController.getInstance(currentAccount).roundVideoBitrate * 1024;
+            int resolution = roundOutputSize();
+            int bitrate = roundOutputBitrate();
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 512);
             });
@@ -2497,7 +2568,13 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     }
                     return;
                 }
-                while (true) {
+                if (avSyncFix) {
+                    input = alignFirstAudioBuffer();
+                    if (input == null) {
+                        return;
+                    }
+                }
+                while (!avSyncFix) {
                     boolean ok = false;
                     for (int a = 0; a < input.results; a++) {
                         if (a == 0 && Math.abs(videoFirst - input.offset[a]) > 10_000_000L) {
@@ -2540,7 +2617,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             if (audioStartTime == -1) {
-                audioStartTime = input.offset[input.lastWroteBuffer];
+                audioStartTime = avSyncFix ? RoundAudioTimeline.audioStartUs(videoFirstRawUs, input.offset[input.lastWroteBuffer]) : input.offset[input.lastWroteBuffer];
             }
             if (buffersToWrite.size() > 1) {
                 input = buffersToWrite.get(0);
@@ -2561,7 +2638,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         for (int a = input.lastWroteBuffer; a <= input.results; a++) {
                             if (a < input.results) {
                                 long totalTime = input.offset[a] - audioStartTime;
-                                if (!running && (input.offset[a] >= videoLast - desyncTime || totalTime >= 60_000000)) {
+                                if (!running && ((avSyncFix ? input.offset[a] >= videoLastRawNs / 1000 : input.offset[a] >= videoLast - desyncTime) || totalTime >= 60_000000)) {
                                     if (BuildVars.LOGS_ENABLED) {
                                         if (totalTime >= 60_000000) {
                                             FileLog.d("InstantCamera stop audio encoding because recorded time more than 60s");
@@ -2612,10 +2689,67 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
         }
 
+        private AudioBufferInfo alignFirstAudioBuffer() {
+            int bufferIndex = -1;
+            int chunkIndex = -1;
+            for (int i = 0; i < buffersToWrite.size() && bufferIndex < 0; i++) {
+                AudioBufferInfo candidate = buffersToWrite.get(i);
+                for (int a = 0; a < candidate.results; a++) {
+                    if (candidate.offset[a] >= videoFirstRawUs) {
+                        bufferIndex = i;
+                        chunkIndex = a;
+                        break;
+                    }
+                }
+            }
+            if (bufferIndex < 0) {
+                if (!RoundAudioTimeline.alignmentTimedOut(System.nanoTime() / 1000, audioWaitStartUs) || buffersToWrite.isEmpty()) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("InstantCamera first audio frame not found, removing buffers " + buffersToWrite.size());
+                    }
+                    for (int i = 0; i < buffersToWrite.size(); i++) {
+                        buffers.offer(buffersToWrite.get(i));
+                    }
+                    buffersToWrite.clear();
+                    return null;
+                }
+                bufferIndex = buffersToWrite.size() - 1;
+                chunkIndex = 0;
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("InstantCamera no audio aligned with video within 500 ms, starting audio at the newest buffer");
+                }
+            }
+            for (int i = 0; i < bufferIndex; i++) {
+                buffers.offer(buffersToWrite.get(i));
+            }
+            buffersToWrite.subList(0, bufferIndex).clear();
+            AudioBufferInfo aligned = buffersToWrite.get(0);
+            aligned.lastWroteBuffer = chunkIndex;
+            audioFirst = aligned.offset[chunkIndex];
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("InstantCamera found first audio frame at " + chunkIndex + " timestamp = " + audioFirst + " video first = " + videoFirst);
+            }
+            return aligned;
+        }
+
         private void handleVideoFrameAvailable(long timestampNanos, Integer cameraId) {
             if (pauseRecorder || !cameraTextureAvailable) {
                 return;
             }
+            if (avSyncFix) {
+                if (lastCameraId != null && !lastCameraId.equals(cameraId)) {
+                    videoClockOffsetKnown = false; // front and back sensors can report different timestamp sources
+                }
+                if (!videoClockOffsetKnown) {
+                    videoClockOffsetKnown = true;
+                    videoClockOffsetNs = RoundAudioTimeline.videoClockOffsetNs(timestampNanos, System.nanoTime(), SystemClock.elapsedRealtimeNanos());
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("InstantCamera video clock offset to monotonic = " + videoClockOffsetNs);
+                    }
+                }
+                timestampNanos -= videoClockOffsetNs;
+            }
+            final long rawTimestampNanos = timestampNanos;
             try {
                 drainEncoder(false);
             } catch (Exception e) {
@@ -2666,15 +2800,20 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 skippedFirst = true;
             }
-            currentTimestamp += dt;
+            if (!(avSyncFix && videoFirst == -1 && prevVideoLast < 0)) {
+                currentTimestamp += dt;
+            }
             if (videoFirst == -1) {
                 videoFirst = timestampNanos / 1000;
+                videoFirstRawUs = rawTimestampNanos / 1000;
+                audioWaitStartUs = System.nanoTime() / 1000;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera first video frame was at " + videoFirst);
                 }
             }
             videoLastDt = timestampNanos - videoLast;
             videoLast = timestampNanos;
+            videoLastRawNs = rawTimestampNanos;
 
             FloatBuffer textureBuffer = InstantCameraView.this.textureBuffer;
             FloatBuffer vertexBuffer = InstantCameraView.this.vertexBuffer;
@@ -2861,9 +3000,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 videoEditedInfo.key = key;
                 videoEditedInfo.iv = iv;
                 videoEditedInfo.estimatedSize = Math.max(1, size);
-                videoEditedInfo.framerate = 25;
-                videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                 videoEditedInfo.originalPath = previewFile.getAbsolutePath();
                 setupVideoPlayer(previewFile);
                 videoEditedInfo.estimatedDuration = recordedTime;
@@ -2957,9 +3096,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         videoEditedInfo.notReadyYet = true;
                         videoEditedInfo.thumb = firstFrameThumb;
@@ -3093,7 +3232,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                             videoEditedInfo.estimatedDuration = endTime - startTime;
                             videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                            videoEditedInfo.bitrate = 1000000;
+                            videoEditedInfo.bitrate = roundOutputBitrate();
                             if (videoEditedInfo.startTime > 0) {
                                 videoEditedInfo.startTime *= 1000;
                             }
@@ -3109,9 +3248,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         final VideoEditedInfo info = videoEditedInfo;
                         if (send == ENCODER_SEND_SEND) {
@@ -3177,33 +3316,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         }
 
         private void setBluetoothScoOn(boolean scoOn) {
-            AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
-            if (SharedConfig.recordViaSco && !PermissionRequest.hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                SharedConfig.recordViaSco = false;
-                SharedConfig.saveConfig();
-            }
-            if (am.isBluetoothScoAvailableOffCall() && SharedConfig.recordViaSco || !scoOn) {
-                BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
-                try {
-                    if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED || !scoOn) {
-                        if (scoOn && !am.isBluetoothScoOn()) {
-                            am.startBluetoothSco();
-                        } else if (!scoOn && am.isBluetoothScoOn()) {
-                            am.stopBluetoothSco();
-                        }
-                    }
-                } catch (SecurityException ignored) {
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                    try {
-                        if (!scoOn && am.isBluetoothScoOn()) {
-                            am.stopBluetoothSco();
-                        }
-                    } catch (Exception e2) {
-                        FileLog.e(e2);
-                    }
-                }
-            }
+            AudioInputPreference.setBluetoothRouting(scoOn);
         }
 
         private void prepareEncoder(boolean fromPause) {
@@ -3237,6 +3350,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 audioStartTime = -1;
                 audioFirst = -1;
                 videoFirst = -1;
+                videoFirstRawUs = -1;
                 videoLast = -1;
                 videoDiff = -1;
                 audioLast = -1;
@@ -3245,6 +3359,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 skippedTime = 0;
 
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+                AudioInputPreference.applyTo(audioRecorder);
                 audioRecorder.startRecording();
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera initied audio record with channels " + audioRecorder.getChannelCount() + " sample rate = " + audioRecorder.getSampleRate() + " bufferSize = " + bufferSize);
@@ -3278,7 +3393,27 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
                 format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
 
-                videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                if (roundQualityBoosted()) {
+                    MediaFormat boostedFormat = MediaFormat.createVideoFormat(VIDEO_MIME_TYPE, videoWidth, videoHeight);
+                    boostedFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+                    boostedFormat.setInteger(MediaFormat.KEY_BIT_RATE, videoBitrate);
+                    boostedFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
+                    boostedFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
+                    applyRoundQualityHints(videoEncoder, boostedFormat);
+                    try {
+                        videoEncoder.configure(boostedFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                        try {
+                            videoEncoder.release();
+                        } catch (Throwable ignore) {
+                        }
+                        videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
+                        videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    }
+                } else {
+                    videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                }
                 surface = videoEncoder.createInputSurface();
                 videoEncoder.start();
 

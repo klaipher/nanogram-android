@@ -63,6 +63,7 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.view.HapticFeedbackConstants;
 import android.view.TextureView;
 import android.view.View;
@@ -1086,6 +1087,44 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private static Runnable refreshGalleryRunnable;
     // A MediaStore change while the app is in the background only sets this; checkGallery() reloads once on return.
     private static volatile boolean galleryChangedWhilePaused;
+    private static volatile boolean galleryDirty;
+    private static volatile boolean galleryPickerVisible;
+    private static final SparseIntArray galleryLoadGenerations = new SparseIntArray();
+
+    private static int nextGalleryGeneration(int guid) {
+        synchronized (galleryLoadGenerations) {
+            int next = galleryLoadGenerations.get(guid) + 1;
+            galleryLoadGenerations.put(guid, next);
+            return next;
+        }
+    }
+
+    private static boolean isCurrentGalleryGeneration(int guid, int generation) {
+        synchronized (galleryLoadGenerations) {
+            return galleryLoadGenerations.get(guid) == generation;
+        }
+    }
+    // Owners (attach sheets) that currently show the picker; a destroyed owner can never leave the flag stuck on.
+    private static final java.util.Set<Object> galleryPickerOwners = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    public static void setGalleryPickerVisible(Object owner, boolean visible) {
+        synchronized (galleryPickerOwners) {
+            if (visible) {
+                galleryPickerOwners.add(owner);
+            } else {
+                galleryPickerOwners.remove(owner);
+            }
+            galleryPickerVisible = !galleryPickerOwners.isEmpty();
+        }
+        if (visible && allPhotosAlbumEntry != null && NanogramGalleryReload.shouldReloadOnOpen(galleryDirty, galleryChangedWhilePaused)) {
+            galleryChangedWhilePaused = false;
+            if (refreshGalleryRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
+                refreshGalleryRunnable = null;
+            }
+            loadGalleryPhotosAlbums(0);
+        }
+    }
     public static AlbumEntry allMediaAlbumEntry;
     public static AlbumEntry allPhotosAlbumEntry;
     public static AlbumEntry allVideosAlbumEntry;
@@ -1346,28 +1385,30 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             super(null);
         }
 
-        private void scheduleReloadRunnable() {
+        private void scheduleReloadRunnable(long delay) {
             AndroidUtilities.runOnUIThread(refreshGalleryRunnable = () -> {
                 if (PhotoViewer.getInstance().isVisible()) {
-                    scheduleReloadRunnable();
+                    scheduleReloadRunnable(delay);
                     return;
                 }
                 refreshGalleryRunnable = null;
                 loadGalleryPhotosAlbums(0);
-            }, 2000);
+            }, delay);
         }
 
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
-            if (ApplicationLoader.mainInterfacePaused) {
+            galleryDirty = true;
+            long delay = NanogramGalleryReload.observerDelayMs(ApplicationLoader.mainInterfacePaused, galleryPickerVisible);
+            if (delay == NanogramGalleryReload.DELAY_NO_RELOAD) {
                 galleryChangedWhilePaused = true;
                 return;
             }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
-            scheduleReloadRunnable();
+            scheduleReloadRunnable(delay);
         }
     }
 
@@ -1379,7 +1420,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
-            if (ApplicationLoader.mainInterfacePaused) {
+            galleryDirty = true;
+            long delay = NanogramGalleryReload.observerDelayMs(ApplicationLoader.mainInterfacePaused, galleryPickerVisible);
+            if (delay == NanogramGalleryReload.DELAY_NO_RELOAD) {
                 galleryChangedWhilePaused = true;
                 return;
             }
@@ -1389,7 +1432,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             AndroidUtilities.runOnUIThread(refreshGalleryRunnable = () -> {
                 refreshGalleryRunnable = null;
                 loadGalleryPhotosAlbums(0);
-            }, 2000);
+            }, delay);
         }
     }
 
@@ -1406,9 +1449,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             loadGalleryPhotosAlbums(0);
             return;
         }
-        final int prevSize = allPhotosAlbumEntry.photos.size();
+        final int prevImages = allPhotosAlbumEntry.photos.size();
+        final int prevVideos = allVideosAlbumEntry != null ? allVideosAlbumEntry.photos.size() : -1;
         Utilities.globalQueue.postRunnable(() -> {
-            int count = 0;
+            int imageCount = 0;
+            int videoCount = 0;
             Cursor cursor = null;
             try {
                 final Context context = ApplicationLoader.applicationContext;
@@ -1423,7 +1468,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor = MediaStore.Images.Media.query(context.getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, new String[]{"COUNT(_id)"}, null, null, null);
                     if (cursor != null) {
                         if (cursor.moveToNext()) {
-                            count += cursor.getInt(0);
+                            imageCount += cursor.getInt(0);
                         }
                     }
                 }
@@ -1447,7 +1492,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor = MediaStore.Images.Media.query(context.getContentResolver(), MediaStore.Video.Media.EXTERNAL_CONTENT_URI, new String[]{"COUNT(_id)"}, null, null, null);
                     if (cursor != null) {
                         if (cursor.moveToNext()) {
-                            count += cursor.getInt(0);
+                            videoCount += cursor.getInt(0);
                         }
                     }
                 }
@@ -1458,14 +1503,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor.close();
                 }
             }
-            if (prevSize != count) {
+            if (NanogramGalleryReload.countsChanged(prevImages, imageCount, prevVideos, videoCount)) {
                 if (refreshGalleryRunnable != null) {
                     AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
                     refreshGalleryRunnable = null;
                 }
                 loadGalleryPhotosAlbums(0);
             }
-        }, 2000);
+        }, 0);
     }
 
 
@@ -2592,6 +2637,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     public void cleanupPlayer(boolean notify, boolean stopService, boolean byVoiceEnd, boolean transferPlayerToPhotoViewer) {
         if (stopService && restoreMusicPlaylistState()) {
+            closePip(true);
             return;
         }
         flushSavedPosition();
@@ -2706,8 +2752,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     playMessage(nextVoiceMessage);
                     playingNext = true;
                     if (!nextVoiceMessage.isRoundVideo() && pipRoundVideoView != null) {
-                        pipRoundVideoView.close(true);
-                        pipRoundVideoView = null;
+                        closePip(true);
                     }
                 } else {
                     if ((lastFile.isVoice() || lastFile.isRoundVideo()) && lastFile.getId() != 0) {
@@ -2716,8 +2761,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     NotificationCenter.getInstance(lastFile.currentAccount).postNotificationName(NotificationCenter.messagePlayingDidReset, lastFile.getId(), stopService);
                     pipSwitchingState = 0;
                     if (pipRoundVideoView != null) {
-                        pipRoundVideoView.close(true);
-                        pipRoundVideoView = null;
+                        closePip(true);
                     }
                 }
             }
@@ -2730,6 +2774,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             ChatActivity chat = raiseChat;
             stopRaiseToEarSensors(raiseChat, false, false);
             raiseChat = chat;
+        }
+        if (stopService && !playingNext && !transferPlayerToPhotoViewer && playingMessageObject == null) {
+            closePip(true);
         }
         if (stopService) {
             CastSync.stop();
@@ -3318,6 +3365,46 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         return pipRoundVideoView != null;
     }
 
+    private void closePip(boolean animated) {
+        PipRoundVideoView view = pipRoundVideoView;
+        pipRoundVideoView = null;
+        if (view != null) {
+            view.setOnClosedListener(null);
+            view.close(animated);
+        }
+    }
+
+    private boolean showPip() {
+        if (pipRoundVideoView != null && pipRoundVideoView.isClosed()) {
+            pipRoundVideoView = null;
+        }
+        if (pipRoundVideoView != null) {
+            return true;
+        }
+        PipRoundVideoView view = new PipRoundVideoView();
+        boolean shown;
+        try {
+            shown = view.show(baseActivity, () -> {
+                closePip(false);
+                cleanupPlayer(true, true);
+            });
+        } catch (Exception e) {
+            FileLog.e(e);
+            shown = false;
+        }
+        if (!shown) {
+            view.close(false);
+            return false;
+        }
+        pipRoundVideoView = view;
+        view.setOnClosedListener(() -> {
+            if (pipRoundVideoView == view) {
+                pipRoundVideoView = null;
+            }
+        });
+        return true;
+    }
+
     public void setCurrentVideoVisible(boolean visible) {
         if (currentAspectRatioFrameLayout == null) {
             return;
@@ -3325,8 +3412,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         if (visible) {
             if (pipRoundVideoView != null) {
                 pipSwitchingState = 2;
-                pipRoundVideoView.close(true);
-                pipRoundVideoView = null;
+                closePip(true);
             } else {
                 if (currentAspectRatioFrameLayout.getParent() == null) {
                     currentTextureViewContainer.addView(currentAspectRatioFrameLayout);
@@ -3339,12 +3425,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 currentTextureViewContainer.removeView(currentAspectRatioFrameLayout);
             } else {
                 if (pipRoundVideoView == null) {
-                    try {
-                        pipRoundVideoView = new PipRoundVideoView();
-                        pipRoundVideoView.show(baseActivity, () -> cleanupPlayer(true, true));
-                    } catch (Exception e) {
-                        pipRoundVideoView = null;
-                    }
+                    showPip();
                 }
                 if (pipRoundVideoView != null) {
                     videoPlayer.setTextureView(pipRoundVideoView.getTextureView());
@@ -3374,12 +3455,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         isDrawingWasReady = aspectRatioFrameLayout != null && aspectRatioFrameLayout.isDrawingReady();
         currentTextureView = textureView;
         if (afterPip != null && pipRoundVideoView == null) {
-            try {
-                pipRoundVideoView = new PipRoundVideoView();
-                pipRoundVideoView.show(baseActivity, () -> cleanupPlayer(true, true));
-            } catch (Exception e) {
-                pipRoundVideoView = null;
-            }
+            showPip();
         }
         if (pipRoundVideoView != null) {
             videoPlayer.setTextureView(pipRoundVideoView.getTextureView());
@@ -3580,12 +3656,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 } else if (pipSwitchingState == 1) {
                     if (baseActivity != null) {
                         if (pipRoundVideoView == null) {
-                            try {
-                                pipRoundVideoView = new PipRoundVideoView();
-                                pipRoundVideoView.show(baseActivity, () -> cleanupPlayer(true, true));
-                            } catch (Exception e) {
-                                pipRoundVideoView = null;
-                            }
+                            showPip();
                         }
                         if (pipRoundVideoView != null) {
                             if (pipRoundVideoView.getTextureView().getSurfaceTexture() != surfaceTexture) {
@@ -3738,26 +3809,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     private void setBluetoothScoOn(boolean scoOn) {
-        AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
-        if (SharedConfig.recordViaSco && !PermissionRequest.hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-            SharedConfig.recordViaSco = false;
-            SharedConfig.saveConfig();
-        }
-        if (am.isBluetoothScoAvailableOffCall() && SharedConfig.recordViaSco || !scoOn) {
-            BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
-            try {
-                if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothAdapter.STATE_CONNECTED || !scoOn) {
-                    if (scoOn && !am.isBluetoothScoOn()) {
-                        am.startBluetoothSco();
-                    } else if (!scoOn && am.isBluetoothScoOn()) {
-                        am.stopBluetoothSco();
-                    }
-                }
-            } catch (SecurityException ignored) {
-            } catch (Throwable e) {
-                FileLog.e(e);
-            }
-        }
+        AudioInputPreference.setBluetoothRouting(scoOn);
     }
 
     public boolean playMessage(final MessageObject messageObject) {
@@ -3926,12 +3978,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     } else if (pipSwitchingState == 1) {
                         if (baseActivity != null) {
                             if (pipRoundVideoView == null) {
-                                try {
-                                    pipRoundVideoView = new PipRoundVideoView();
-                                    pipRoundVideoView.show(baseActivity, () -> cleanupPlayer(true, true));
-                                } catch (Exception e) {
-                                    pipRoundVideoView = null;
-                                }
+                                showPip();
                             }
                             if (pipRoundVideoView != null) {
                                 if (pipRoundVideoView.getTextureView().getSurfaceTexture() != surfaceTexture) {
@@ -3952,12 +3999,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             currentAspectRatioFrameLayoutReady = false;
             if (pipRoundVideoView != null || !MessagesController.getInstance(messageObject.currentAccount).isDialogVisible(messageObject.getDialogId(), messageObject.scheduled)) {
                 if (pipRoundVideoView == null) {
-                    try {
-                        pipRoundVideoView = new PipRoundVideoView();
-                        pipRoundVideoView.show(baseActivity, () -> cleanupPlayer(true, true));
-                    } catch (Exception e) {
-                        pipRoundVideoView = null;
-                    }
+                    showPip();
                 }
                 if (pipRoundVideoView != null) {
                     videoPlayer.setTextureView(pipRoundVideoView.getTextureView());
@@ -4005,8 +4047,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             }
         } else {
             if (pipRoundVideoView != null) {
-                pipRoundVideoView.close(true);
-                pipRoundVideoView = null;
+                closePip(true);
             }
             try {
                 audioPlayer = new VideoPlayer();
@@ -5297,6 +5338,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 //                        MediaDataController.getInstance(recordingCurrentAccount).pushDraftVoiceMessage(recordDialogId, recordTopicId, null);
 //
                         audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
+                        AudioInputPreference.applyTo(audioRecorder);
                         recordStartTime = System.currentTimeMillis();
                         writtenFrame = 0;
                         samplesCount = 0;
@@ -5400,6 +5442,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
                 audioRecorderPaused = false;
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
+                        AudioInputPreference.applyTo(audioRecorder);
                 recordStartTime = System.currentTimeMillis();
                 recordTimeCount = 0;
                 writtenFrame = 0;
@@ -6743,6 +6786,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public static void loadGalleryPhotosAlbums(final int guid) {
+        galleryDirty = false;
+        final int generation = nextGalleryGeneration(guid);
         Thread thread = new Thread(() -> {
             final ArrayList<AlbumEntry> mediaAlbumsSorted = new ArrayList<>();
             final ArrayList<AlbumEntry> photoAlbumsSorted = new ArrayList<>();
@@ -6955,20 +7000,27 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     return 0;
                 });
             }
-            broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, mediaCameraAlbumId, allMediaAlbum, allPhotosAlbum, allVideosAlbum, 0);
+            if (!isCurrentGalleryGeneration(guid, generation)) {
+                return; // a newer scan started after this one; its result is the fresher one
+            }
+            broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, mediaCameraAlbumId, allMediaAlbum, allPhotosAlbum, allVideosAlbum, 0, generation);
         });
         thread.setPriority(Thread.MIN_PRIORITY);
         thread.start();
     }
 
     public static boolean forceBroadcastNewPhotos;
-    private static void broadcastNewPhotos(final int guid, final ArrayList<AlbumEntry> mediaAlbumsSorted, final ArrayList<AlbumEntry> photoAlbumsSorted, final Integer cameraAlbumIdFinal, final AlbumEntry allMediaAlbumFinal, final AlbumEntry allPhotosAlbumFinal, final AlbumEntry allVideosAlbumFinal, int delay) {
+    private static void broadcastNewPhotos(final int guid, final ArrayList<AlbumEntry> mediaAlbumsSorted, final ArrayList<AlbumEntry> photoAlbumsSorted, final Integer cameraAlbumIdFinal, final AlbumEntry allMediaAlbumFinal, final AlbumEntry allPhotosAlbumFinal, final AlbumEntry allVideosAlbumFinal, int delay, final int generation) {
         if (broadcastPhotosRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(broadcastPhotosRunnable);
         }
         AndroidUtilities.runOnUIThread(broadcastPhotosRunnable = () -> {
+            if (!isCurrentGalleryGeneration(guid, generation)) {
+                broadcastPhotosRunnable = null;
+                return;
+            }
             if (PhotoViewer.getInstance().isVisible() && !forceBroadcastNewPhotos) {
-                broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, cameraAlbumIdFinal, allMediaAlbumFinal, allPhotosAlbumFinal, allVideosAlbumFinal, 1000);
+                broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, cameraAlbumIdFinal, allMediaAlbumFinal, allPhotosAlbumFinal, allVideosAlbumFinal, 1000, generation);
                 return;
             }
             allMediaAlbums = mediaAlbumsSorted;

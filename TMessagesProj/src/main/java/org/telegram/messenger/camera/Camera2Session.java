@@ -33,6 +33,7 @@ import androidx.annotation.RequiresApi;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -81,6 +82,10 @@ public class Camera2Session {
     private long lastTime;
 
     public static Camera2Session create(boolean front, int viewWidth, int viewHeight) {
+        return create(front, viewWidth, viewHeight, 0);
+    }
+
+    public static Camera2Session create(boolean front, int viewWidth, int viewHeight, int fallbackSize) {
         final Context context = ApplicationLoader.applicationContext;
         final CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -105,6 +110,9 @@ public class Camera2Session {
                 if (bestAspectRatio <= 0 || Math.abs((float) viewWidth / viewHeight - bestAspectRatio) > Math.abs((float) viewWidth / viewHeight - cameraAspectRatio)) {
                     if (confMap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         Size size = chooseOptimalSize(confMap.getOutputSizes(SurfaceTexture.class), viewWidth, viewHeight, false);
+                        if (fallbackSize > 0 && size != null && !RoundVideoEncodingPolicy.cameraSizeAcceptable(viewWidth, size.getWidth(), size.getHeight())) {
+                            size = chooseOptimalSize(confMap.getOutputSizes(SurfaceTexture.class), fallbackSize, fallbackSize, false);
+                        }
                         if (size != null) {
                             bestAspectRatio = cameraAspectRatio;
                             cameraId = id;

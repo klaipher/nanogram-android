@@ -66,6 +66,11 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
     private int videoHeight;
     private AnimatorSet hideShowAnimation;
     private Runnable onCloseRunnable;
+    private Runnable onClosedListener;
+    private boolean closing;
+    private boolean closed;
+    private final Paint closeBackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint closeIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private WindowManager.LayoutParams windowLayoutParams;
     private WindowManager windowManager;
@@ -83,11 +88,29 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
         }
     }
 
-    public void show(Activity activity, Runnable closeRunnable) {
+    public void setOnClosedListener(Runnable listener) {
+        onClosedListener = listener;
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    public boolean show(Activity activity, Runnable closeRunnable) {
         if (activity == null) {
-            return;
+            return false;
         }
+        if (instance != null && instance != this) {
+            instance.close(false);
+        }
+        closing = false;
+        closed = false;
         instance = this;
+        closeBackPaint.setColor(0x99000000);
+        closeIconPaint.setColor(0xffffffff);
+        closeIconPaint.setStyle(Paint.Style.STROKE);
+        closeIconPaint.setStrokeCap(Paint.Cap.ROUND);
+        closeIconPaint.setStrokeWidth(AndroidUtilities.dpf2(1.7f));
         onCloseRunnable = closeRunnable;
         windowView = new PipFrameLayout(activity) {
 
@@ -95,6 +118,11 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
             private float startY;
             private boolean dragging;
             private boolean startDragging;
+            private boolean closeTouch;
+
+            private boolean inCloseRect(MotionEvent event) {
+                return event.getX() >= getWidth() - AndroidUtilities.dp(32) && event.getY() <= AndroidUtilities.dp(32);
+            }
 
             @Override
             public boolean onInterceptTouchEvent(MotionEvent event) {
@@ -102,6 +130,7 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
                     startX = event.getRawX();
                     startY = event.getRawY();
                     startDragging = true;
+                    closeTouch = inCloseRect(event);
                 }
                 return true;
             }
@@ -113,6 +142,19 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
 
             @Override
             public boolean onTouchEvent(MotionEvent event) {
+                if (closeTouch) {
+                    int action = event.getAction();
+                    if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        boolean hit = action == MotionEvent.ACTION_UP && inCloseRect(event);
+                        closeTouch = false;
+                        startDragging = false;
+                        dragging = false;
+                        if (hit) {
+                            closeByUser();
+                        }
+                    }
+                    return true;
+                }
                 if (!startDragging && !dragging) {
                     return false;
                 }
@@ -183,6 +225,15 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
                     Theme.chat_docBackPaint.setAlpha((int) (getAlpha() * 255));
                     canvas.drawCircle(AndroidUtilities.dp(3 + 60), AndroidUtilities.dp(3 + 60), AndroidUtilities.dp(59.5f), Theme.chat_docBackPaint);
                 }
+                float cx = getWidth() - AndroidUtilities.dp(11);
+                float cy = AndroidUtilities.dp(11);
+                int alpha = (int) (getAlpha() * 255);
+                closeBackPaint.setAlpha(alpha * 0x99 / 255);
+                closeIconPaint.setAlpha(alpha);
+                canvas.drawCircle(cx, cy, AndroidUtilities.dp(10), closeBackPaint);
+                float d = AndroidUtilities.dpf2(3.5f);
+                canvas.drawLine(cx - d, cy - d, cx + d, cy + d, closeIconPaint);
+                canvas.drawLine(cx - d, cy + d, cx + d, cy - d, closeIconPaint);
             }
         };
         windowView.setWillNotDraw(false);
@@ -293,12 +344,25 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
             windowManager.addView(windowView, windowLayoutParams);
         } catch (Exception e) {
             FileLog.e(e);
-            return;
+            closed = true;
+            if (instance == this) {
+                instance = null;
+            }
+            windowView = null;
+            return false;
         }
         parentActivity = activity;
         currentAccount = UserConfig.selectedAccount;
         NotificationCenter.getInstance(currentAccount).addWeakObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
         runShowHideAnimation(true);
+        return true;
+    }
+
+    private void closeByUser() {
+        close(true);
+        if (onCloseRunnable != null) {
+            onCloseRunnable.run();
+        }
     }
 
     private static int getSideCoord(boolean isX, int side, float p, int sideSize) {
@@ -336,26 +400,36 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
     }
 
     public void close(boolean animated) {
-        if (animated) {
-            if (textureView != null && textureView.getParent() != null) {
-                if (textureView.getWidth() > 0 && textureView.getHeight() > 0) {
-                    bitmap = Bitmaps.createBitmap(textureView.getWidth(), textureView.getHeight(), Bitmap.Config.ARGB_8888);
-                }
-                try {
-                    textureView.getBitmap(bitmap);
-                } catch (Throwable e) {
-                    bitmap = null;
-                }
-                imageView.setImageBitmap(bitmap);
-                try {
-                    aspectRatioFrameLayout.removeView(textureView);
-                } catch (Exception ignore) {
-
-                }
-                imageView.setVisibility(View.VISIBLE);
-                runShowHideAnimation(false);
+        int action = PipRoundCloseState.closeAction(animated, closed, closing, windowView != null, textureView != null && textureView.getParent() != null);
+        if (action == PipRoundCloseState.NONE) {
+            return;
+        }
+        if (action == PipRoundCloseState.ANIMATE) {
+            closing = true;
+            if (textureView.getWidth() > 0 && textureView.getHeight() > 0) {
+                bitmap = Bitmaps.createBitmap(textureView.getWidth(), textureView.getHeight(), Bitmap.Config.ARGB_8888);
             }
+            try {
+                textureView.getBitmap(bitmap);
+            } catch (Throwable e) {
+                bitmap = null;
+            }
+            imageView.setImageBitmap(bitmap);
+            try {
+                aspectRatioFrameLayout.removeView(textureView);
+            } catch (Exception ignore) {
+
+            }
+            imageView.setVisibility(View.VISIBLE);
+            runShowHideAnimation(false);
         } else {
+            closed = true;
+            closing = false;
+            if (hideShowAnimation != null) {
+                AnimatorSet animation = hideShowAnimation;
+                hideShowAnimation = null;
+                animation.cancel();
+            }
             if (bitmap != null) {
                 imageView.setImageDrawable(null);
                 bitmap.recycle();
@@ -371,10 +445,18 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
             }
             parentActivity = null;
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.messagePlayingProgressDidChanged);
+            Runnable listener = onClosedListener;
+            onClosedListener = null;
+            if (listener != null) {
+                listener.run();
+            }
         }
     }
 
     public void onConfigurationChanged() {
+        if (closed || windowView == null || windowLayoutParams == null) {
+            return;
+        }
         int sidex = preferences.getInt("sidex", 1);
         int sidey = preferences.getInt("sidey", 0);
         float px = preferences.getFloat("px", 0);
@@ -385,6 +467,9 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
     }
 
     public void showTemporary(boolean show) {
+        if (!PipRoundCloseState.canShowTemporary(closed, closing, windowView != null)) {
+            return;
+        }
         if (hideShowAnimation != null) {
             hideShowAnimation.cancel();
         }
@@ -410,6 +495,9 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
     }
 
     private void runShowHideAnimation(final boolean show) {
+        if (!PipRoundCloseState.canAnimate(show, closed, closing, windowView != null)) {
+            return;
+        }
         if (hideShowAnimation != null) {
             hideShowAnimation.cancel();
         }
@@ -425,10 +513,10 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
         hideShowAnimation.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
+                if (!show && closing) {
+                    close(false);
+                }
                 if (animation.equals(hideShowAnimation)) {
-                    if (!show) {
-                        close(false);
-                    }
                     hideShowAnimation = null;
                 }
             }
@@ -516,6 +604,9 @@ public class PipRoundVideoView implements NotificationCenter.NotificationCenterD
                 animatorSet.addListener(new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationEnd(Animator animation) {
+                        if (closed) {
+                            return;
+                        }
                         close(false);
                         if (onCloseRunnable != null) {
                             onCloseRunnable.run();

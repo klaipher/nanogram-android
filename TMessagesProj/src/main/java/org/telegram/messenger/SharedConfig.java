@@ -289,7 +289,7 @@ public class SharedConfig {
     public static boolean raiseToSpeak = false;
     public static boolean raiseToListen = true;
     public static boolean nextMediaTap = true;
-    public static boolean recordViaSco = false;
+    public static int recordInputDevice = AudioInputPreference.AUTOMATIC;
     public static boolean adaptableColorInBrowser = true;
     public static boolean onlyLocalInstantView = false;
     public static boolean directShare = true;
@@ -496,7 +496,7 @@ public class SharedConfig {
                 editor = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Context.MODE_PRIVATE).edit();
                 editor.putBoolean("hasEmailLogin", hasEmailLogin);
                 editor.putBoolean("floatingDebugActive", isFloatingDebugActive);
-                editor.putBoolean("record_via_sco", recordViaSco);
+                editor.putInt("record_input_device", recordInputDevice);
                 editor.apply();
             } catch (Exception e) {
                 FileLog.e(e);
@@ -602,7 +602,7 @@ public class SharedConfig {
             raiseToListen = preferences.getBoolean("raise_to_listen", true);
             raiseToSpeak = preferences.getBoolean("raise_to_speak", false);
             nextMediaTap = preferences.getBoolean("next_media_on_tap", true);
-            recordViaSco = preferences.getBoolean("record_via_sco", false);
+            recordInputDevice = AudioInputPreference.sanitize(preferences.getInt("record_input_device", AudioInputPreference.migrateLegacy(preferences.getBoolean("record_via_sco", false))));
             adaptableColorInBrowser = preferences.getBoolean("adaptableBrowser", false);
             onlyLocalInstantView = preferences.getBoolean("onlyLocalInstantView", BuildVars.DEBUG_PRIVATE_VERSION);
             directShare = preferences.getBoolean("direct_share", true);
