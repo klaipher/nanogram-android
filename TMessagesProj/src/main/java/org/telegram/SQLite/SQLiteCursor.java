@@ -23,6 +23,7 @@ public class SQLiteCursor {
 	public static final int FIELD_TYPE_NULL = 5;
 
 	private SQLitePreparedStatement preparedStatement;
+	private boolean disposed;
 	private boolean inRow = false;
 
 	public SQLiteCursor(SQLitePreparedStatement stmt) {
@@ -126,6 +127,10 @@ public class SQLiteCursor {
 	}
 
 	public void dispose() {
+		if (disposed) {
+			return;
+		}
+		disposed = true;
 		preparedStatement.dispose();
 	}
 

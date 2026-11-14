@@ -5,6 +5,12 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- ANDROID-DB-2 (same flag as ANDROID-DB-1, default OFF): per-connection prepared-statement LRU (64, `NanogramStatementCache`)
+  behind a new `SQLiteDatabase.queryCached()`. A cached statement is reset (not finalized) on `dispose()`, a statement
+  still in use is never handed out twice (nested or concurrent callers get a fresh uncached one), cursor `dispose()`
+  is idempotent, and `close()` finalizes the cache before `sqlite3_close`. First users: `messages_v2 WHERE uid = ? AND
+  mid = ?` and `dialogs WHERE did = ?` folder lookups. IN-list chunking and the debug prepare counter are deferred.
+  JVM test: `NanogramStatementCacheTest`.
 - ANDROID-DB-1 (flag, default OFF): optional cache4.db tuning after the existing PRAGMAs, also on the recovery re-open:
   `cache_size = -8192` (average/high class), `mmap_size = 64 MB` (high class, 64-bit only), explicit
   `wal_autocheckpoint = 1000`. Switch: Debug menu > "Larger database cache and mmap (restart)" (`NanogramDbTuning`, JVM

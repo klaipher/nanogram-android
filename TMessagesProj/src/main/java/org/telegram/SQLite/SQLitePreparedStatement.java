@@ -89,7 +89,24 @@ public class SQLitePreparedStatement {
         reset(sqliteStatementHandle);
     }
 
+    private NanogramStatementCache<SQLitePreparedStatement> cache;
+
+    void setCache(NanogramStatementCache<SQLitePreparedStatement> cache) {
+        this.cache = cache;
+    }
+
     public void dispose() {
+        NanogramStatementCache<SQLitePreparedStatement> cache = this.cache;
+        if (cache != null && !isFinalized) {
+            try {
+                reset(sqliteStatementHandle);
+                if (cache.release(this)) {
+                    return;
+                }
+            } catch (SQLiteException e) {
+                FileLog.e(e);
+            }
+        }
         finalizeQuery();
     }
 

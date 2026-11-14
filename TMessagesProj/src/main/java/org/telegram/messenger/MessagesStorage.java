@@ -16246,7 +16246,7 @@ public class MessagesStorage extends BaseController {
                 if (messageObject.isQuickReply()) continue;
                 SQLiteCursor cursor = null;
                 try {
-                    cursor = database.queryFinalized("SELECT data FROM messages_v2 WHERE uid = ? AND mid = ?", messageObject.getDialogId(), messageObject.getId());
+                    cursor = database.queryCached("SELECT data FROM messages_v2 WHERE uid = ? AND mid = ?", messageObject.getDialogId(), messageObject.getId());
                     if (cursor.next()) {
                         NativeByteBuffer data = cursor.byteBufferValue(0);
                         if (data != null) {
@@ -17815,7 +17815,7 @@ public class MessagesStorage extends BaseController {
             if (unknownDialogsIds.get(dialogId) != null) {
                 folderId = -1;
             } else {
-                cursor = database.queryFinalized("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
+                cursor = database.queryCached("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
                 if (cursor.next()) {
                     folderId = cursor.intValue(0);
                 } else {
@@ -17842,7 +17842,7 @@ public class MessagesStorage extends BaseController {
                 if (unknownDialogsIds.get(dialogId) != null) {
                     folderId = -1;
                 } else {
-                    cursor = database.queryFinalized("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
+                    cursor = database.queryCached("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
                     if (cursor.next()) {
                         folderId = cursor.intValue(0);
                     } else {

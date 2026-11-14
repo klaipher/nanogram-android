@@ -10,6 +10,7 @@ package org.telegram.SQLite;
 
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramDbTuning;
 import org.telegram.messenger.ApplicationLoader;
 
 public class SQLiteDatabase {
@@ -26,7 +27,12 @@ public class SQLiteDatabase {
 	public SQLiteDatabase(String fileName) throws SQLiteException {
 		sqliteHandle = opendb(fileName, ApplicationLoader.getFilesDirFixed().getPath());
 		isOpen = true;
+		if (NanogramDbTuning.isEnabled()) {
+			statementCache = new NanogramStatementCache<>(64, SQLitePreparedStatement::finalizeQuery);
+		}
 	}
+
+	private NanogramStatementCache<SQLitePreparedStatement> statementCache;
 
 	public boolean tableExists(String tableName) throws SQLiteException {
 		checkOpened();
@@ -70,10 +76,34 @@ public class SQLiteDatabase {
 		return new SQLitePreparedStatement(this, sql).query(args);
 	}
 
+	public SQLiteCursor queryCached(String sql, Object... args) throws SQLiteException {
+		checkOpened();
+		NanogramStatementCache<SQLitePreparedStatement> cache = statementCache;
+		if (cache == null) {
+			return new SQLitePreparedStatement(this, sql).query(args);
+		}
+		SQLitePreparedStatement statement = cache.acquire(sql);
+		if (statement == null) {
+			statement = new SQLitePreparedStatement(this, sql);
+			if (cache.offer(sql, statement)) {
+				statement.setCache(cache);
+			}
+		}
+		try {
+			return statement.query(args);
+		} catch (SQLiteException | RuntimeException e) {
+			statement.dispose();
+			throw e;
+		}
+	}
+
 	public void close() {
 		if (isOpen) {
 			try {
                 commitTransaction();
+				if (statementCache != null) {
+					statementCache.clear();
+				}
 				closedb(sqliteHandle);
 			} catch (SQLiteException e) {
 				if (BuildVars.LOGS_ENABLED) {
