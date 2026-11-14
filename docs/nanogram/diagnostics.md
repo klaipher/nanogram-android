@@ -49,6 +49,12 @@ always-on log:
 - Key events (`FileLog.i`): process start (version, device, pid), app foreground/background, push received (delay
   since the server sent it), call state changes, connection state changes, memory trim levels/low memory, and on the
   next start every problem exit and Java crash of the previous run.
+- Privacy: the "no message text, phone numbers or ids" promise holds for the quiet log only. Upstream `FileLog.d` lines can
+  carry transcripts, phone numbers, push tokens and ids, so while verbose logs are on, and for 3 days after, the README and
+  the screen warn to send the zip only to the developer. Those 3 days also lift the 5 MB / 30 file caps (age cap only).
+- Quiet log: key events (`FileLog.i`) have their own burst budget; a process restart reopens the newest small file of the day.
+- Sending to a chat: `AndroidUtilities.isInternalUri` allows `cache/nanogram_diagnostics/Nanogram-diagnostics-*.zip`, like
+  upstream's `voip_logs` exception. A new export removes only zips older than an hour.
 - Verbose logs: Settings > Send diagnostics > Verbose logs (same preference as upstream's `logsEnabled`, so the debug
   menu switch is the same switch). Heap dumps (`FileLog.dumpMemory`) happen only in verbose mode.
 

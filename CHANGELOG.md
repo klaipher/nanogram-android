@@ -19,6 +19,11 @@ Newest first: version, build number, date, commit; what changed and how.
   (API 35+), thermal status/headroom, standby bucket, background restriction, data saver, exact-alarm and
   full-screen-intent state, notification channel states (per-chat channels only counted), `/proc/self` memory and fds.
 - Docs: `docs/nanogram/diagnostics.md`.
+- Commits: 00a159d (quiet log, crash records, exit history, system report), 5a4c01a (screen), c1efa35 (key events),
+  389cfcc and 955b4d4 (docs); review fixes in the commits after them: send-to-chat path exception in `isInternalUri`,
+  `getStartComponent` only on API 36, default notification channel matching, update owner API 34, LOW_MEMORY/FREEZER only
+  when not cached, separate budget for `FileLog.i`, synchronized `FileLog.init`, quiet file reuse, zips kept for an hour,
+  verbose logs retained 3 days after switch-off with a privacy warning in README and screen.
 
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),
