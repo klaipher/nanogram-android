@@ -416,6 +416,21 @@ public class LocaleController {
 
     private Locale currentLocale;
     private Locale systemDefaultLocale;
+    private String lastMappedSystemLocale;
+
+    // same order at startup and on configuration change: language_script_region ... language, then the legacy locale string
+    private LocaleInfo findLanguageForSystemLocale(Locale locale) {
+        if (locale == null) {
+            return null;
+        }
+        for (String key : NanogramLocaleMap.candidateKeys(locale)) {
+            final LocaleInfo info = getLanguageFromDict(key);
+            if (info != null) {
+                return info;
+            }
+        }
+        return getLanguageFromDict(getLocaleString(locale));
+    }
     private PluralRules currentPluralRules;
     private LocaleInfo currentLocaleInfo;
     private String languageOverride;
@@ -743,15 +758,13 @@ public class LocaleController {
                 }
             }
 
-            if (currentInfo == null && systemDefaultLocale.getLanguage() != null) {
-                currentInfo = getLanguageFromDict(systemDefaultLocale.getLanguage());
-            }
             if (currentInfo == null) {
-                currentInfo = getLanguageFromDict(getLocaleString(systemDefaultLocale));
+                currentInfo = findLanguageForSystemLocale(systemDefaultLocale);
                 if (currentInfo == null) {
                     currentInfo = getLanguageFromDict("en");
                 }
             }
+            lastMappedSystemLocale = systemDefaultLocale == null ? null : systemDefaultLocale.toLanguageTag();
 
             applyLanguage(currentInfo, override, true, UserConfig.selectedAccount);
         } catch (Exception e) {
@@ -2102,13 +2115,12 @@ public class LocaleController {
             }
         }
         if (languageOverride == null && Build.VERSION.SDK_INT >= 33 && newConfig.locale != null) {
-            for (String key : NanogramLocaleMap.candidateKeys(newConfig.locale)) {
-                final LocaleInfo info = getLanguageFromDict(key);
-                if (info != null) {
-                    if (info != currentLocaleInfo) {
-                        applyLanguage(info, false, false, UserConfig.selectedAccount);
-                    }
-                    break;
+            final String tag = newConfig.locale.toLanguageTag();
+            if (!tag.equals(lastMappedSystemLocale)) {
+                lastMappedSystemLocale = tag;
+                final LocaleInfo info = findLanguageForSystemLocale(newConfig.locale);
+                if (info != null && info != currentLocaleInfo) {
+                    applyLanguage(info, false, false, UserConfig.selectedAccount);
                 }
             }
         }
