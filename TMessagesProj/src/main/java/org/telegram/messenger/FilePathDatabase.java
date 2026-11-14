@@ -26,6 +26,7 @@ public class FilePathDatabase {
     private SQLiteDatabase database;
     private File cacheFile;
     private File shmCacheFile;
+    private File walCacheFile;
 
     private final String NULL_PATH = "~null~";
     private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
@@ -52,6 +53,7 @@ public class FilePathDatabase {
         }
         cacheFile = new File(filesDir, DATABASE_NAME + ".db");
         shmCacheFile = new File(filesDir, DATABASE_NAME + ".db-shm");
+        walCacheFile = new File(filesDir, DATABASE_NAME + ".db-wal");
 
         boolean createTable = false;
 
@@ -62,6 +64,9 @@ public class FilePathDatabase {
             database = new SQLiteDatabase(cacheFile.getPath());
             database.executeFast("PRAGMA secure_delete = ON").stepThis().dispose();
             database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
+            // A path index: every autocommit used to cost a rollback-journal round with two fsyncs.
+            database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
+            database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
 
             if (createTable) {
                 database.executeFast("CREATE TABLE paths(document_id INTEGER, dc_id INTEGER, type INTEGER, path TEXT, flags INTEGER, PRIMARY KEY(document_id, dc_id, type));").stepThis().dispose();
@@ -93,6 +98,7 @@ public class FilePathDatabase {
                 } else {
                     cacheFile.delete();
                     shmCacheFile.delete();
+                    walCacheFile.delete();
                     createDatabase(tryCount + 1, false);
                 }
             }
@@ -137,9 +143,10 @@ public class FilePathDatabase {
         }
         File backupCacheFile = new File(filesDir, DATABASE_BACKUP_NAME + ".db");
         try {
+            database.executeFast("PRAGMA wal_checkpoint(TRUNCATE)").stepThis().dispose();
             AndroidUtilities.copyFile(cacheFile, backupCacheFile);
             FileLog.d("file db backup created " + backupCacheFile.getAbsolutePath());
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -155,6 +162,9 @@ public class FilePathDatabase {
             return false;
         }
         try {
+            // An old log would replay onto the restored file.
+            walCacheFile.delete();
+            shmCacheFile.delete();
             return AndroidUtilities.copyFile(backupCacheFile, cacheFile);
         } catch (IOException e) {
             FileLog.e(e);
@@ -279,8 +289,11 @@ public class FilePathDatabase {
             }
             SQLitePreparedStatement state = null;
             SQLitePreparedStatement deleteState = null;
+            boolean inTransaction = false;
             try {
                 if (path != null) {
+                    database.beginTransaction();
+                    inTransaction = true;
                     deleteState = database.executeFast("DELETE FROM paths WHERE path = ?");
                     deleteState.bindString(1, path);
                     deleteState.step();
@@ -294,6 +307,9 @@ public class FilePathDatabase {
                     state.bindInteger(5, flags);
                     state.step();
                     state.dispose();
+                    state = null;
+                    database.commitTransaction();
+                    inTransaction = false;
                     cache.put(id + "_" + dc + "_" + type, path);
                 } else {
                     database.executeFast("DELETE FROM paths WHERE document_id = " + id + " AND dc_id = " + dc + " AND type = " + type).stepThis().dispose();
@@ -307,6 +323,9 @@ public class FilePathDatabase {
                 }
                 if (state != null) {
                     state.dispose();
+                }
+                if (inTransaction) {
+                    database.commitTransaction();
                 }
             }
         });
