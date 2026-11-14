@@ -21,11 +21,10 @@ public class NanogramGalleryReloadTest {
     }
 
     @Test
-    public void openingThePickerReloadsWhenDirtyOrStale() {
-        assertTrue(NanogramGalleryReload.shouldReloadOnOpen(true, 10_000, 10_100));
-        assertFalse(NanogramGalleryReload.shouldReloadOnOpen(false, 10_000, 12_900));
-        assertTrue(NanogramGalleryReload.shouldReloadOnOpen(false, 10_000, 13_001));
-        assertTrue(NanogramGalleryReload.shouldReloadOnOpen(false, 0, 500));
+    public void openingThePickerReloadsOnlyWhenTheGalleryChanged() {
+        assertTrue(NanogramGalleryReload.shouldReloadOnOpen(true, false));
+        assertTrue(NanogramGalleryReload.shouldReloadOnOpen(false, true));
+        assertFalse(NanogramGalleryReload.shouldReloadOnOpen(false, false));
     }
 
     @Test

@@ -63,6 +63,7 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.view.HapticFeedbackConstants;
 import android.view.TextureView;
 import android.view.View;
@@ -1088,11 +1089,35 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private static volatile boolean galleryChangedWhilePaused;
     private static volatile boolean galleryDirty;
     private static volatile boolean galleryPickerVisible;
-    private static volatile long lastGalleryLoadTime;
+    private static final SparseIntArray galleryLoadGenerations = new SparseIntArray();
 
-    public static void setGalleryPickerVisible(boolean visible) {
-        galleryPickerVisible = visible;
-        if (visible && allPhotosAlbumEntry != null && NanogramGalleryReload.shouldReloadOnOpen(galleryDirty, lastGalleryLoadTime, SystemClock.elapsedRealtime())) {
+    private static int nextGalleryGeneration(int guid) {
+        synchronized (galleryLoadGenerations) {
+            int next = galleryLoadGenerations.get(guid) + 1;
+            galleryLoadGenerations.put(guid, next);
+            return next;
+        }
+    }
+
+    private static boolean isCurrentGalleryGeneration(int guid, int generation) {
+        synchronized (galleryLoadGenerations) {
+            return galleryLoadGenerations.get(guid) == generation;
+        }
+    }
+    // Owners (attach sheets) that currently show the picker; a destroyed owner can never leave the flag stuck on.
+    private static final java.util.Set<Object> galleryPickerOwners = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    public static void setGalleryPickerVisible(Object owner, boolean visible) {
+        synchronized (galleryPickerOwners) {
+            if (visible) {
+                galleryPickerOwners.add(owner);
+            } else {
+                galleryPickerOwners.remove(owner);
+            }
+            galleryPickerVisible = !galleryPickerOwners.isEmpty();
+        }
+        if (visible && allPhotosAlbumEntry != null && NanogramGalleryReload.shouldReloadOnOpen(galleryDirty, galleryChangedWhilePaused)) {
+            galleryChangedWhilePaused = false;
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
                 refreshGalleryRunnable = null;
@@ -6762,7 +6787,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     public static void loadGalleryPhotosAlbums(final int guid) {
         galleryDirty = false;
-        lastGalleryLoadTime = SystemClock.elapsedRealtime();
+        final int generation = nextGalleryGeneration(guid);
         Thread thread = new Thread(() -> {
             final ArrayList<AlbumEntry> mediaAlbumsSorted = new ArrayList<>();
             final ArrayList<AlbumEntry> photoAlbumsSorted = new ArrayList<>();
@@ -6975,20 +7000,27 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     return 0;
                 });
             }
-            broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, mediaCameraAlbumId, allMediaAlbum, allPhotosAlbum, allVideosAlbum, 0);
+            if (!isCurrentGalleryGeneration(guid, generation)) {
+                return; // a newer scan started after this one; its result is the fresher one
+            }
+            broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, mediaCameraAlbumId, allMediaAlbum, allPhotosAlbum, allVideosAlbum, 0, generation);
         });
         thread.setPriority(Thread.MIN_PRIORITY);
         thread.start();
     }
 
     public static boolean forceBroadcastNewPhotos;
-    private static void broadcastNewPhotos(final int guid, final ArrayList<AlbumEntry> mediaAlbumsSorted, final ArrayList<AlbumEntry> photoAlbumsSorted, final Integer cameraAlbumIdFinal, final AlbumEntry allMediaAlbumFinal, final AlbumEntry allPhotosAlbumFinal, final AlbumEntry allVideosAlbumFinal, int delay) {
+    private static void broadcastNewPhotos(final int guid, final ArrayList<AlbumEntry> mediaAlbumsSorted, final ArrayList<AlbumEntry> photoAlbumsSorted, final Integer cameraAlbumIdFinal, final AlbumEntry allMediaAlbumFinal, final AlbumEntry allPhotosAlbumFinal, final AlbumEntry allVideosAlbumFinal, int delay, final int generation) {
         if (broadcastPhotosRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(broadcastPhotosRunnable);
         }
         AndroidUtilities.runOnUIThread(broadcastPhotosRunnable = () -> {
+            if (!isCurrentGalleryGeneration(guid, generation)) {
+                broadcastPhotosRunnable = null;
+                return;
+            }
             if (PhotoViewer.getInstance().isVisible() && !forceBroadcastNewPhotos) {
-                broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, cameraAlbumIdFinal, allMediaAlbumFinal, allPhotosAlbumFinal, allVideosAlbumFinal, 1000);
+                broadcastNewPhotos(guid, mediaAlbumsSorted, photoAlbumsSorted, cameraAlbumIdFinal, allMediaAlbumFinal, allPhotosAlbumFinal, allVideosAlbumFinal, 1000, generation);
                 return;
             }
             allMediaAlbums = mediaAlbumsSorted;

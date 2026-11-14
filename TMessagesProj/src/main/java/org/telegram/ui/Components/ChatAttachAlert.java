@@ -4418,7 +4418,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
     public void show() {
         super.show();
         buttonPressed = false;
-        MediaController.setGalleryPickerVisible(true);
+        MediaController.setGalleryPickerVisible(this, true);
         if (baseFragment instanceof ChatActivity) {
             ChatActivity chatActivity = (ChatActivity) baseFragment;
             calcMandatoryInsets = chatActivity.isKeyboardVisible();
@@ -6949,7 +6949,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
     @Override
     public void dismissInternal() {
-        MediaController.setGalleryPickerVisible(false);
+        MediaController.setGalleryPickerVisible(this, false);
         if (delegate != null) {
             delegate.doOnIdle(this::removeFromRoot);
         } else {
@@ -7050,7 +7050,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
         if (currentAttachLayout.onDismiss() || isDismissed()) {
             return;
         }
-        MediaController.setGalleryPickerVisible(false);
+        MediaController.setGalleryPickerVisible(this, false);
         gramSendDismissalInProgress = currentAttachLayout == gramLayout && gramLayout != null && gramLayout.hasQueuedSend();
         if (!gramSendDismissalInProgress && commentTextView != null) {
             AndroidUtilities.hideKeyboard(commentTextView.getEditText());
