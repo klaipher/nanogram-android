@@ -290,10 +290,14 @@ public final class WidgetSandboxSession {
         if (!WidgetEngine.isolated || disabledByConfig() || !usedRecently()) return;
         android.app.ActivityManager activityManager = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         if (activityManager == null || activityManager.isLowRamDevice()) return;
-        try {
-            WidgetRemoteEngine.INSTANCE.prewarm(context);
-        } catch (Exception e) {
-            org.telegram.messenger.FileLog.e(e);
+        // A push-woken or just-backgrounded process never gets onBecameBackground again, so it must not take the hold.
+        org.telegram.ui.Components.ForegroundDetector foreground = org.telegram.ui.Components.ForegroundDetector.getInstance();
+        if (foreground != null && !foreground.isBackground()) {
+            try {
+                WidgetRemoteEngine.INSTANCE.prewarm(context);
+            } catch (Exception e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
         }
         // The hold is given up in the background and taken again here, also after an engine that died meanwhile.
         if (!foregroundWatched) {
