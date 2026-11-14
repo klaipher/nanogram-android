@@ -32,6 +32,15 @@ public class NanogramImageCacheSizeTest {
     }
 
     @Test
+    public void thresholdsUseReportedRamNotMarketingRam() {
+        long reported4Gb = (long) (3.7 * GB);
+        long reported6Gb = (long) (5.6 * GB);
+        assertEquals(32, NanogramImageCacheSize.megabytes(256, NanogramImageCacheSize.CLASS_HIGH, false, reported4Gb));
+        assertEquals(48, NanogramImageCacheSize.megabytes(256, NanogramImageCacheSize.CLASS_HIGH, false, reported6Gb));
+        assertEquals(30, NanogramImageCacheSize.megabytes(256, NanogramImageCacheSize.CLASS_HIGH, false, (long) (3.4 * GB)));
+    }
+
+    @Test
     public void averageClassIsModest() {
         assertEquals(32, NanogramImageCacheSize.megabytes(256, NanogramImageCacheSize.CLASS_AVERAGE, false, 6 * GB));
         assertEquals(32, NanogramImageCacheSize.megabytes(256, NanogramImageCacheSize.CLASS_HIGH, false, 5 * GB));

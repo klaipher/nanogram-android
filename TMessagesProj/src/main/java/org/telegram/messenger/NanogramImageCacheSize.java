@@ -9,7 +9,8 @@ public class NanogramImageCacheSize {
     public static final int CLASS_AVERAGE = 1;
     public static final int CLASS_HIGH = 2;
 
-    private static final long GB = 1024L * 1024L * 1024L;
+    private static final long MIN_4GB_CLASS = 3584L * 1024L * 1024L;
+    private static final long MIN_6GB_CLASS = 5632L * 1024L * 1024L;
 
     public static int upstreamMegabytes(int memoryClass) {
         return Math.min(memoryClass >= 192 ? 30 : 15, memoryClass / 7);
@@ -17,11 +18,11 @@ public class NanogramImageCacheSize {
 
     public static int megabytes(int memoryClass, int performanceClass, boolean lowRamDevice, long totalMemBytes) {
         int base = upstreamMegabytes(memoryClass);
-        if (lowRamDevice || performanceClass == CLASS_LOW || memoryClass < 192 || (totalMemBytes > 0 && totalMemBytes < 4 * GB)) {
+        if (lowRamDevice || performanceClass == CLASS_LOW || memoryClass < 192 || (totalMemBytes > 0 && totalMemBytes < MIN_4GB_CLASS)) {
             return base;
         }
         int target;
-        if (performanceClass == CLASS_HIGH && memoryClass >= 256 && (totalMemBytes <= 0 || totalMemBytes >= 6 * GB)) {
+        if (performanceClass == CLASS_HIGH && memoryClass >= 256 && (totalMemBytes <= 0 || totalMemBytes >= MIN_6GB_CLASS)) {
             target = 48;
         } else {
             target = 32;
