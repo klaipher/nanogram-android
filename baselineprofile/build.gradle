@@ -1,0 +1,42 @@
+// Profile generator (androidx.baselineprofile producer). Only part of the build with -Pnanogram.baselineProfile=true
+// (Tools/dev/ng profile sets it), so normal builds do not configure it.
+apply plugin: 'com.android.test'
+apply plugin: 'androidx.baselineprofile'
+
+android {
+    namespace 'org.klaipher.nanogram.baselineprofile'
+    compileSdk rootProject.ext.nanogramCompileSdk
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk 28
+        targetSdk 36
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    targetProjectPath = ':TMessagesProj_App'
+
+    // The generator runs in its own process next to the target app (no separate test APK for the app).
+    experimentalProperties['android.experimental.self-instrumenting'] = true
+
+    // Same dimension as the app; only afat (the shipped flavor) is profiled.
+    flavorDimensions = ['minApi']
+    productFlavors {
+        afat {}
+    }
+}
+
+baselineProfile {
+    // The running emulator or device, not a Gradle managed device.
+    useConnectedDevices = true
+}
+
+dependencies {
+    implementation 'androidx.test.ext:junit:1.3.0'
+    implementation 'androidx.test.uiautomator:uiautomator:2.4.1'
+    implementation 'androidx.benchmark:benchmark-macro-junit4:1.5.0'
+}

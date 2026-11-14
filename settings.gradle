@@ -7,6 +7,10 @@ if (providers.gradleProperty('nanogram.allModules').getOrElse('false').toBoolean
     include ':TMessagesProj_AppStandalone'
     include ':TMessagesProj_AppTests'
 }
+// Profile generator: only when generating (Tools/dev/ng profile), so normal builds do not configure it.
+if (providers.gradleProperty('nanogram.baselineProfile').getOrElse('false').toBoolean()) {
+    include ':baselineprofile'
+}
 include ':jlatexmath'
 project(':jlatexmath').projectDir = file('TMessagesProj/lib/jlatexmath/jlatexmath')
 

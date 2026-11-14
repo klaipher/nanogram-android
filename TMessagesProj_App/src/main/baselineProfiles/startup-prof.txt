@@ -1,0 +1,29 @@
+# Logged-in cold start for the R8 startup dex layout (merged by AGP with the generated startup-prof.txt, which only covers
+# the logged-out start). Explicit class lines: startup-prof.txt does not expand wildcards the way baseline-prof.txt does.
+Lorg/telegram/ui/LaunchActivity;
+Lorg/telegram/ui/MainTabsActivity;
+Lorg/telegram/ui/MainTabsActivityController;
+Lorg/telegram/ui/MainTabsLayout;
+Lorg/telegram/ui/Components/glass/GlassTabView;
+Lorg/telegram/ui/DialogsActivity;
+Lorg/telegram/ui/Cells/DialogCell;
+Lorg/telegram/ui/Adapters/DialogsAdapter;
+Lorg/telegram/ui/Components/ListView/AdapterWithDiffUtils;
+Lorg/telegram/messenger/MessagesController;
+Lorg/telegram/messenger/MessagesStorage;
+Lorg/telegram/messenger/ApplicationLoader;
+Lorg/telegram/messenger/UserConfig;
+Lorg/telegram/messenger/NotificationCenter;
+Lorg/telegram/messenger/DialogObject;
+Lorg/telegram/messenger/ImageReceiver;
+Lorg/telegram/messenger/ImageLoader;
+Lorg/telegram/messenger/FileLoader;
+Lorg/telegram/messenger/LocaleController;
+Lorg/telegram/tgnet/ConnectionsManager;
+Lorg/telegram/ui/ActionBar/BaseFragment;
+Lorg/telegram/ui/ActionBar/ActionBarLayout;
+Lorg/telegram/ui/ActionBar/ActionBar;
+Lorg/telegram/ui/ActionBar/Theme;
+Lorg/telegram/ui/Components/RecyclerListView;
+Lorg/telegram/ui/Components/BackupImageView;
+Lorg/telegram/ui/Components/FilterTabsView;

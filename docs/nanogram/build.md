@@ -39,6 +39,37 @@ after with `ng build release` on both commits: `ls -l` of `libtmessages.49.so` a
 `dumpsys gfxinfo` jank on a long chat list (sqlite), voice-message playback CPU (`top -H`), a VP9 .webm sticker
 (libvpx). Verify with `compile_commands.json` that tgnet/sqlite sources, `jni.c` and `image.cpp` end with `-O2` (the last `-O` on
 the line wins; a trailing `-Os` or `-O3` means an interface option of a linked target overrode it).
+## Profiles (ART baseline profile, startup profile)
+
+Sideloaded APKs get no Play cloud profile, so without help ART compiles nothing ahead of time and picks methods only
+from what it sees at runtime. The APK therefore carries its own profile and hands it to ART itself. This does not make
+first runs fast: ART compiles the profile at the next background dexopt (device idle and charging), so the gain is a
+better-chosen set of methods at that first dexopt. Install-time compilation would need a `.dm` dex-metadata file in the
+install session (not done: the in-app updater and `adb install` ship only the APK). To test the effect right away:
+`adb shell cmd package compile -m speed-profile -f org.klaipher.nanogram`.
+
+| Piece | Where | Effect |
+|---|---|---|
+| Profile in the APK | AGP packs `assets/dexopt/baseline.prof` (+ `.profm`) from `TMessagesProj_App/src/main/baseline-prof.txt` and `src/main/generated/baselineProfiles/baseline-prof.txt` in release builds; R8 rewrites it to the obfuscated names | known-hot classes and methods are compiled ahead of time at the next background dexopt |
+| `androidx.profileinstaller` 1.4.1 | app dependency | writes the profile to ART's profile location on first launch (API 24+), no Play Store needed |
+| Startup profile | `src/main/generated/baselineProfiles/startup-prof.txt` (logged-out start) plus hand-written `src/main/baselineProfiles/startup-prof.txt` (logged-in start: LaunchActivity, MainTabsActivity, DialogsActivity, chat list, storage), `dexLayoutOptimization = true` | R8 groups startup classes at the front of the dex files: fewer page faults on cold start. Only files named `startup-prof.txt` feed it; the S flags in `baseline-prof.txt` do not |
+| Hand-written rules | `TMessagesProj_App/src/main/baseline-prof.txt` (wildcards) | post-login paths the emulator cannot reach: chat list, open chat, images, storage, connection callbacks, emoji and theme drawing |
+| Generator | `:baselineprofile` (macrobenchmark `BaselineProfileRule`) | records the logged-out start: cold start, intro swipes, Start Messaging, permission dialogs ("Don't allow"), phone login, country picker, diagnostics screen |
+
+Regenerate with the AVD `nanogram-api36-16k` running (API 36, not logged in):
+
+```sh
+Tools/dev/ng profile            # -> TMessagesProj_App/src/main/generated/baselineProfiles/, prints the line counts
+git add TMessagesProj_App/src/main/generated   # review the diff first, then commit
+```
+
+`ng profile` builds the app's `nonMinifiedRelease` variant (arm64, release native code), installs it on the emulator,
+runs the generator and merges the result into `src/main`. The `:baselineprofile` module is only part of the build with
+`-Pnanogram.baselineProfile=true`, which `ng profile` sets, so normal builds do not include it. While it is
+set only the `afat` release family exists; without it the profile-only `nonMinifiedRelease` and `benchmarkRelease`
+variants are disabled. Regenerate after large UI or startup changes and at upstream release syncs
+(class and method names move); the committed profile keeps working in between, stale rules are ignored. Check a release
+APK with `unzip -l <apk> | grep dexopt` (expect `baseline.prof` and `baseline.profm`).
 
 ## Measurements
 
