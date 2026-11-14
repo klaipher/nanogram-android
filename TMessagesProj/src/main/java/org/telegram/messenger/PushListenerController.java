@@ -95,6 +95,7 @@ public class PushListenerController {
 
     public static void processRemoteMessage(@PushType int pushType, String data, long time) {
         String tag = pushType == PUSH_TYPE_FIREBASE ? "FCM" : "HCM";
+        FileLog.i(tag + " push received" + (time > 0 ? ", sent " + Math.max(0, System.currentTimeMillis() - time) + " ms ago" : ""));
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d(tag + " PRE START PROCESSING");
         }

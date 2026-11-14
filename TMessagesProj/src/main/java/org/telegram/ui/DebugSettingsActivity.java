@@ -105,6 +105,7 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_WIDGET_STATIC_LAYERS = 44;
     private static final int ID_FORGET_HINTS = 45;
     private static final int ID_COMPACT_MODE = 46;
+    private static final int ID_NANOGRAM_DIAGNOSTICS = 90;
 
     @Override
     protected boolean useSimpleActionBar() {
@@ -164,6 +165,7 @@ public class DebugSettingsActivity extends UniversalFragment {
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("App"));
+        items.add(UItem.asButton(ID_NANOGRAM_DIAGNOSTICS, getString(R.string.NanogramDiagnosticsTitle)));
         if (!BuildVars.DEBUG_VERSION) {
             items.add(UItem.asCheck(ID_LOGS, getString(R.string.DebugMenuEnableLogs)).setChecked(BuildVars.LOGS_ENABLED));
         }
@@ -267,6 +269,9 @@ public class DebugSettingsActivity extends UniversalFragment {
                 }
                 break;
             }
+            case ID_NANOGRAM_DIAGNOSTICS:
+                presentFragment(new NanogramDiagnosticsActivity());
+                break;
             case ID_INAPP_CAMERA:
                 SharedConfig.toggleInappCamera();
                 break;

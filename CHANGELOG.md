@@ -17,6 +17,26 @@ Newest first: version, build number, date, commit; what changed and how.
 - `androidx.biometric` stays at 1.1.0 (newest stable, Jan 2021; 1.4 is still beta).
 - `BotBiometry` creates a new AndroidX prompt per request (AndroidX keeps one client callback per activity).
 - Removed unused strings WalletTouchFingerprint and WalletFingerprintRetry.
+### Diagnostics and log collection
+- New `org.telegram.messenger.nanogram` package and `NanogramDiagnosticsActivity` (Settings > Help > Send diagnostics,
+  also Debug menu): builds `Nanogram-diagnostics-<versionCode>-<time>.zip` (device/power/network/permission/memory report,
+  process exit history with ANR traces and native tombstones, own crash records, logs, call logs) and shares it through
+  the system share sheet (FileProvider `cache-path`) or Nanogram's own chat picker (`DialogsActivity` select mode,
+  `SendMessagesHelper.prepareSendingDocuments`); verbose-log switch, clear logs, "closed unexpectedly" list.
+- Release builds keep a rolling quiet log: `FileLog.e/w/fatal` and new `FileLog.i` write without `LOGS_ENABLED`
+  (5 MB, 3 days, 30 files, 1 MB per file, 40 lines per 10 s burst cap); `FileLog.d` and heap dumps stay verbose-only;
+  the TL dump file is created only in verbose mode. Key events logged: start, foreground/background, push received,
+  call state, connection state, memory trim, and exits/crashes of the previous run on the next start.
+- Uncaught exceptions are recorded synchronously by `NanogramCrashHandler` (chained before upstream's handler).
+- Collected through `ActivityManager.getHistoricalProcessExitReasons` (API 30+), `getHistoricalProcessStartReasons`
+  (API 35+), thermal status/headroom, standby bucket, background restriction, data saver, exact-alarm and
+  full-screen-intent state, notification channel states (per-chat channels only counted), `/proc/self` memory and fds.
+- Docs: `docs/nanogram/diagnostics.md`.
+- Commits: 00a159d (quiet log, crash records, exit history, system report), 5a4c01a (screen), c1efa35 (key events),
+  389cfcc and 955b4d4 (docs); review fixes in the commits after them: send-to-chat path exception in `isInternalUri`,
+  `getStartComponent` only on API 36, default notification channel matching, update owner API 34, LOW_MEMORY/FREEZER only
+  when not cached, separate budget for `FileLog.i`, synchronized `FileLog.init`, quiet file reuse, zips kept for an hour,
+  verbose logs retained 3 days after switch-off with a privacy warning in README and screen.
 
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),

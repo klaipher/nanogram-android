@@ -4952,6 +4952,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	private void dispatchStateChanged(int state) {
+		FileLog.i("call state changed to " + state);
 		if (BuildVars.LOGS_ENABLED) {
 			FileLog.d("== Call " + getCallID() + " state changed to " + state + " ==");
 		}
