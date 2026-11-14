@@ -71,6 +71,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.media3.exoplayer.ExoPlayer;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AudioInputPreference;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AutoDeleteMediaTask;
 import org.telegram.messenger.BuildVars;
@@ -3302,33 +3303,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         }
 
         private void setBluetoothScoOn(boolean scoOn) {
-            AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
-            if (SharedConfig.recordViaSco && !PermissionRequest.hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                SharedConfig.recordViaSco = false;
-                SharedConfig.saveConfig();
-            }
-            if (am.isBluetoothScoAvailableOffCall() && SharedConfig.recordViaSco || !scoOn) {
-                BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
-                try {
-                    if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED || !scoOn) {
-                        if (scoOn && !am.isBluetoothScoOn()) {
-                            am.startBluetoothSco();
-                        } else if (!scoOn && am.isBluetoothScoOn()) {
-                            am.stopBluetoothSco();
-                        }
-                    }
-                } catch (SecurityException ignored) {
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                    try {
-                        if (!scoOn && am.isBluetoothScoOn()) {
-                            am.stopBluetoothSco();
-                        }
-                    } catch (Exception e2) {
-                        FileLog.e(e2);
-                    }
-                }
-            }
+            AudioInputPreference.setBluetoothRouting(scoOn);
         }
 
         private void prepareEncoder(boolean fromPause) {
@@ -3370,6 +3345,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 skippedTime = 0;
 
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+                AudioInputPreference.applyTo(audioRecorder);
                 audioRecorder.startRecording();
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera initied audio record with channels " + audioRecorder.getChannelCount() + " sample rate = " + audioRecorder.getSampleRate() + " bufferSize = " + bufferSize);

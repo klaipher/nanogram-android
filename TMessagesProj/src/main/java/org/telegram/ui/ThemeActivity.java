@@ -54,6 +54,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AudioInputPreference;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
@@ -629,6 +630,23 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
             return true;
         }
         return false;
+    }
+
+    private static int microphoneTitle(int type) {
+        switch (type) {
+            case android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC:
+                return R.string.MicrophoneBuiltIn;
+            case android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                return R.string.MicrophoneWired;
+            case android.media.AudioDeviceInfo.TYPE_USB_HEADSET:
+                return R.string.MicrophoneUsb;
+            case android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                return R.string.MicrophoneBluetooth;
+            case android.media.AudioDeviceInfo.TYPE_BLE_HEADSET:
+                return R.string.MicrophoneLeAudio;
+            default:
+                return R.string.MicrophoneAutomatic;
+        }
     }
 
     private void updateRows(boolean notify) {
@@ -1362,34 +1380,26 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
                 LinearLayout linearLayout = new LinearLayout(context);
                 linearLayout.setOrientation(LinearLayout.VERTICAL);
 
-                RadioColorCell cell = new RadioColorCell(getParentActivity());
-                cell.setPadding(dp(4), 0, dp(4), 0);
-                cell.setCheckColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_dialogRadioBackgroundChecked));
-                cell.setTextAndValue(getString(R.string.MicrophoneForVoiceMessagesBuiltIn), !SharedConfig.recordViaSco);
-                ThemeBind.selectorBackground(cell, Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL), null, ThemeBind.of(Theme.key_listSelector));
-                linearLayout.addView(cell);
-                cell.setOnClickListener(v -> {
-                    SharedConfig.recordViaSco = false;
-                    SharedConfig.saveConfig();
-                    updateRecordViaSco = true;
-                    dialogRef.get().dismiss();
-
-                    RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(bluetoothScoRow);
-                    if (holder != null) {
-                        listAdapter.onBindViewHolder(holder, bluetoothScoRow);
+                final int[] connected = AudioInputPreference.connectedInputTypes();
+                final int[] types = AudioInputPreference.choices(connected);
+                final int selected = AudioInputPreference.resolve(SharedConfig.recordInputDevice, connected);
+                final int[] options = new int[types.length + 1];
+                options[0] = AudioInputPreference.AUTOMATIC;
+                System.arraycopy(types, 0, options, 1, types.length);
+                for (int option : options) {
+                    RadioColorCell cell = new RadioColorCell(getParentActivity());
+                    cell.setPadding(dp(4), 0, dp(4), 0);
+                    cell.setCheckColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_dialogRadioBackgroundChecked));
+                    if (AudioInputPreference.isBluetoothType(option)) {
+                        cell.setTextAndText2AndValue(getString(microphoneTitle(option)), getString(R.string.MicrophoneForVoiceMessagesScoHint), option == selected);
+                    } else {
+                        cell.setTextAndValue(getString(microphoneTitle(option)), option == selected);
                     }
-                });
-
-                cell = new RadioColorCell(getParentActivity());
-                cell.setPadding(dp(4), 0, dp(4), 0);
-                cell.setCheckColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_dialogRadioBackgroundChecked));
-                cell.setTextAndText2AndValue(getString(R.string.MicrophoneForVoiceMessagesScoIfConnected), getString(R.string.MicrophoneForVoiceMessagesScoHint), SharedConfig.recordViaSco);
-                ThemeBind.selectorBackground(cell, Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL), null, ThemeBind.of(Theme.key_listSelector));
-                linearLayout.addView(cell);
-                cell.setOnClickListener(v -> {
-                    PermissionRequest.ensurePermission(R.raw.permission_request_microphone, R.string.PermissionNoBluetoothWithHint, Manifest.permission.BLUETOOTH_CONNECT, granted -> {
-                        if (!granted) {
-                            SharedConfig.recordViaSco = false;
+                    ThemeBind.selectorBackground(cell, Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL), null, ThemeBind.of(Theme.key_listSelector));
+                    linearLayout.addView(cell);
+                    cell.setOnClickListener(v -> {
+                        Runnable apply = () -> {
+                            SharedConfig.recordInputDevice = option;
                             SharedConfig.saveConfig();
                             updateRecordViaSco = true;
                             dialogRef.get().dismiss();
@@ -1400,22 +1410,21 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
                                     listAdapter.onBindViewHolder(holder, bluetoothScoRow);
                                 }
                             }
+                        };
+                        if (AudioInputPreference.isBluetoothType(option)) {
+                            PermissionRequest.ensurePermission(R.raw.permission_request_microphone, R.string.PermissionNoBluetoothWithHint, Manifest.permission.BLUETOOTH_CONNECT, granted -> {
+                                if (granted) {
+                                    apply.run();
+                                }
+                            });
+                        } else {
+                            apply.run();
                         }
                     });
-
-                    SharedConfig.recordViaSco = true;
-                    SharedConfig.saveConfig();
-                    updateRecordViaSco = true;
-                    dialogRef.get().dismiss();
-
-                    RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(bluetoothScoRow);
-                    if (holder != null) {
-                        listAdapter.onBindViewHolder(holder, bluetoothScoRow);
-                    }
-                });
+                }
 
                 Dialog dialog = new AlertDialog.Builder(getParentActivity())
-                        .setTitle(getString(R.string.MicrophoneForVoiceMessages))
+                        .setTitle(getString(R.string.MicrophoneForRecordings))
                         .setView(linearLayout)
                         .setNegativeButton(getString("Cancel", R.string.Cancel), null)
                         .create();
@@ -2626,7 +2635,7 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
                     } else if (position == searchEngineRow) {
                         cell.setTextAndValue(getString(R.string.SearchEngine), SearchEngine.getCurrent().name, updateSearchEngine, false);
                     } else if (position == bluetoothScoRow) {
-                        cell.setTextAndValue(getString(R.string.MicrophoneForVoiceMessages), getString(SharedConfig.recordViaSco ? R.string.MicrophoneForVoiceMessagesSco : R.string.MicrophoneForVoiceMessagesBuiltIn), updateRecordViaSco, false);
+                        cell.setTextAndValue(getString(R.string.MicrophoneForRecordings), getString(microphoneTitle(AudioInputPreference.resolve(SharedConfig.recordInputDevice, AudioInputPreference.connectedInputTypes()))), updateRecordViaSco, false);
                         updateRecordViaSco = false;
                     }
                     break;

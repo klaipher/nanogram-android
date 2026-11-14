@@ -1,5 +1,6 @@
 package org.telegram.utils.recorder.audio;
 
+import org.telegram.messenger.AudioInputPreference;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -149,6 +150,7 @@ final class AudioCapture {
             if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
                 throw new IllegalStateException("Unable to initialize AudioRecord");
             }
+            AudioInputPreference.applyTo(audioRecord);
             audioRecord.startRecording();
             if (audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
                 throw new IllegalStateException("Unable to start AudioRecord");

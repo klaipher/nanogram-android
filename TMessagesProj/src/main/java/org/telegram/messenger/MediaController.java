@@ -3784,26 +3784,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     private void setBluetoothScoOn(boolean scoOn) {
-        AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
-        if (SharedConfig.recordViaSco && !PermissionRequest.hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-            SharedConfig.recordViaSco = false;
-            SharedConfig.saveConfig();
-        }
-        if (am.isBluetoothScoAvailableOffCall() && SharedConfig.recordViaSco || !scoOn) {
-            BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
-            try {
-                if (btAdapter != null && btAdapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothAdapter.STATE_CONNECTED || !scoOn) {
-                    if (scoOn && !am.isBluetoothScoOn()) {
-                        am.startBluetoothSco();
-                    } else if (!scoOn && am.isBluetoothScoOn()) {
-                        am.stopBluetoothSco();
-                    }
-                }
-            } catch (SecurityException ignored) {
-            } catch (Throwable e) {
-                FileLog.e(e);
-            }
-        }
+        AudioInputPreference.setBluetoothRouting(scoOn);
     }
 
     public boolean playMessage(final MessageObject messageObject) {
@@ -5332,6 +5313,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 //                        MediaDataController.getInstance(recordingCurrentAccount).pushDraftVoiceMessage(recordDialogId, recordTopicId, null);
 //
                         audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
+                        AudioInputPreference.applyTo(audioRecorder);
                         recordStartTime = System.currentTimeMillis();
                         writtenFrame = 0;
                         samplesCount = 0;
@@ -5435,6 +5417,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
                 audioRecorderPaused = false;
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
+                        AudioInputPreference.applyTo(audioRecorder);
                 recordStartTime = System.currentTimeMillis();
                 recordTimeCount = 0;
                 writtenFrame = 0;

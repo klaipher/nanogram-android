@@ -5934,6 +5934,13 @@
     <string name="MicrophoneForVoiceMessagesSco">Headset</string>
     <string name="MicrophoneForVoiceMessagesScoIfConnected">Headset (if connected)</string>
     <string name="MicrophoneForVoiceMessagesScoHint">Using a headset microphone may reduce background noise but will slightly decrease audio quality.</string>
+    <string name="MicrophoneForRecordings">Microphone for voice messages and round videos</string>
+    <string name="MicrophoneAutomatic">Automatic</string>
+    <string name="MicrophoneBuiltIn">Phone microphone</string>
+    <string name="MicrophoneWired">Wired headset</string>
+    <string name="MicrophoneUsb">USB headset</string>
+    <string name="MicrophoneBluetooth">Bluetooth headset</string>
+    <string name="MicrophoneLeAudio">LE Audio headset</string>
     <string name="ReactionInDialog">Reacted with %s to your message</string>
     <string name="DialogNotAvailable">Not available</string>
 
