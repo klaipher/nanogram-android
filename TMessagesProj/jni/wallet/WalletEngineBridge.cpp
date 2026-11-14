@@ -1097,7 +1097,7 @@ extern "C" JNIEXPORT jobject JNICALL
 Java_org_telegram_ui_Wallet_WalletEngine2_nativePrepareSend(
         JNIEnv *env, jclass, jlong handle, jbyteArray phrase_bytes, jstring address,
         jlong amount, jbyteArray comment_bytes, jbyteArray comment_recipient_public_key,
-        jstring gasless_address, jstring operation_id) {
+        jboolean trust_recipient_public_key, jstring gasless_address, jstring operation_id) {
     try {
         auto client = get_client(handle);
         const auto destination = java_string(env, address);
@@ -1128,7 +1128,7 @@ Java_org_telegram_ui_Wallet_WalletEngine2_nativePrepareSend(
                 env->GetByteArrayRegion(comment_recipient_public_key, 0, 32, reinterpret_cast<jbyte *>(recipient_key.data()));
                 if (env->ExceptionCheck()) return nullptr;
                 SecretScope scope(client, phrase, we::SecretAccessReason::kEncryptComment);
-                encrypted_comment_body = client.wallet->create_encrypted_comment({destination, comment, recipient_key, true});
+                encrypted_comment_body = client.wallet->create_encrypted_comment({destination, comment, recipient_key, trust_recipient_public_key == JNI_TRUE});
                 body = we::SendMessageBody::kRawPayload{*encrypted_comment_body};
             } else {
                 body = we::SendMessageBody::kComment{comment};
@@ -1178,7 +1178,7 @@ extern "C" JNIEXPORT jobject JNICALL
 Java_org_telegram_ui_Wallet_WalletEngine2_nativeSend(
         JNIEnv *env, jclass, jlong handle, jbyteArray phrase_bytes, jstring address,
         jlong amount, jbyteArray comment_bytes, jbyteArray comment_recipient_public_key,
-        jstring operation_id, jobject callbacks) {
+        jboolean trust_recipient_public_key, jstring operation_id, jobject callbacks) {
     try {
         auto client = get_client(handle);
         auto destination = java_string(env, address);
@@ -1205,7 +1205,7 @@ Java_org_telegram_ui_Wallet_WalletEngine2_nativeSend(
             if (env->ExceptionCheck()) return nullptr;
             SecretScope scope(client, phrase, we::SecretAccessReason::kEncryptComment);
             body = we::SendMessageBody::kRawPayload{
-                client.wallet->create_encrypted_comment({destination, *comment, recipient_key, true})
+                client.wallet->create_encrypted_comment({destination, *comment, recipient_key, trust_recipient_public_key == JNI_TRUE})
             };
         }
         auto intent = transfer_intent(destination, amount, std::move(body));
