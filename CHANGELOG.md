@@ -5,6 +5,18 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Shared-library sources, no new repos (W1.3)
+- `.gitmodules`: dav1d url -> https://code.videolan.org/videolan/dav1d.git (pin 54706fc, tag 1.5.4) and wamr url ->
+  https://github.com/bytecodealliance/wasm-micro-runtime.git (pin 25bd7eb); same commits, so no rebuild. Both match the
+  canonical upstream homes used by iOS and macOS.
+- Removed the dead `rlottie/src/lottie` include from voipandroid (no rlottie directory exists in this tree).
+- Rust toolchain pinned: `toolchain.properties` `rust=1.99.1` (the channel in Mac's `core-xprojects/rust-toolchain.toml`).
+  `ng prebuild` exports it as `TLOTTIE_RUST_TOOLCHAIN` and `RUSTUP_TOOLCHAIN` (tlottie defaulted to `stable` and
+  wallet-engine to its own rust-toolchain.toml, so each could build with a different compiler) and the value is part of the prebuild cache key. `ng doctor` reports it.
+  Install once: `rustup toolchain install 1.99.1 --profile minimal` and `rustup target add --toolchain 1.99.1
+  aarch64-linux-android` (the build script already prints that command when a target is missing).
+
+
 ### Shared tlottie (dkaraush/tlottie v1.0.6, same as iOS and macOS)
 - `TMessagesProj/jni/tlottie` now points at the official dkaraush/tlottie v1.0.6 (92df98dc) instead of klaipher/tlottie
   31f1b542 (v1.0.4 line); `.gitmodules` url changed. klaipher/tlottie carried no local commits of ours, and 31f1b542 is

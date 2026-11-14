@@ -204,6 +204,9 @@ def cmd_doctor(_: argparse.Namespace) -> None:
     for pkg in sdk_packages():
         p = sdk_root() / pkg.replace(";", "/")
         print(f"  {pkg:<32} {'ok' if p.exists() else 'MISSING'}")
+    if TC.get("rust"):
+        rc = subprocess.run(["rustup", "which", "--toolchain", TC["rust"], "rustc"], capture_output=True, text=True) if shutil.which("rustup") else None
+        print(f"rust         {TC['rust']} ({'ok' if rc and rc.returncode == 0 else 'MISSING: rustup toolchain install ' + TC['rust'] + ' --profile minimal'})")
     for tool in ("ccache", "ninja", "cmake", "adb"):
         print(f"{tool:<12} {shutil.which(tool) or 'not on PATH'}")
     if shutil.which("ccache"):
@@ -284,7 +287,7 @@ def prebuild_key(abis: list[str]) -> str:
     for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
         if p.is_file():
             h.update(p.name.encode() + p.read_bytes())
-    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')}".encode())
+    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')};rust={TC.get('rust', '')}".encode())
     return h.hexdigest()[:16]
 
 
@@ -312,6 +315,10 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
         "INCLUDE_DIR": str(tmp / "include"),
         "PKGCONFIG_DIR": str(tmp / "pkgconfig"),
     })
+    if TC.get("rust"):
+        # One compiler for every Rust prebuilt, overriding the sources' own rust-toolchain.toml.
+        env["TLOTTIE_RUST_TOOLCHAIN"] = TC["rust"]
+        env["RUSTUP_TOOLCHAIN"] = TC["rust"]
     if env.get("NANOGRAM_CCACHE"):
         # CMake-based libraries (BoringSSL, td, tlottie, openh264, wamr) reuse earlier compiles.
         env["CMAKE_C_COMPILER_LAUNCHER"] = env["NANOGRAM_CCACHE"]
