@@ -8235,9 +8235,9 @@ public class MediaDataController extends BaseController {
                 }
             }
             if (threadId == 0) {
-                draftPreferences.edit().remove("" + dialogId).remove("r_" + dialogId).commit();
+                draftPreferences.edit().remove("" + dialogId).remove("r_" + dialogId).apply();
             } else {
-                draftPreferences.edit().remove("t_" + dialogId + "_" + threadId).remove("rt_" + dialogId + "_" + threadId).commit();
+                draftPreferences.edit().remove("t_" + dialogId + "_" + threadId).remove("rt_" + dialogId + "_" + threadId).apply();
             }
             messagesController.removeDraftDialogIfNeed(dialogId);
         } else {
@@ -8298,7 +8298,7 @@ public class MediaDataController extends BaseController {
                 FileLog.e(e);
             }
         }
-        editor.commit();
+        editor.apply();
         if (fromServer && (threadId == 0 || getMessagesController().isForum(dialogId))) {
             if (draft != null && draft.reply_to != null && draft.reply_to.reply_to_msg_id != 0 && (replyToMessage == null || replyToMessage.reply_to instanceof TLRPC.TL_messageReplyHeader && replyToMessage.replyMessage == null)) {
                 final long replyDialogId = (draft.reply_to.flags & 2) != 0 ? DialogObject.getPeerDialogId(draft.reply_to.reply_to_peer_id) : dialogId;
@@ -8451,11 +8451,11 @@ public class MediaDataController extends BaseController {
                 }
             }
             if (threadId == 0) {
-                draftPreferences.edit().remove("" + dialogId).remove("r_" + dialogId).commit();
+                draftPreferences.edit().remove("" + dialogId).remove("r_" + dialogId).apply();
                 getMessagesController().sortDialogs(null);
                 getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
             } else {
-                draftPreferences.edit().remove("t_" + dialogId + "_" + threadId).remove("rt_" + dialogId + "_" + threadId).commit();
+                draftPreferences.edit().remove("t_" + dialogId + "_" + threadId).remove("rt_" + dialogId + "_" + threadId).apply();
             }
         } else if (draftMessage.reply_to == null || draftMessage.reply_to.reply_to_msg_id != 0) {
             if (draftMessage.reply_to != null) {
