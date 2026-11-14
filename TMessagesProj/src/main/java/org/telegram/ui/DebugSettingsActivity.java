@@ -28,6 +28,7 @@ import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.NanogramUpdater;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -101,6 +102,7 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_FRAME_METRICS = 39;
     private static final int ID_VIEW_METRICS = 41;
     private static final int ID_EXPERIMENTAL = 42;
+    private static final int ID_NANOGRAM_UPDATER = 47;
     private static final int ID_CLEAR_WIDGET_HEIGHTS = 43;
     private static final int ID_WIDGET_STATIC_LAYERS = 44;
     private static final int ID_FORGET_HINTS = 45;
@@ -180,6 +182,9 @@ public class DebugSettingsActivity extends UniversalFragment {
             items.add(UItem.asCheck(ID_FLOATING_DEBUG, getString(R.string.FloatingDebugEnable)).setChecked(SharedConfig.isFloatingDebugActive));
         }
         items.add(UItem.asCheck(ID_EXPERIMENTAL, "Experimental settings").setChecked(SharedSettings.experimentalSettingsAllowed.get()));
+        if (BuildVars.DEBUG_VERSION) {
+            items.add(UItem.asCheck(ID_NANOGRAM_UPDATER, "GitHub update check in debug build").setChecked(NanogramUpdater.getInstance().isDebugToggleOn()));
+        }
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("Interface"));
@@ -437,6 +442,9 @@ public class DebugSettingsActivity extends UniversalFragment {
             }
             case ID_EXPERIMENTAL:
                 SharedSettings.experimentalSettingsAllowed.toggle();
+                break;
+            case ID_NANOGRAM_UPDATER:
+                NanogramUpdater.getInstance().setDebugToggle(!NanogramUpdater.getInstance().isDebugToggleOn());
                 break;
             case ID_CLEAR_WIDGET_HEIGHTS:
                 // Chats opened after this lay their widgets out as on first sight.
