@@ -4,6 +4,20 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Biometrics on the modern API
+- Removed the API 36 FingerprintManager stub jar, the compileOnly line and the R8 `-dontwarn`; deleted
+  `org.telegram.messenger.support.fingerprint` (only `PasscodeView.hasFingerprint` and `FingerprintController` used it).
+- `FingerprintController.isBiometricAvailable()` = `BiometricManager.canAuthenticate(BIOMETRIC_STRONG)`, replaces
+  isHardwareDetected + hasEnrolledFingerprints. The passcode keystore key (RSA, user-auth-required, invalidated on new
+  enrolment) is unchanged, so stored settings and keys stay valid. BIOMETRIC_STRONG kept for passcode, bot biometry
+  and wallet: Class 3 face/iris now qualify (Android 11+), weak face does not.
+- Wallet unlock (`GramWalletStorageAuth`): R+ framework BiometricPrompt (device credential inside); Android 6-10
+  AndroidX BiometricPrompt (BIOMETRIC_STRONG, so P-Q stay fingerprint/strong-only) with a "Use device PIN" button. The hand-rolled FingerprintManager
+  dialog is gone.
+- `androidx.biometric` stays at 1.1.0 (newest stable, Jan 2021; 1.4 is still beta).
+- `BotBiometry` creates a new AndroidX prompt per request (AndroidX keeps one client callback per activity).
+- Removed unused strings WalletTouchFingerprint and WalletFingerprintRetry.
+
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),
   DrKLO/Telegram 21f7d109 (commit 406cbeb).

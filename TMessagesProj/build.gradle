@@ -42,8 +42,6 @@ dependencies {
     // Used directly by our code; AGP 9 no longer aligns the compile classpath with runtime-only versions.
     implementation 'androidx.collection:collection:1.7.0'
     compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
-    // compileSdk 37 removed FingerprintManager from the SDK; devices still provide it (passcode and wallet unlock on M-Q).
-    compileOnly files('libs/compile-only/android-36-fingerprint-stubs.jar')
     implementation 'androidx.palette:palette:1.1.0'
     implementation 'androidx.exifinterface:exifinterface:1.4.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.1.0'

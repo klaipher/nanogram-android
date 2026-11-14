@@ -85,5 +85,3 @@
 # Use -keep to explicitly keep any other classes shrinking would remove
 #-dontoptimize
 #-dontobfuscate
-# Nanogram: compileSdk 37 dropped FingerprintManager from the SDK; devices still provide it (see NANOGRAM-CHANGES.md).
--dontwarn android.hardware.fingerprint.**
