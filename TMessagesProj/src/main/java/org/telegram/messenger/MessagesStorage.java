@@ -1644,7 +1644,13 @@ public class MessagesStorage extends BaseController {
                 state6 = null;
                 database.commitTransaction();
                 database.executeFast("PRAGMA journal_size_limit = 0").stepThis().dispose();
-                database.executeFast("VACUUM").stepThis().dispose();
+                // temp_store = MEMORY would build the whole compacted copy in RAM.
+                database.executeFast("PRAGMA temp_store = FILE").stepThis().dispose();
+                try {
+                    database.executeFast("VACUUM").stepThis().dispose();
+                } finally {
+                    database.executeFast("PRAGMA temp_store = MEMORY").stepThis().dispose();
+                }
                 database.executeFast("PRAGMA journal_size_limit = -1").stepThis().dispose();
 
                 getMessagesController().getTopicsController().databaseCleared();
