@@ -195,8 +195,8 @@ public class BotBiometry {
         });
     }
 
+    // New prompt per request: AndroidX keeps one client callback per activity, so a reused prompt would lose it to other users.
     private void initPrompt() {
-        if (prompt != null) return;
         final Executor executor = ContextCompat.getMainExecutor(context);
         prompt = new BiometricPrompt(LaunchActivity.instance, executor, new BiometricPrompt.AuthenticationCallback() {
             @Override
