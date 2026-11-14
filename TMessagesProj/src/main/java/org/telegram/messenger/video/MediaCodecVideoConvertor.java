@@ -180,7 +180,7 @@ public class MediaCodecVideoConvertor {
                     canBeBrokenEncoder = "c2.qti.avc.encoder".equalsIgnoreCase(selectedEncoderName);
                     FileLog.d("selected encoder " + selectedEncoderName);
 
-                    encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    encoder = org.telegram.messenger.NanogramMediaCapabilities.configureEncoder(encoder, outputFormat, outputMimeType);
                     inputSurface = new InputSurface(encoder.createInputSurface());
                     inputSurface.makeCurrent();
                     encoder.start();
@@ -506,7 +506,7 @@ public class MediaCodecVideoConvertor {
                             if (!legacyCodecSetup) {
                                 setEncoderOperatingRate(outputFormat);
                             }
-                            encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                            encoder = org.telegram.messenger.NanogramMediaCapabilities.configureEncoder(encoder, outputFormat, outputMimeType);
                             inputSurface = new InputSurface(encoder.createInputSurface());
                             inputSurface.makeCurrent();
                             encoder.start();

@@ -3412,7 +3412,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                     }
                 } else {
-                    videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    videoEncoder = org.telegram.messenger.NanogramMediaCapabilities.configureEncoder(videoEncoder, format, VIDEO_MIME_TYPE);
                 }
                 surface = videoEncoder.createInputSurface();
                 videoEncoder.start();

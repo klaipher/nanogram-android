@@ -321,7 +321,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
         }
         diagnostics.log("video encoder configure: codec=" + videoCodec.getName()
                 + ", format=" + format);
-        videoCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        videoCodec = org.telegram.messenger.NanogramMediaCapabilities.configureEncoder(videoCodec, format, MediaFormat.MIMETYPE_VIDEO_AVC);
         videoInputSurface = videoCodec.createInputSurface();
     }
 

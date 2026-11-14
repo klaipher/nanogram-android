@@ -17,6 +17,19 @@ public final class NanogramDisplay {
         return supportsHints(Build.VERSION.SDK_INT) && NanogramExperiments.isEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE);
     }
 
+    public static boolean defaultDisplayHasArr() {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA || ApplicationLoader.applicationContext == null) {
+                return false;
+            }
+            android.hardware.display.DisplayManager dm = (android.hardware.display.DisplayManager) ApplicationLoader.applicationContext.getSystemService(android.content.Context.DISPLAY_SERVICE);
+            android.view.Display display = dm.getDisplay(android.view.Display.DEFAULT_DISPLAY);
+            return display != null && display.hasArrSupport();
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
     public static boolean supportsHints(int sdkInt) {
         return sdkInt >= Build.VERSION_CODES.VANILLA_ICE_CREAM;
     }

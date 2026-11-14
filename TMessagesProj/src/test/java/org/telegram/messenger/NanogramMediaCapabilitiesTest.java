@@ -53,8 +53,19 @@ public class NanogramMediaCapabilitiesTest {
         assertTrue(NanogramMediaCapabilities.autoGpuPreupload(34, false));
         assertFalse(NanogramMediaCapabilities.autoGpuPreupload(0, false));
         assertFalse(NanogramMediaCapabilities.autoGpuPreupload(33, true));
-        assertFalse(NanogramMediaCapabilities.autoAdaptiveRefresh(34));
-        assertTrue(NanogramMediaCapabilities.autoAdaptiveRefresh(35));
+        assertFalse(NanogramMediaCapabilities.autoAdaptiveRefresh(35, true));
+        assertFalse(NanogramMediaCapabilities.autoAdaptiveRefresh(36, false));
+        assertTrue(NanogramMediaCapabilities.autoAdaptiveRefresh(36, true));
+    }
+
+    @Test
+    public void refusedEncoderNameIsDropped() {
+        java.util.Map<String, String> names = new java.util.HashMap<>();
+        names.put("a", "hw1");
+        names.put("b", "hw2");
+        NanogramMediaCapabilities.dropName(names, "hw1");
+        assertEquals("", names.get("a"));
+        assertEquals("hw2", names.get("b"));
     }
 
     @Test

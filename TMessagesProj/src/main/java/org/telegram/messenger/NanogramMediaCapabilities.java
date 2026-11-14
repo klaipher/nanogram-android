@@ -5,6 +5,7 @@ import android.content.Context;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.os.Build;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ public final class NanogramMediaCapabilities {
     }
 
     private static final ConcurrentHashMap<String, String> encoderNames = new ConcurrentHashMap<>();
+    private static final java.util.Set<String> pickedHardware = ConcurrentHashMap.newKeySet();
     private static volatile int av1 = -1;
 
     private NanogramMediaCapabilities() {
@@ -82,8 +84,9 @@ public final class NanogramMediaCapabilities {
         return performanceClass >= CLASS_S && !lowRam;
     }
 
-    public static boolean autoAdaptiveRefresh(int sdkInt) {
-        return NanogramDisplay.supportsHints(sdkInt);
+    /** Adaptive refresh needs Android 16 plus a display whose HAL supports it (Display.hasArrSupport); API 35 stays tester-only. */
+    public static boolean autoAdaptiveRefresh(int sdkInt, boolean displayHasArr) {
+        return sdkInt >= Build.VERSION_CODES.BAKLAVA && displayHasArr;
     }
 
     public static boolean hasHardwareDecoder(String mime, int width, int height, int fps) {
@@ -115,29 +118,64 @@ public final class NanogramMediaCapabilities {
         return false;
     }
 
-    /** Hardware encoder for the mime that can do the size and rate, created by name; the platform default encoder when none (or on any error). */
+    /** The platform default encoder when it is already hardware (today's behaviour); a hardware encoder by name only when the default is software. */
     public static MediaCodec createEncoder(String mime, int width, int height, int fps) throws java.io.IOException {
-        String name = encoderNames.get(mime + width + "x" + height + "@" + fps);
-        if (name == null) {
-            name = findHardware(mime, true, width, height, fps);
-            encoderNames.put(mime + width + "x" + height + "@" + fps, name == null ? "" : name);
-        }
-        if (name != null && !name.isEmpty()) {
-            try {
-                MediaCodec codec = MediaCodec.createByCodecName(name);
+        MediaCodec codec = MediaCodec.createEncoderByType(mime);
+        try {
+            MediaCodecInfo info = codec.getCodecInfo();
+            if (isHardware(info.isHardwareAccelerated(), info.isSoftwareOnly())) {
+                return codec;
+            }
+            String key = mime + width + "x" + height + "@" + fps;
+            String name = encoderNames.get(key);
+            if (name == null) {
+                name = findHardware(mime, true, width, height, fps);
+                encoderNames.put(key, name == null ? "" : name);
+            }
+            if (!name.isEmpty() && !name.equals(codec.getName())) {
+                MediaCodec hardware = MediaCodec.createByCodecName(name);
+                codec.release();
+                pickedHardware.add(name);
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("video encoder " + mime + ": " + name + " (hardware)");
                 }
-                return codec;
-            } catch (Throwable e) {
-                FileLog.e(e, false);
+                return hardware;
             }
-        }
-        MediaCodec codec = MediaCodec.createEncoderByType(mime);
-        if (BuildVars.LOGS_ENABLED) {
-            FileLog.d("video encoder " + mime + ": " + codec.getName() + " (platform default)");
+        } catch (Throwable e) {
+            FileLog.e(e, false);
         }
         return codec;
+    }
+
+    /** Configures an encoder from createEncoder; when the hardware one it picked refuses, that name is dropped and the platform default is configured instead. */
+    public static MediaCodec configureEncoder(MediaCodec codec, MediaFormat format, String mime) throws java.io.IOException {
+        try {
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            return codec;
+        } catch (RuntimeException e) {
+            String name = codec.getName();
+            if (!pickedHardware.contains(name)) {
+                throw e;
+            }
+            FileLog.e(e, false);
+            dropName(encoderNames, name);
+            pickedHardware.remove(name);
+            try {
+                codec.release();
+            } catch (Throwable ignore) {
+            }
+            MediaCodec fallback = MediaCodec.createEncoderByType(mime);
+            fallback.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            return fallback;
+        }
+    }
+
+    static void dropName(java.util.Map<String, String> names, String name) {
+        for (java.util.Map.Entry<String, String> entry : names.entrySet()) {
+            if (name.equals(entry.getValue())) {
+                entry.setValue("");
+            }
+        }
     }
 
     private static String findHardware(String mime, boolean encoder, int width, int height, int fps) {

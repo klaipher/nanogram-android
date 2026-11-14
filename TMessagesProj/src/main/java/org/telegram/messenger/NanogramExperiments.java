@@ -43,7 +43,7 @@ public final class NanogramExperiments {
     }
 
     public static boolean autoDefault(String key) {
-        return ADAPTIVE_REFRESH_RATE.equals(key) && NanogramMediaCapabilities.autoAdaptiveRefresh(Build.VERSION.SDK_INT);
+        return ADAPTIVE_REFRESH_RATE.equals(key) && NanogramMediaCapabilities.autoAdaptiveRefresh(Build.VERSION.SDK_INT, NanogramDisplay.defaultDisplayHasArr());
     }
 
     public static boolean isOverridden(String key) {
