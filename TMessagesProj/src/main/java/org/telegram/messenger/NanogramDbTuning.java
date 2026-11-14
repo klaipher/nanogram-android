@@ -44,19 +44,9 @@ public class NanogramDbTuning {
             list.add("PRAGMA mmap_size = 67108864");
         }
         list.add("PRAGMA wal_autocheckpoint = 1000");
-        // Refresh planner statistics only for tables whose indexes changed a lot (bit 0x10000 = analyze up to
-        // a bounded number of rows); cheap on an up-to-date database.
-        list.add("PRAGMA optimize=0x10002");
-        return list;
-    }
-
-    /** Small side database (file paths): small page cache, no mmap. */
-    public static List<String> lightPragmas(boolean flagOn) {
-        ArrayList<String> list = new ArrayList<>();
-        if (flagOn) {
-            list.add("PRAGMA cache_size = -2048");
-            list.add("PRAGMA optimize=0x10002");
-        }
+        // No PRAGMA optimize here: the bundled SQLite 3.39.3 has no "check all tables" bit (0x10000 is 3.46+), so
+        // at open it analyzes nothing, and a later bare optimize would run an unbounded ANALYZE. Revisit with
+        // analysis_limit after the SQLCipher/SQLite 3.46+ swap.
         return list;
     }
 
@@ -68,10 +58,6 @@ public class NanogramDbTuning {
                 FileLog.e(e);
             }
         }
-    }
-
-    public static void applyLight(SQLiteDatabase database) {
-        run(database, lightPragmas(isEnabled()));
     }
 
     public static void apply(SQLiteDatabase database) {

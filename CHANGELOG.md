@@ -6,10 +6,13 @@ Newest first: version, build number, date, commit; what changed and how.
 ## Unreleased
 
 ### Android media, database and search (modernization review, branch nanogram/mod-media)
-- SHARED-SQLITE-2 (same flag as ANDROID-DB-1, default OFF): the DB tuning flag now also runs `PRAGMA optimize=0x10002` on
-  cache4.db open, `PRAGMA optimize` before the database closes on cleanup, and gives `file_paths.db` a 2 MB page cache plus
-  the same optimize. PRAGMAs are engine-agnostic (valid on plain SQLite and SQLCipher) and sit after the existing
-  `synchronous = NORMAL` in WAL. `cache_size`/`mmap_size` are the ANDROID-DB-1 settings. Deferred: opening with
+- SHARED-SQLITE-2 (same flag as ANDROID-DB-1, default OFF): reviewed and found to have NO effect on the bundled SQLite
+  3.39.3, so removed: `PRAGMA optimize=0x10002` on open (bit 0x10000 exists only from 3.46; 3.39.3 analyzes only tables
+  used by queries on that connection, none at open), the `file_paths.db` light profile (`cache_size -2048` is about the
+  compiled default of -2000), and `PRAGMA optimize` before close (all callers delete the file or retry a malformed DB,
+  and a bare optimize runs an unbounded ANALYZE since nothing creates sqlite_stat1). Revisit after the SQLCipher/SQLite
+  3.46+ swap: run optimize at a real idle point on storageQueue with `PRAGMA analysis_limit=400` first; note that query
+  plans change once sqlite_stat1 exists. `cache_size`/`mmap_size` stay the ANDROID-DB-1 settings. Deferred: opening with
   `SQLITE_OPEN_NOMUTEX` (getDatabase() has ~25 callers; needs a thread audit; `jni/sqlite` is owned by the shared-codebase
   migration). JVM test: `NanogramDbTuningTest`.
 - SHARED-FFMPEG-ANDROID-GIF-1 (flag, default OFF): H.264 clips up to 320 px (GIFs, round videos) decode with the loop
