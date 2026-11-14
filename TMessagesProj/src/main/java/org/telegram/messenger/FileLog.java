@@ -59,6 +59,7 @@ public class FileLog {
     private File tonlibFile = null;
     private boolean initied;
     private boolean initiing;
+    private boolean appendToCurrent;
     public static boolean databaseIsMalformed = false;
 
     private OutputStreamWriter tlStreamWriter = null;
@@ -317,7 +318,7 @@ public class FileLog {
     }
 
 
-    private void init() {
+    private synchronized void init() {
         if (initied) {
             return;
         }
@@ -337,7 +338,11 @@ public class FileLog {
                 return;
             }
             NanogramLog.prune(dir);
-            currentFile = new File(dir, date + ".txt");
+            currentFile = BuildVars.LOGS_ENABLED ? null : NanogramLog.reusableQuietFile(dir, date);
+            appendToCurrent = currentFile != null;
+            if (currentFile == null) {
+                currentFile = new File(dir, date + ".txt");
+            }
             tlRequestsFile = new File(dir, date + "_mtproto.txt");
         } catch (Exception e) {
             e.printStackTrace();
@@ -345,7 +350,7 @@ public class FileLog {
         try {
             logQueue = new DispatchQueue2("logQueue");
             currentFile.createNewFile();
-            FileOutputStream stream = new FileOutputStream(currentFile);
+            FileOutputStream stream = new FileOutputStream(currentFile, appendToCurrent);
             streamWriter = new OutputStreamWriter(stream);
             streamWriter.write("-----start log " + date + "-----\n");
             streamWriter.flush();
@@ -426,7 +431,7 @@ public class FileLog {
 
     // Key lifecycle lines (start, push, calls, connection): kept in release builds too, never in hot loops.
     public static void i(final String message) {
-        if (!NanogramLog.shouldLog()) {
+        if (!NanogramLog.shouldLogEvent()) {
             return;
         }
         ensureInitied();
