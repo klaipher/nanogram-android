@@ -5,6 +5,14 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Shared tlottie (dkaraush/tlottie v1.0.6, same as iOS and macOS)
+- `TMessagesProj/jni/tlottie` now points at the official dkaraush/tlottie v1.0.6 (92df98dc) instead of klaipher/tlottie
+  31f1b542 (v1.0.4 line); `.gitmodules` url changed. klaipher/tlottie carried no local commits of ours, and 31f1b542 is
+  an ancestor of 92df98dc, so nothing is lost. Android gains 6 commits: 8386793 limits overhaul (2000 px canvas, NFT
+  model sticker fix, rlottie_2019 NFT pattern compatibility, faster asset id parsing), b8ed399 v1.0.5, 0e82666 merge,
+  4ad34f6 empty JSON arrays for vectors (rlottie compatibility), a9164a0 v1.0.6, 92df98d v1.0.6 follow-up. The C API
+  header is unchanged; the prebuilt rebuilds because the submodule commit is part of the `ng prebuild` key.
+
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not
