@@ -1499,11 +1499,13 @@ target_include_directories(tgcalls PUBLIC
         voip/webrtc/third_party/libsrtp/crypto/include
         third_party
         ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
-        third_party/ffmpeg
         third_party/libvpx
         third_party/dav1d/include
         voip/webrtc/third_party/crc32c/src/include
 )
+# FFmpeg's source root holds a VERSION file; on a case-insensitive disk an -I on it shadows libc++'s <version>.
+# Searching it after the system headers keeps <libavcodec/...> working without the clash.
+target_compile_options(tgcalls PUBLIC "-idirafter${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg")
 target_include_directories(tgcalls PUBLIC
         ${NANOGRAM_SHIM_DIR}
         voip/webrtc/nanogram/android-generated)

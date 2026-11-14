@@ -326,7 +326,6 @@ target_include_directories(${NATIVE_LIB} PUBLIC
         third_party/boringssl/include
         openssl/include
         ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
-        third_party/ffmpeg
         third_party/libvpx
         third_party/dav1d/include
         emoji
@@ -338,6 +337,9 @@ target_include_directories(${NATIVE_LIB} PUBLIC
         td/tde2e
         td/tde2e/td/e2e
 )
+# FFmpeg's source root holds a VERSION file; on a case-insensitive disk an -I on it shadows libc++'s <version>.
+# Searching it after the system headers keeps <libavcodec/...> working without the clash.
+target_compile_options(${NATIVE_LIB} PUBLIC "-idirafter${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg")
 
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
