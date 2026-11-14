@@ -5,6 +5,18 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-ML-1: ML Kit replaces Mobile Vision
+- QR scan (camera scanner, QR overlay, story QR hint), document barcodes (MrzRecognizer driver licences) and face
+  detection (photo viewer, paint, story paint) use ML Kit unbundled `play-services-mlkit-barcode-scanning` and
+  `-face-detection` through one synchronous wrapper, `NanogramVision` (Tasks.await on the existing background threads).
+  `play-services-vision` and its manifest meta-data are gone; the `com.google.mlkit.vision.DEPENDENCIES` meta-data
+  pre-downloads the barcode and face models next to the subject segmentation one.
+- If a model is missing (no Play services, de-Googled device) the wrapper reports not operational after the first failure
+  and the existing ZXing path (QR) or the no-face result keeps working.
+- Face rotation is now passed in degrees (the old code passed degrees where Mobile Vision expected 0..3).
+- Test: `NanogramVisionTest` (rotation normalization). Needs a device check: scan one QR at 3 distances and in dim
+  light, avatar face hint, driver licence PDF417.
+
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

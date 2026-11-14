@@ -11,18 +11,16 @@ import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.text.TextUtils;
-import android.util.SparseArray;
 import android.view.TextureView;
 import android.view.View;
 
 import androidx.annotation.NonNull;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
+import com.google.mlkit.vision.barcode.common.Barcode;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NanogramVision;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -30,12 +28,13 @@ import org.telegram.messenger.camera.CameraView;
 import org.telegram.ui.Components.AnimatedFloat;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class QRScanner {
 
-    private final AtomicReference<BarcodeDetector> detector = new AtomicReference<>();
+    private final AtomicReference<NanogramVision.Barcodes> detector = new AtomicReference<>();
     private final AtomicBoolean paused = new AtomicBoolean(false);
 
     private final Utilities.Callback<Detected> listener;
@@ -46,7 +45,7 @@ public class QRScanner {
         this.listener = whenScanned;
         this.prefix = MessagesController.getInstance(UserConfig.selectedAccount).linkPrefix;
         Utilities.globalQueue.postRunnable(() -> {
-            detector.set(new BarcodeDetector.Builder(context).setBarcodeFormats(Barcode.QR_CODE).build());
+            detector.set(new NanogramVision.Barcodes(true));
             attach(cameraView);
         });
     }
@@ -131,26 +130,27 @@ public class QRScanner {
             return null;
         }
 
-        final BarcodeDetector detector = this.detector.get();
+        final NanogramVision.Barcodes detector = this.detector.get();
         if (detector == null || !detector.isOperational()) {
             return null;
         }
 
         final int w = bitmap.getWidth();
         final int h = bitmap.getHeight();
-        final Frame frame = new Frame.Builder().setBitmap(bitmap).build();
-        final SparseArray<Barcode> codes = detector.detect(frame);
+        final List<Barcode> codes = detector.detect(bitmap);
 
         for (int i = 0; i < codes.size(); ++i) {
-            final Barcode code = codes.valueAt(i);
-            String link = code.rawValue;
+            final Barcode code = codes.get(i);
+            String link = code.getRawValue();
+            if (link == null || code.getCornerPoints() == null) continue;
             if (link == null) continue;
             link = link.trim();
             if (!link.startsWith(prefix) && !link.startsWith("https://" + prefix) && !link.startsWith("http://" + prefix)) continue;
 
-            final PointF[] cornerPoints = new PointF[code.cornerPoints.length];
-            for (int j = 0; j < code.cornerPoints.length; ++j) {
-                cornerPoints[j] = new PointF((float) code.cornerPoints[j].x / w, (float) code.cornerPoints[j].y / h);
+            final android.graphics.Point[] corners = code.getCornerPoints();
+            final PointF[] cornerPoints = new PointF[corners.length];
+            for (int j = 0; j < corners.length; ++j) {
+                cornerPoints[j] = new PointF((float) corners[j].x / w, (float) corners[j].y / h);
             }
 
             return new Detected(link, cornerPoints);
@@ -179,7 +179,7 @@ public class QRScanner {
     }
 
     public void detach() {
-        BarcodeDetector detector = this.detector.getAndSet(null);
+        NanogramVision.Barcodes detector = this.detector.getAndSet(null);
         if (detector != null) {
             detector.release();
         }

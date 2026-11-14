@@ -50,9 +50,7 @@ import androidx.dynamicanimation.animation.FloatValueHolder;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.face.Face;
-import com.google.android.gms.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.Face;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.Bitmaps;
@@ -69,6 +67,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.NanogramVision;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.tgnet.TLRPC;
@@ -1634,10 +1633,10 @@ public class LPhotoPaintView extends SizeNotifierFrameLayoutPhoto implements IPh
 
     private int getFrameRotation() {
         switch (originalBitmapRotation) {
-            case 90: return Frame.ROTATION_90;
-            case 180: return Frame.ROTATION_180;
-            case 270: return Frame.ROTATION_270;
-            default: return Frame.ROTATION_0;
+            case 90: return 90;
+            case 180: return 180;
+            case 270: return 270;
+            default: return 0;
         }
     }
 
@@ -1647,12 +1646,9 @@ public class LPhotoPaintView extends SizeNotifierFrameLayoutPhoto implements IPh
 
     private void detectFaces() {
         queue.postRunnable(() -> {
-            FaceDetector faceDetector = null;
+            NanogramVision.Faces faceDetector = null;
             try {
-                faceDetector = new FaceDetector.Builder(getContext())
-                        .setMode(FaceDetector.ACCURATE_MODE)
-                        .setLandmarkType(FaceDetector.ALL_LANDMARKS)
-                        .setTrackingEnabled(false).build();
+                faceDetector = new NanogramVision.Faces(true, true);
                 if (!faceDetector.isOperational()) {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.e("face detection is not operational");
@@ -1660,19 +1656,14 @@ public class LPhotoPaintView extends SizeNotifierFrameLayoutPhoto implements IPh
                     return;
                 }
 
-                Frame frame = new Frame.Builder().setBitmap(facesBitmap).setRotation(getFrameRotation()).build();
-                SparseArray<Face> faces;
-                try {
-                    faces = faceDetector.detect(frame);
-                } catch (Throwable e) {
-                    FileLog.e(e);
+                List<Face> faces = faceDetector.detect(facesBitmap, getFrameRotation());
+                if (faces == null) {
                     return;
                 }
                 ArrayList<PhotoFace> result = new ArrayList<>();
                 Size targetSize = getPaintingSize();
                 for (int i = 0; i < faces.size(); i++) {
-                    int key = faces.keyAt(i);
-                    Face f = faces.get(key);
+                    Face f = faces.get(i);
                     PhotoFace face = new PhotoFace(f, facesBitmap, targetSize, isSidewardOrientation());
                     if (face.isSufficient()) {
                         result.add(face);

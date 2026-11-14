@@ -37,7 +37,6 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
-import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -53,9 +52,7 @@ import androidx.dynamicanimation.animation.FloatValueHolder;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
+import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.LuminanceSource;
 import com.google.zxing.PlanarYUVLuminanceSource;
@@ -74,6 +71,7 @@ import org.telegram.messenger.MrzRecognizer;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.NanogramVision;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.camera.CameraSessionWrapper;
@@ -97,6 +95,7 @@ import org.telegram.ui.Components.URLSpanNoUnderline;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 
 public class CameraScanActivity extends BaseFragment {
 
@@ -150,7 +149,7 @@ public class CameraScanActivity extends BaseFragment {
     private boolean qrLoaded = false;
 
     private QRCodeReader qrReader = null;
-    private BarcodeDetector visionQrReader = null;
+    private NanogramVision.Barcodes visionQrReader = null;
 
     private boolean needGalleryButton;
 
@@ -257,7 +256,7 @@ public class CameraScanActivity extends BaseFragment {
         if (isQr()) {
             Utilities.globalQueue.postRunnable(() -> {
                 qrReader = new QRCodeReader();
-                visionQrReader = new BarcodeDetector.Builder(ApplicationLoader.applicationContext).setBarcodeFormats(Barcode.QR_CODE).build();
+                visionQrReader = new NanogramVision.Barcodes(true);
             });
         }
 
@@ -1234,6 +1233,9 @@ public class CameraScanActivity extends BaseFragment {
     }
 
     private static PointF[] toPointF(Point[] points, int w, int h) {
+        if (points == null) {
+            return new PointF[0];
+        }
         PointF[] out = new PointF[points.length];
         for (int i = 0; i < points.length; ++i) {
             out[i] = new PointF(
@@ -1251,29 +1253,28 @@ public class CameraScanActivity extends BaseFragment {
             PointF[] cornerPoints = null;
             int width = 1, height = 1;
             if (visionQrReader != null && visionQrReader.isOperational()) {
-                Frame frame;
+                List<Barcode> codes;
                 if (bitmap != null) {
-                    frame = new Frame.Builder().setBitmap(bitmap).build();
                     width = bitmap.getWidth();
                     height = bitmap.getHeight();
+                    codes = visionQrReader.detect(bitmap);
                 } else {
-                    frame = new Frame.Builder().setImageData(ByteBuffer.wrap(data), size.getWidth(), size.getHeight(), ImageFormat.NV21).build();
                     width = size.getWidth();
                     height = size.getWidth();
+                    codes = visionQrReader.detect(data, size.getWidth(), size.getHeight());
                 }
-                SparseArray<Barcode> codes = visionQrReader.detect(frame);
                 if (codes != null && codes.size() > 0) {
-                    Barcode code = codes.valueAt(0);
-                    text = code.rawValue;
-                    cornerPoints = toPointF(code.cornerPoints, width, height);
-                    if (code.cornerPoints == null || code.cornerPoints.length == 0) {
+                    Barcode code = codes.get(0);
+                    text = code.getRawValue();
+                    cornerPoints = toPointF(code.getCornerPoints(), width, height);
+                    if (code.getCornerPoints() == null || code.getCornerPoints().length == 0) {
                         bounds = null;
                     } else {
                         float minX = Float.MAX_VALUE,
                               maxX = Float.MIN_VALUE,
                               minY = Float.MAX_VALUE,
                               maxY = Float.MIN_VALUE;
-                        for (Point point : code.cornerPoints) {
+                        for (Point point : code.getCornerPoints()) {
                             minX = Math.min(minX, point.x);
                             maxX = Math.max(maxX, point.x);
                             minY = Math.min(minY, point.y);
@@ -1284,22 +1285,21 @@ public class CameraScanActivity extends BaseFragment {
                 } else if (bitmap != null) {
                     Bitmap inverted = invert(bitmap);
                     bitmap.recycle();
-                    frame = new Frame.Builder().setBitmap(inverted).build();
                     width = inverted.getWidth();
                     height = inverted.getHeight();
-                    codes = visionQrReader.detect(frame);
+                    codes = visionQrReader.detect(inverted);
                     if (codes != null && codes.size() > 0) {
-                        Barcode code = codes.valueAt(0);
-                        text = code.rawValue;
-                        cornerPoints = toPointF(code.cornerPoints, width, height);
-                        if (code.cornerPoints == null || code.cornerPoints.length == 0) {
+                        Barcode code = codes.get(0);
+                        text = code.getRawValue();
+                        cornerPoints = toPointF(code.getCornerPoints(), width, height);
+                        if (code.getCornerPoints() == null || code.getCornerPoints().length == 0) {
                             bounds = null;
                         } else {
                             float minX = Float.MAX_VALUE,
                                     maxX = Float.MIN_VALUE,
                                     minY = Float.MAX_VALUE,
                                     maxY = Float.MIN_VALUE;
-                            for (Point point : code.cornerPoints) {
+                            for (Point point : code.getCornerPoints()) {
                                 minX = Math.min(minX, point.x);
                                 maxX = Math.max(maxX, point.x);
                                 minY = Math.min(minY, point.y);
@@ -1310,22 +1310,21 @@ public class CameraScanActivity extends BaseFragment {
                     } else {
                         Bitmap monochrome = monochrome(inverted, 90);
                         inverted.recycle();
-                        frame = new Frame.Builder().setBitmap(monochrome).build();
                         width = inverted.getWidth();
                         height = inverted.getHeight();
-                        codes = visionQrReader.detect(frame);
+                        codes = visionQrReader.detect(monochrome);
                         if (codes != null && codes.size() > 0) {
-                            Barcode code = codes.valueAt(0);
-                            text = code.rawValue;
-                            cornerPoints = toPointF(code.cornerPoints, width, height);
-                            if (code.cornerPoints == null || code.cornerPoints.length == 0) {
+                            Barcode code = codes.get(0);
+                            text = code.getRawValue();
+                            cornerPoints = toPointF(code.getCornerPoints(), width, height);
+                            if (code.getCornerPoints() == null || code.getCornerPoints().length == 0) {
                                 bounds = null;
                             } else {
                                 float minX = Float.MAX_VALUE,
                                         maxX = Float.MIN_VALUE,
                                         minY = Float.MAX_VALUE,
                                         maxY = Float.MIN_VALUE;
-                                for (Point point : code.cornerPoints) {
+                                for (Point point : code.getCornerPoints()) {
                                     minX = Math.min(minX, point.x);
                                     maxX = Math.max(maxX, point.x);
                                     minY = Math.min(minY, point.y);

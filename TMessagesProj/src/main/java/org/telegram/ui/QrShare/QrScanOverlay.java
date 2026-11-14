@@ -42,9 +42,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
+import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.Result;
@@ -59,6 +57,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.NanogramVision;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.LiteMode;
@@ -76,6 +75,7 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.PhotoAlbumPickerActivity;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The QR scanner of the QR screen, opened like the story camera: the scan button swells a little, then stretches over
@@ -287,9 +287,9 @@ public final class QrScanOverlay extends FrameLayout {
     /** The first code in a picture that {@code accept} takes, or null; not on the UI thread. */
     @Nullable
     public static String readQr(Bitmap bitmap, Utilities.CallbackReturn<String, Boolean> accept) {
-        BarcodeDetector vision = null;
+        NanogramVision.Barcodes vision = null;
         try {
-            vision = new BarcodeDetector.Builder(ApplicationLoader.applicationContext).setBarcodeFormats(Barcode.QR_CODE).build();
+            vision = new NanogramVision.Barcodes(true);
         } catch (Throwable e) {
             FileLog.e(e);
         }
@@ -321,7 +321,7 @@ public final class QrScanOverlay extends FrameLayout {
     private final HandlerThread scanThread = new HandlerThread("QrScan");
     private final Handler scanHandler;
     private volatile boolean scanning;
-    private @Nullable BarcodeDetector visionReader;
+    private @Nullable NanogramVision.Barcodes visionReader;
     private @Nullable QRCodeReader zxingReader;
     private @Nullable Bitmap frameBitmap;
     private boolean found;
@@ -359,7 +359,7 @@ public final class QrScanOverlay extends FrameLayout {
         scanHandler = new Handler(scanThread.getLooper());
         scanHandler.post(() -> {
             try {
-                visionReader = new BarcodeDetector.Builder(ApplicationLoader.applicationContext).setBarcodeFormats(Barcode.QR_CODE).build();
+                visionReader = new NanogramVision.Barcodes(true);
             } catch (Throwable e) {
                 FileLog.e(e);
             }
@@ -978,19 +978,20 @@ public final class QrScanOverlay extends FrameLayout {
 
     /** The first Telegram link in the frame; other codes are ignored and the scan goes on. */
     @Nullable
-    private static Scanned decode(Bitmap bitmap, @Nullable BarcodeDetector visionReader, @Nullable QRCodeReader zxingReader, Utilities.CallbackReturn<String, Boolean> accept) {
+    private static Scanned decode(Bitmap bitmap, @Nullable NanogramVision.Barcodes visionReader, @Nullable QRCodeReader zxingReader, Utilities.CallbackReturn<String, Boolean> accept) {
         final int w = bitmap.getWidth(), h = bitmap.getHeight();
         if (visionReader != null && visionReader.isOperational()) {
-            final SparseArray<Barcode> codes = visionReader.detect(new Frame.Builder().setBitmap(bitmap).build());
-            for (int i = 0; codes != null && i < codes.size(); i++) {
-                final Barcode code = codes.valueAt(i);
-                final String text = code.rawValue != null ? code.rawValue.trim() : null;
+            final List<Barcode> codes = visionReader.detect(bitmap);
+            for (int i = 0; i < codes.size(); i++) {
+                final Barcode code = codes.get(i);
+                final String text = code.getRawValue() != null ? code.getRawValue().trim() : null;
                 if (!accepts(accept, text)) {
                     continue;
                 }
-                final PointF[] points = new PointF[code.cornerPoints != null ? code.cornerPoints.length : 0];
+                final android.graphics.Point[] corners = code.getCornerPoints();
+                final PointF[] points = new PointF[corners != null ? corners.length : 0];
                 for (int k = 0; k < points.length; k++) {
-                    points[k] = new PointF(code.cornerPoints[k].x / (float) w, code.cornerPoints[k].y / (float) h);
+                    points[k] = new PointF(corners[k].x / (float) w, corners[k].y / (float) h);
                 }
                 return new Scanned(text, points);
             }

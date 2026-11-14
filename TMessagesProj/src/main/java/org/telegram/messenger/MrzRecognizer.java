@@ -9,14 +9,12 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.text.TextUtils;
 import android.util.Base64;
-import android.util.SparseArray;
 
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
+import com.google.mlkit.vision.barcode.common.Barcode;
 
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.List;
 
 public class MrzRecognizer {
 
@@ -42,18 +40,24 @@ public class MrzRecognizer {
 	}
 
 	private static Result recognizeBarcode(Bitmap bitmap) {
-		BarcodeDetector detector = new BarcodeDetector.Builder(ApplicationLoader.applicationContext)/*.setBarcodeFormats(Barcode.PDF417)*/.build();
+		NanogramVision.Barcodes detector = new NanogramVision.Barcodes(false);
 		if (bitmap.getWidth() > 1500 || bitmap.getHeight() > 1500) {
 			float scale = 1500f / Math.max(bitmap.getWidth(), bitmap.getHeight());
 			bitmap = Bitmap.createScaledBitmap(bitmap, Math.round(bitmap.getWidth() * scale), Math.round(bitmap.getHeight() * scale), true);
 		}
-		SparseArray<Barcode> barcodes = detector.detect(new Frame.Builder().setBitmap(bitmap).build());
+		List<Barcode> barcodes;
+		try {
+			barcodes = detector.detect(bitmap);
+		} finally {
+			detector.release();
+		}
 		for (int i = 0; i < barcodes.size(); i++) {
-			Barcode code = barcodes.valueAt(i);
-			if (code.valueFormat == Barcode.DRIVER_LICENSE && code.driverLicense != null) { // BarcodeDetector has built-in support for North American driver licenses/IDs
+			Barcode code = barcodes.get(i);
+			Barcode.DriverLicense license = code.getDriverLicense();
+			if (code.getValueType() == Barcode.TYPE_DRIVER_LICENSE && license != null) { // ML Kit has built-in support for North American driver licenses/IDs
 				Result res = new Result();
-				res.type = "ID".equals(code.driverLicense.documentType) ? Result.TYPE_ID : Result.TYPE_DRIVER_LICENSE;
-				switch (code.driverLicense.issuingCountry) {
+				res.type = "ID".equals(license.getDocumentType()) ? Result.TYPE_ID : Result.TYPE_DRIVER_LICENSE;
+				switch (String.valueOf(license.getIssuingCountry())) {
 					case "USA":
 						res.nationality = res.issuingCountry = "US";
 						break;
@@ -61,12 +65,12 @@ public class MrzRecognizer {
 						res.nationality = res.issuingCountry = "CA";
 						break;
 				}
-				res.firstName = capitalize(code.driverLicense.firstName);
-				res.lastName = capitalize(code.driverLicense.lastName);
-				res.middleName = capitalize(code.driverLicense.middleName);
-				res.number = code.driverLicense.licenseNumber;
-				if (code.driverLicense.gender != null) {
-					switch (code.driverLicense.gender) {
+				res.firstName = capitalize(license.getFirstName());
+				res.lastName = capitalize(license.getLastName());
+				res.middleName = capitalize(license.getMiddleName());
+				res.number = license.getLicenseNumber();
+				if (license.getGender() != null) {
+					switch (license.getGender()) {
 						case "1":
 							res.gender = Result.GENDER_MALE;
 							break;
@@ -86,26 +90,26 @@ public class MrzRecognizer {
 					dayOffset = 6;
 				}
 				try {
-					if (code.driverLicense.birthDate != null && code.driverLicense.birthDate.length() == 8) {
-						res.birthYear = Integer.parseInt(code.driverLicense.birthDate.substring(yearOffset, yearOffset + 4));
-						res.birthMonth = Integer.parseInt(code.driverLicense.birthDate.substring(monthOffset, monthOffset + 2));
-						res.birthDay = Integer.parseInt(code.driverLicense.birthDate.substring(dayOffset, dayOffset + 2));
+					if (license.getBirthDate() != null && license.getBirthDate().length() == 8) {
+						res.birthYear = Integer.parseInt(license.getBirthDate().substring(yearOffset, yearOffset + 4));
+						res.birthMonth = Integer.parseInt(license.getBirthDate().substring(monthOffset, monthOffset + 2));
+						res.birthDay = Integer.parseInt(license.getBirthDate().substring(dayOffset, dayOffset + 2));
 					}
-					if (code.driverLicense.expiryDate != null && code.driverLicense.expiryDate.length() == 8) {
-						res.expiryYear = Integer.parseInt(code.driverLicense.expiryDate.substring(yearOffset, yearOffset + 4));
-						res.expiryMonth = Integer.parseInt(code.driverLicense.expiryDate.substring(monthOffset, monthOffset + 2));
-						res.expiryDay = Integer.parseInt(code.driverLicense.expiryDate.substring(dayOffset, dayOffset + 2));
+					if (license.getExpiryDate() != null && license.getExpiryDate().length() == 8) {
+						res.expiryYear = Integer.parseInt(license.getExpiryDate().substring(yearOffset, yearOffset + 4));
+						res.expiryMonth = Integer.parseInt(license.getExpiryDate().substring(monthOffset, monthOffset + 2));
+						res.expiryDay = Integer.parseInt(license.getExpiryDate().substring(dayOffset, dayOffset + 2));
 					}
 				} catch (NumberFormatException ignore) {
 				}
 
 				return res;
-			} else if (code.valueFormat == Barcode.TEXT && code.format == Barcode.PDF417) { // Russian driver licenses (new-ish ones) use a non-very-much-documented format
+			} else if (code.getValueType() == Barcode.TYPE_TEXT && code.getFormat() == Barcode.FORMAT_PDF417) { // Russian driver licenses (new-ish ones) use a non-very-much-documented format
 				// base64(number|issue date|expiry date|last name|first name|middle/father name|birth date|categories|???|???)
 				// all dates are YYYYMMDD, names are capital cyrillic letters in Windows-1251, categories are comma separated
-				if (code.rawValue.matches("^[A-Za-z0-9=]+$")) {
+				if (code.getRawValue() != null && code.getRawValue().matches("^[A-Za-z0-9=]+$")) {
 					try {
-						byte[] _data = Base64.decode(code.rawValue, 0);
+						byte[] _data = Base64.decode(code.getRawValue(), 0);
 						String[] data = new String(_data, "windows-1251").split("\\|");
 						if (data.length >= 10) {
 							Result res = new Result();
