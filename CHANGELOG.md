@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### tgcalls pin moved to 73cc1f8d
+- `TMessagesProj/jni/tgcalls` 2a5daa0f -> 73cc1f8d (fork `nanogram-shared`, fast-forward of 9bfb76f8). Over 2a5daa0f the fork adds only the macOS SwiftPM `ios/` exclude in `Package.swift`, host-test path defaults and doc fixes; no source Android compiles changes (`tools/check_android_cmake.sh` file set is untouched). The three apps pin one commit.
+
 ### Cleanup after the tgcalls and WebRTC swaps (W6)
 - Dead-name grep over the repository (tg_owt, nanogram-security-fixes, nanogram-mac, telegram-ios-dev, tgcalls-port,
   usrsctp, libevent, jni_zero, `voip/rnnoise`, `voip/third_party`, `third_party/{absl,libsrtp,pffft,rnnoise}`): the only hits
