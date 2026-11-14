@@ -8,12 +8,16 @@ import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraExtensionSession;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.ExtensionSessionConfiguration;
+import android.hardware.camera2.params.OutputConfiguration;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -35,6 +39,8 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 
@@ -47,6 +53,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class Camera2Session {
@@ -81,11 +89,33 @@ public class Camera2Session {
 
     private long lastTime;
 
+    private final boolean allowExtensions;
+    private final NanogramCameraExtensions.Plan plan;
+    private final Executor handlerExecutor = command -> handler.post(command);
+    private CameraExtensionSession extensionSession;
+    private int sessionGeneration;
+    private boolean sessionStarting;
+    private int requestedExtension = -1;
+    private boolean extensionsBlocked;
+    private Size normalStillSize;
+    private Size activeStillSize;
+    private Set<CaptureRequest.Key> extensionKeys;
+    private Runnable pendingStart;
+    private Runnable pendingRetry;
+    private Utilities.Callback<Integer> captureProgressCallback;
+
+    private static final String TAG_STILL = "nanogram_still";
+
     public static Camera2Session create(boolean front, int viewWidth, int viewHeight) {
-        return create(front, viewWidth, viewHeight, 0);
+        return create(front, viewWidth, viewHeight, 0, false);
     }
 
     public static Camera2Session create(boolean front, int viewWidth, int viewHeight, int fallbackSize) {
+        return create(front, viewWidth, viewHeight, fallbackSize, false);
+    }
+
+    /** allowExtensions is only for the photo camera: it enables the full-size still reader and, with the Nanogram switch on, camera extensions. */
+    public static Camera2Session create(boolean front, int viewWidth, int viewHeight, int fallbackSize, boolean allowExtensions) {
         final Context context = ApplicationLoader.applicationContext;
         final CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -130,10 +160,31 @@ public class Camera2Session {
         if (cameraId == null || bestSize == null) {
             return null;
         }
-        return new Camera2Session(context, front, cameraId, bestSize);
+        NanogramCameraExtensions.Plan plan = null;
+        if (allowExtensions && NanogramFeatures.enhancedPhotos()) {
+            try {
+                final StreamConfigurationMap confMap = cameraManager.getCameraCharacteristics(cameraId).get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                final List<int[]> normal = new ArrayList<>();
+                if (confMap != null) {
+                    for (Size s : confMap.getOutputSizes(SurfaceTexture.class)) {
+                        normal.add(new int[]{s.getWidth(), s.getHeight()});
+                    }
+                }
+                plan = NanogramCameraExtensions.plan(cameraId, NanogramFeatures.enhancedPhotoMode(), viewWidth, viewHeight, normal);
+                if (plan != null) {
+                    bestSize = new Size(plan.previewWidth, plan.previewHeight);
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+                plan = null;
+            }
+        }
+        return new Camera2Session(context, front, cameraId, bestSize, allowExtensions, plan);
     }
 
-    private Camera2Session(Context context, boolean isFront, String cameraId, Size size) {
+    private Camera2Session(Context context, boolean isFront, String cameraId, Size size, boolean allowExtensions, NanogramCameraExtensions.Plan plan) {
+        this.allowExtensions = allowExtensions;
+        this.plan = plan;
         thread = new HandlerThread("tg_camera2");
         thread.start();
         handler = new Handler(thread.getLooper());
@@ -167,24 +218,31 @@ public class Camera2Session {
             @Override
             public void onConfigured(@NonNull CameraCaptureSession session) {
                 captureSession = session;
+                sessionStarting = false;
                 FileLog.e("Camera2Session camera #" + cameraId + " capture session configured");
                 Camera2Session.this.lastTime = System.currentTimeMillis();
                 try {
+                    if (allowExtensions && (requestedExtension >= 0 || pendingStart != null)) {
+                        captureSession = null;
+                        session.close();
+                        return;
+                    }
                     updateCaptureRequest();
-                    AndroidUtilities.runOnUIThread(() -> {
-                        isSuccess = true;
-                        if (doneCallback != null) {
-                            doneCallback.run();
-                            doneCallback = null;
-                        }
-                    });
+                    notifyReady();
+                    runPendingRetry();
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
             }
 
             @Override
+            public void onClosed(@NonNull CameraCaptureSession session) {
+                runPendingStart();
+            }
+
+            @Override
             public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+                sessionStarting = false;
                 captureSession = session;
                 FileLog.e("Camera2Session camera #" + cameraId + " capture session failed to configure");
                 AndroidUtilities.runOnUIThread(() -> {
@@ -197,10 +255,24 @@ public class Camera2Session {
         this.cameraId = cameraId;
         this.previewSize = size;
         this.lastTime = System.currentTimeMillis();
-        this.imageReader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 1);
+        if (!allowExtensions) {
+            this.imageReader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 1);
+        }
         cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         try {
             cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
+            if (allowExtensions) {
+                final StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                final List<int[]> jpeg = new ArrayList<>();
+                if (map != null) {
+                    for (Size s : map.getOutputSizes(ImageFormat.JPEG)) {
+                        jpeg.add(new int[]{s.getWidth(), s.getHeight()});
+                    }
+                }
+                final int[] still = NanogramCameraExtensions.pickStillSize(jpeg, (float) size.getWidth() / size.getHeight(), NanogramCameraExtensions.MAX_STILL_PIXELS);
+                normalStillSize = still != null ? new Size(still[0], still[1]) : size;
+                ensureStillReader(normalStillSize);
+            }
             sensorSize = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
             final Float value = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
             maxZoom = (value == null || value < 1f) ? 1f : value;
@@ -241,16 +313,325 @@ public class Camera2Session {
 
         surface = new Surface(surfaceTexture);
 
+        startSession();
+    }
+
+    private void notifyReady() {
+        AndroidUtilities.runOnUIThread(() -> {
+            isSuccess = true;
+            if (doneCallback != null) {
+                doneCallback.run();
+                doneCallback = null;
+            }
+        });
+    }
+
+    private void runPendingStart() {
+        final Runnable r = pendingStart;
+        pendingStart = null;
+        if (r != null && !isClosed) {
+            r.run();
+        }
+    }
+
+    private void runPendingRetry() {
+        final Runnable r = pendingRetry;
+        pendingRetry = null;
+        if (r != null && !isClosed) {
+            r.run();
+        }
+    }
+
+    private void ensureStillReader(Size size) {
+        if (imageReader != null && activeStillSize != null && activeStillSize.equals(size)) {
+            return;
+        }
+        if (imageReader != null) {
+            imageReader.close();
+        }
+        activeStillSize = size;
+        imageReader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 2);
+    }
+
+    private int desiredExtension() {
+        if (!allowExtensions || plan == null || extensionsBlocked || recordingVideo || scanningBarcode || flashing) return -1;
+        if (!NanogramFeatures.enhancedPhotos()) return -1;
+        if (NanogramCameraExtensions.isBlacklisted(cameraId, plan.extension)) return -1;
+        return plan.extension;
+    }
+
+    /** Handler thread. Opens the extension session when wanted, otherwise the normal one. */
+    private void startSession() {
+        if (cameraDevice == null || isClosed) return;
+        final int ext = desiredExtension();
+        if (ext >= 0 && startExtensionSession(ext)) return;
+        startNormalSession();
+    }
+
+    private void startNormalSession() {
         try {
-            ArrayList<Surface> surfaces = new ArrayList<>();
-            surfaces.add(surface);
-            surfaces.add(imageReader.getSurface());
-            cameraDevice.createCaptureSession(surfaces, captureStateCallback, null);
+            requestedExtension = -1;
+            sessionGeneration++;
+            sessionStarting = true;
+            if (allowExtensions) {
+                ensureStillReader(normalStillSize);
+                final List<OutputConfiguration> outputs = new ArrayList<>();
+                outputs.add(new OutputConfiguration(surface));
+                outputs.add(new OutputConfiguration(imageReader.getSurface()));
+                cameraDevice.createCaptureSession(new SessionConfiguration(SessionConfiguration.SESSION_REGULAR, outputs, handlerExecutor, captureStateCallback));
+            } else {
+                ArrayList<Surface> surfaces = new ArrayList<>();
+                surfaces.add(surface);
+                surfaces.add(imageReader.getSurface());
+                cameraDevice.createCaptureSession(surfaces, captureStateCallback, null);
+            }
         } catch (Exception e) {
             FileLog.e(e);
+            sessionStarting = false;
             AndroidUtilities.runOnUIThread(() -> {
                 isError = true;
             });
+        }
+    }
+
+    private boolean startExtensionSession(int ext) {
+        try {
+            final float aspect = (float) previewSize.getWidth() / previewSize.getHeight();
+            final int[] still = NanogramCameraExtensions.pickStillSize(plan.jpegSizes, aspect, NanogramCameraExtensions.MAX_STILL_PIXELS);
+            if (still == null) {
+                NanogramCameraExtensions.blacklist(cameraId, ext);
+                return false;
+            }
+            ensureStillReader(new Size(still[0], still[1]));
+            extensionKeys = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                extensionKeys = cameraManager.getCameraExtensionCharacteristics(cameraId).getAvailableCaptureRequestKeys(ext);
+            }
+            final List<OutputConfiguration> outputs = new ArrayList<>();
+            outputs.add(new OutputConfiguration(surface));
+            outputs.add(new OutputConfiguration(imageReader.getSurface()));
+            requestedExtension = ext;
+            sessionStarting = true;
+            cameraDevice.createExtensionSession(new ExtensionSessionConfiguration(ext, outputs, handlerExecutor, new ExtensionStateCallback(++sessionGeneration, ext)));
+            return true;
+        } catch (Exception e) {
+            FileLog.e("Camera2Session extension " + NanogramCameraExtensions.name(ext) + " failed to start", e);
+            requestedExtension = -1;
+            sessionStarting = false;
+            NanogramExperiments.count("cameraExtensionFailed");
+            NanogramCameraExtensions.blacklist(cameraId, ext);
+            return false;
+        }
+    }
+
+    /** Handler thread. Closes the current session (one at a time) and starts the right one from its onClosed. */
+    private void restartSession() {
+        if (!opened || cameraDevice == null || isClosed) return;
+        if (extensionSession != null) {
+            final CameraExtensionSession old = extensionSession;
+            extensionSession = null;
+            pendingStart = this::startSession;
+            closeExtension(old);
+        } else if (captureSession != null) {
+            final CameraCaptureSession old = captureSession;
+            captureSession = null;
+            pendingStart = this::startSession;
+            old.close();
+        } else if (sessionStarting) {
+            pendingStart = this::startSession;
+        } else if (pendingStart == null) {
+            startSession();
+        }
+    }
+
+    private void closeExtension(CameraExtensionSession session) {
+        try {
+            session.close();
+        } catch (Exception e) {
+            FileLog.e(e);
+            runPendingStart();
+        }
+    }
+
+    private void onModeStateChanged() {
+        if (!allowExtensions || plan == null) {
+            updateCaptureRequest();
+            return;
+        }
+        handler.post(() -> {
+            if (isClosed || !opened) return;
+            if ((desiredExtension() >= 0) != (requestedExtension >= 0)) {
+                restartSession();
+            } else {
+                updateCaptureRequest();
+            }
+        });
+    }
+
+    /** Photo camera only: the dual camera runs two sessions, so extensions step aside. */
+    public void setExtensionsBlocked(boolean blocked) {
+        if (extensionsBlocked != blocked) {
+            extensionsBlocked = blocked;
+            if (plan != null) {
+                onModeStateChanged();
+            }
+        }
+    }
+
+    public void setCaptureProgressCallback(Utilities.Callback<Integer> callback) {
+        captureProgressCallback = callback;
+    }
+
+    private class ExtensionStateCallback extends CameraExtensionSession.StateCallback {
+        private final int generation;
+        private final int extension;
+
+        ExtensionStateCallback(int generation, int extension) {
+            this.generation = generation;
+            this.extension = extension;
+        }
+
+        @Override
+        public void onConfigured(@NonNull CameraExtensionSession session) {
+            if (generation != sessionGeneration) {
+                closeExtension(session);
+                return;
+            }
+            sessionStarting = false;
+            if (isClosed || requestedExtension < 0 || pendingStart != null) {
+                closeExtension(session);
+                return;
+            }
+            extensionSession = session;
+            lastTime = System.currentTimeMillis();
+            NanogramExperiments.count("cameraExtensionOpened");
+            FileLog.d("Camera2Session camera #" + cameraId + " extension " + NanogramCameraExtensions.name(extension) + " configured" + latencyInfo());
+            updateExtensionRequest();
+            notifyReady();
+            runPendingRetry();
+        }
+
+        @Override
+        public void onConfigureFailed(@NonNull CameraExtensionSession session) {
+            if (generation != sessionGeneration) {
+                return;
+            }
+            sessionStarting = false;
+            FileLog.e("Camera2Session camera #" + cameraId + " extension session failed to configure");
+            NanogramExperiments.count("cameraExtensionFailed");
+            NanogramCameraExtensions.blacklist(cameraId, extension);
+            extensionSession = null;
+            if (!isClosed) {
+                if (pendingStart != null) {
+                    runPendingStart();
+                } else {
+                    startNormalSession();
+                }
+            }
+        }
+
+        @Override
+        public void onClosed(@NonNull CameraExtensionSession session) {
+            if (generation == sessionGeneration) {
+                runPendingStart();
+            }
+        }
+    }
+
+    private String latencyInfo() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activeStillSize != null) {
+                final android.util.Range<Long> range = cameraManager.getCameraExtensionCharacteristics(cameraId).getEstimatedCaptureLatencyRangeMillis(requestedExtension, activeStillSize, ImageFormat.JPEG);
+                if (range != null) {
+                    return ", latency " + range;
+                }
+            }
+        } catch (Exception ignore) {
+        }
+        return "";
+    }
+
+    private class ExtensionCaptureCallback extends CameraExtensionSession.ExtensionCaptureCallback {
+        private final File file;
+        private final Utilities.Callback<Integer> whenDone;
+        private final boolean retried;
+        private boolean failedHandled;
+
+        ExtensionCaptureCallback(File file, Utilities.Callback<Integer> whenDone, boolean retried) {
+            this.file = file;
+            this.whenDone = whenDone;
+            this.retried = retried;
+        }
+
+        @Override
+        public void onCaptureFailed(@NonNull CameraExtensionSession session, @NonNull CaptureRequest request) {
+            handleFailed(request);
+        }
+
+        @Override
+        @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+        public void onCaptureFailed(@NonNull CameraExtensionSession session, @NonNull CaptureRequest request, int failure) {
+            handleFailed(request);
+        }
+
+        private void handleFailed(CaptureRequest request) {
+            if (!TAG_STILL.equals(request.getTag()) || failedHandled) return;
+            failedHandled = true;
+            FileLog.e("Camera2Session camera #" + cameraId + " extension capture failed");
+            NanogramExperiments.count("cameraExtensionFailed");
+            if (requestedExtension >= 0) {
+                NanogramCameraExtensions.blacklist(cameraId, requestedExtension);
+            }
+            if (!retried && !isClosed) {
+                pendingRetry = () -> {
+                    if (!shoot(file, whenDone, true)) {
+                        FileLog.e("Camera2Session camera #" + cameraId + " extension capture retry could not start");
+                    }
+                };
+                restartSession();
+            }
+        }
+
+        @Override
+        public void onCaptureSequenceAborted(@NonNull CameraExtensionSession session, int sequenceId) {
+            if (retried || isClosed || failedHandled) return;
+            failedHandled = true;
+            pendingRetry = () -> {
+                if (!shoot(file, whenDone, true)) {
+                    FileLog.e("Camera2Session camera #" + cameraId + " extension capture retry could not start");
+                }
+            };
+            if (extensionSession == session) {
+                restartSession();
+            }
+        }
+
+        @Override
+        @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        public void onCaptureProcessProgressed(@NonNull CameraExtensionSession session, @NonNull CaptureRequest request, int progress) {
+            final Utilities.Callback<Integer> callback = captureProgressCallback;
+            if (callback != null) {
+                AndroidUtilities.runOnUIThread(() -> callback.run(progress));
+            }
+        }
+    }
+
+    private boolean extensionKeyAvailable(CaptureRequest.Key<?> key) {
+        return extensionKeys == null || extensionKeys.contains(key);
+    }
+
+    private void updateExtensionRequest() {
+        final CameraExtensionSession session = extensionSession;
+        if (cameraDevice == null || surface == null || session == null) return;
+        try {
+            final CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            if (extensionKeys != null && extensionKeys.contains(CaptureRequest.CONTROL_ZOOM_RATIO) && Math.abs(currentZoom - 1f) >= 0.01f) {
+                builder.set(CaptureRequest.CONTROL_ZOOM_RATIO, currentZoom);
+            }
+            builder.addTarget(surface);
+            session.setRepeatingRequest(builder.build(), handlerExecutor, new CameraExtensionSession.ExtensionCaptureCallback() {});
+        } catch (Exception e) {
+            FileLog.e("Camera2Session extension setRepeatingRequest error", e);
         }
     }
 
@@ -380,6 +761,11 @@ public class Camera2Session {
     private final Rect cropRegion = new Rect();
     public void setZoom(float value) {
         if (!isInitiated()) return;
+        if (extensionSession != null) {
+            currentZoom = Utilities.clamp(value, maxZoom, 1f);
+            updateExtensionRequest();
+            return;
+        }
         if (captureRequestBuilder == null || cameraDevice == null || sensorSize == null) return;
 
         currentZoom = Utilities.clamp(value, maxZoom, 1f);
@@ -396,7 +782,7 @@ public class Camera2Session {
     public void setFlash(boolean flash) {
         if (flashing != flash) {
             flashing = flash;
-            updateCaptureRequest();
+            onModeStateChanged();
         }
     }
     public boolean getFlash() {
@@ -432,6 +818,10 @@ public class Camera2Session {
         isClosed = true;
         if (async) {
             handler.post(() -> {
+                if (extensionSession != null) {
+                    closeExtension(extensionSession);
+                    extensionSession = null;
+                }
                 if (captureSession != null) {
                     captureSession.close();
                     captureSession = null;
@@ -457,6 +847,10 @@ public class Camera2Session {
                 });
             });
         } else {
+            if (extensionSession != null) {
+                closeExtension(extensionSession);
+                extensionSession = null;
+            }
             if (captureSession != null) {
                 captureSession.close();
                 captureSession = null;
@@ -485,7 +879,7 @@ public class Camera2Session {
     public void setRecordingVideo(boolean recording) {
         if (recordingVideo != recording) {
             recordingVideo = recording;
-            updateCaptureRequest();
+            onModeStateChanged();
         }
     }
 
@@ -493,7 +887,7 @@ public class Camera2Session {
     public void setScanningBarcode(boolean scanning) {
         if (scanningBarcode != scanning) {
             scanningBarcode = scanning;
-            updateCaptureRequest();
+            onModeStateChanged();
         }
     }
 
@@ -506,6 +900,10 @@ public class Camera2Session {
     }
 
     private void updateCaptureRequest() {
+        if (extensionSession != null) {
+            updateExtensionRequest();
+            return;
+        }
         if (cameraDevice == null || surface == null || captureSession == null) return;
         try {
             int template;
@@ -556,33 +954,38 @@ public class Camera2Session {
     }
 
     public boolean takePicture(final File file, Utilities.Callback<Integer> whenDone) {
-        if (cameraDevice == null || captureSession == null) return false;
+        return shoot(file, whenDone, false);
+    }
+
+    private boolean shoot(final File file, Utilities.Callback<Integer> whenDone, boolean retried) {
+        final CameraExtensionSession extension = extensionSession;
+        if (cameraDevice == null || imageReader == null || (captureSession == null && extension == null)) return false;
         try {
             CaptureRequest.Builder captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             final int orientation = getJpegOrientation();
-            captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, orientation);
+            if (extension == null || extensionKeyAvailable(CaptureRequest.JPEG_ORIENTATION)) {
+                captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, orientation);
+            }
             imageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader reader) {
-                    Image image = reader.acquireLatestImage();
-                    ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-                    byte[] bytes = new byte[buffer.remaining()];
-                    buffer.get(bytes);
-
-                    FileOutputStream output = null;
+                    Image image = null;
                     try {
-                        output = new FileOutputStream(file);
-                        output.write(bytes);
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                        image = reader.acquireNextImage();
+                        if (image == null) {
+                            return;
+                        }
+                        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+                        byte[] bytes = new byte[buffer.remaining()];
+                        buffer.get(bytes);
+                        try (FileOutputStream output = new FileOutputStream(file)) {
+                            output.write(bytes);
+                        }
+                    } catch (Exception e) {
+                        FileLog.e(e);
                     } finally {
-                        image.close();
-                        if (null != output) {
-                            try {
-                                output.close();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
+                        if (image != null) {
+                            image.close();
                         }
                     }
 
@@ -592,11 +995,19 @@ public class Camera2Session {
                         }
                     });
                 }
-            }, null);
+            }, handler);
+            captureRequestBuilder.addTarget(imageReader.getSurface());
+            if (extension != null) {
+                if (extensionKeyAvailable(CaptureRequest.CONTROL_ZOOM_RATIO) && extensionKeys != null && Math.abs(currentZoom - 1f) >= 0.01f) {
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, currentZoom);
+                }
+                captureRequestBuilder.setTag(TAG_STILL);
+                extension.capture(captureRequestBuilder.build(), handlerExecutor, new ExtensionCaptureCallback(file, whenDone, retried));
+                return true;
+            }
             if (scanningBarcode) {
                 captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, CameraMetadata.CONTROL_SCENE_MODE_BARCODE);
             }
-            captureRequestBuilder.addTarget(imageReader.getSurface());
             captureSession.capture(captureRequestBuilder.build(), new CameraCaptureSession.CaptureCallback() {}, null);
             return true;
         } catch (Exception e) {

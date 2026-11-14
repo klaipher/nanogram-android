@@ -219,6 +219,7 @@ public final class RoundVideoSession {
         private int videoBitrate;
         private long maximumDurationMs = DEFAULT_MAXIMUM_DURATION_MS;
         private boolean compositionEnabled = true;
+        private boolean wideAngle;
         private Listener listener;
         private OutputListener outputListener;
         private ScreenFlashController screenFlashController;
@@ -268,6 +269,12 @@ public final class RoundVideoSession {
         /** Enables the circular blur, dimming and Telegram overlays. */
         public @NonNull Builder setCompositionEnabled(boolean enabled) {
             compositionEnabled = enabled;
+            return this;
+        }
+
+        /** Opens the camera at its widest field of view and adds the wide/normal lens choice. */
+        public @NonNull Builder setWideAngle(boolean enabled) {
+            wideAngle = enabled;
             return this;
         }
 
@@ -404,6 +411,8 @@ public final class RoundVideoSession {
         private final FrameRate activeFrameRate;
         private final FlashType flashType;
         private final float maximumZoomRatio;
+        private final float minimumZoomRatio;
+        private final float restingZoomRatio;
 
         private CameraCapabilities(
                 CameraFacing requestedFacing,
@@ -413,7 +422,9 @@ public final class RoundVideoSession {
                 FrameRate requestedFrameRate,
                 FrameRate activeFrameRate,
                 FlashType flashType,
-                float maximumZoomRatio
+                float maximumZoomRatio,
+                float minimumZoomRatio,
+                float restingZoomRatio
         ) {
             this.requestedFacing = requestedFacing;
             this.activeFacing = activeFacing;
@@ -423,6 +434,8 @@ public final class RoundVideoSession {
             this.activeFrameRate = activeFrameRate;
             this.flashType = flashType;
             this.maximumZoomRatio = maximumZoomRatio;
+            this.minimumZoomRatio = minimumZoomRatio;
+            this.restingZoomRatio = restingZoomRatio;
         }
 
         /** Returns the camera requested for the current or next segment. */
@@ -448,6 +461,15 @@ public final class RoundVideoSession {
 
         /** Returns the maximum zoom ratio exposed by the normalized zoom control. */
         public float getMaximumZoomRatio() { return maximumZoomRatio; }
+
+        /** Returns the lowest zoom ratio; below 1 only with the wide-angle option on a wide camera. */
+        public float getMinimumZoomRatio() { return minimumZoomRatio; }
+
+        /** Returns the ratio the current lens choice rests at. */
+        public float getRestingZoomRatio() { return restingZoomRatio; }
+
+        /** Returns whether the configured camera can zoom out below 1x. */
+        public boolean isWideAvailable() { return minimumZoomRatio < 1f; }
 
         /** Returns whether the configured camera supports zoom. */
         public boolean isZoomSupported() { return maximumZoomRatio > 1f; }
@@ -517,6 +539,7 @@ public final class RoundVideoSession {
     private final CameraResolution requestedCameraResolution;
     private final FrameRate requestedFrameRate;
     private final boolean compositionEnabled;
+    private final boolean wideAngle;
     private final long maximumDurationMs;
 
     private State state = State.IDLE;
@@ -526,7 +549,9 @@ public final class RoundVideoSession {
     private FrameRate activeFrameRate;
     private FlashType flashType = FlashType.NONE;
     private float maximumZoomRatio = 1f;
-    private float zoomProgress;
+    private float minimumZoomRatio = 1f;
+    private float zoomRatio = 1f;
+    private boolean lensWide;
     private boolean flashEnabled;
     private boolean screenFlashEnabled;
     private boolean cameraSwitching;
@@ -590,6 +615,8 @@ public final class RoundVideoSession {
         requestedFrameRate = builder.frameRate;
         maximumDurationMs = builder.maximumDurationMs;
         compositionEnabled = builder.compositionEnabled;
+        wideAngle = builder.wideAngle;
+        lensWide = wideAngle;
         listener = builder.listener;
         outputListener = builder.outputListener;
         screenFlashController = builder.screenFlashController;
@@ -601,6 +628,7 @@ public final class RoundVideoSession {
                 + ", cameraMode=" + requestedCameraResolution
                 + ", fps=" + requestedFrameRate.getValue()
                 + ", composition=" + compositionEnabled
+                + ", wideAngle=" + wideAngle
                 + ", facing=" + requestedFacing
                 + ", maxDurationMs=" + maximumDurationMs);
         cameraController = new RoundVideoCameraController(
@@ -614,6 +642,7 @@ public final class RoundVideoSession {
                 diagnostics,
                 cameraCallback
         );
+        cameraController.setWideAngle(wideAngle);
     }
 
     /** Opens the requested camera and starts recording after its first frame arrives. */
@@ -736,7 +765,12 @@ public final class RoundVideoSession {
         requestedFacing = facing;
         if (state == State.RECORDING || state == State.STARTING) {
             disableCameraEffects();
+            lensWide = wideAngle;
+            cameraController.setLensWide(lensWide);
             cameraSwitching = cameraController.setCameraFacing(facing);
+        } else {
+            lensWide = wideAngle;
+            cameraController.setLensWide(lensWide);
         }
         notifyCapabilities();
         notifyState();
@@ -748,8 +782,35 @@ public final class RoundVideoSession {
     public boolean setZoom(float progress) {
         requireMainThread();
         if (state != State.RECORDING || cameraSwitching) return false;
-        zoomProgress = clamp(progress, 0f, 1f);
-        return cameraController.setZoom(zoomProgress);
+        zoomRatio = RoundVideoZoomPlan.progressToRatio(progress, maximumZoomRatio);
+        return cameraController.setZoom(clamp(progress, 0f, 1f));
+    }
+
+    /** Applies a zoom ratio; ratios below 1 need a wide camera with the wide-angle option. */
+    @MainThread
+    public boolean setZoomRatio(float ratio) {
+        requireMainThread();
+        if (state != State.RECORDING || cameraSwitching) return false;
+        zoomRatio = clamp(ratio, minimumZoomRatio, maximumZoomRatio);
+        return cameraController.setZoomRatio(zoomRatio);
+    }
+
+    /** Returns the ratio last requested from the camera. */
+    @MainThread
+    public float getZoomRatio() {
+        requireMainThread();
+        return zoomRatio;
+    }
+
+    /** Switches the lens choice between wide and normal; the caller animates to the new resting ratio. */
+    @MainThread
+    public boolean toggleLens() {
+        requireMainThread();
+        if (state != State.RECORDING || cameraSwitching || minimumZoomRatio >= 1f) return false;
+        lensWide = !lensWide;
+        cameraController.setLensWide(lensWide);
+        notifyCapabilities();
+        return true;
     }
 
     /** Enables the rear torch or requests front-camera screen flash. */
@@ -950,6 +1011,10 @@ public final class RoundVideoSession {
         activeCameraResolution = info.cameraResolution;
         activeFrameRate = info.frameRate;
         maximumZoomRatio = info.maximumZoomRatio;
+        minimumZoomRatio = info.minimumZoomRatio;
+        if (cameraSwitch || state == State.STARTING) {
+            zoomRatio = getRestingZoomRatio();
+        }
         flashType = info.facing == CameraFacing.FRONT
                 ? screenFlashController == null ? FlashType.NONE : FlashType.SCREEN
                 : info.torchAvailable ? FlashType.TORCH : FlashType.NONE;
@@ -959,6 +1024,7 @@ public final class RoundVideoSession {
                 + ", recording=" + info.recordingSize
                 + ", fps=" + info.frameRate.getValue()
                 + ", maxZoom=" + maximumZoomRatio
+                + ", minZoom=" + minimumZoomRatio
                 + ", flash=" + flashType
                 + ", switch=" + cameraSwitch);
         if (cameraSwitch || cameraSwitching) {
@@ -1421,7 +1487,7 @@ public final class RoundVideoSession {
                 previewPlaying,
                 cameraSwitching,
                 flashEnabled,
-                zoomProgress
+                RoundVideoZoomPlan.ratioToProgress(zoomRatio, maximumZoomRatio)
         );
     }
 
@@ -1434,14 +1500,20 @@ public final class RoundVideoSession {
                 requestedFrameRate,
                 activeFrameRate,
                 flashType,
-                maximumZoomRatio
+                maximumZoomRatio,
+                minimumZoomRatio,
+                getRestingZoomRatio()
         ));
     }
 
+    private float getRestingZoomRatio() {
+        return RoundVideoZoomPlan.lensRatio(lensWide, minimumZoomRatio);
+    }
+
     private void disableCameraEffects() {
-        zoomProgress = 0f;
+        zoomRatio = getRestingZoomRatio();
         flashEnabled = false;
-        cameraController.setZoom(0f);
+        cameraController.resetZoom();
         cameraController.setTorchEnabled(false);
         setScreenFlashEnabled(false);
     }

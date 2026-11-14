@@ -69,6 +69,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
@@ -125,7 +126,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private int focusAreaSize;
     private Drawable thumbDrawable;
 
-    private final boolean useCamera2 = NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE);
+    private final boolean useCamera2 = NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE) || NanogramFeatures.enhancedPhotos() && NanogramCameraExtensions.anySupportedCached();
     private final long[] cameraOpenStartNanos = new long[2];
     private final CameraSessionWrapper[] cameraSession = new CameraSessionWrapper[2];
     private CameraSessionWrapper cameraSessionRecording;
@@ -315,6 +316,14 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         toggleDual(false);
     }
 
+    private void setExtensionsBlocked(boolean blocked) {
+        for (CameraSessionWrapper wrapper : cameraSession) {
+            if (wrapper != null && wrapper.camera2Session != null) {
+                wrapper.camera2Session.setExtensionsBlocked(blocked);
+            }
+        }
+    }
+
     public void toggleDual(boolean force) {
         if (!force && (flipping || closingDualCamera || (System.currentTimeMillis() < toggleDualUntil || dual != dualCameraAppeared) && !dual)) {
             return;
@@ -322,6 +331,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         addToDualWait(200L);
         dual = !dual;
         if (dual) {
+            setExtensionsBlocked(true);
             if (cameraSession[0] != null) {
                 cameraSession[0].setCurrentFlashMode(Camera.Parameters.FLASH_MODE_OFF);
             }
@@ -339,6 +349,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 cameraSession[1].destroy(false, null, () -> {
                     closingDualCamera = false;
                     dualCameraAppeared = false;
+                    setExtensionsBlocked(false);
                     addToDualWait(400L);
                     final Handler handler = cameraThread.getHandler();
                     if (handler != null) {
@@ -351,6 +362,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 info[1] = null;
             } else {
                 dualCameraAppeared = false;
+                setExtensionsBlocked(false);
             }
             if (!closingDualCamera) {
                 final Handler handler = cameraThread.getHandler();
@@ -2296,12 +2308,15 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             }
 
             cameraOpenStartNanos[i] = System.nanoTime();
-            final Camera2Session camera2 = useCamera2 && !optimizeForBarcode ? Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight) : null;
+            final Camera2Session camera2 = useCamera2 && !optimizeForBarcode ? Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight, 0, i == 0) : null;
             if (useCamera2 && !optimizeForBarcode) {
                 NanogramExperiments.count(camera2 != null ? "camera2Opened" : "camera2Unavailable");
             }
             if (camera2 != null) {
                 final Camera2Session session = camera2;
+                if (i == 0 && dual) {
+                    session.setExtensionsBlocked(true);
+                }
                 cameraSession[i] = CameraSessionWrapper.of(session);
                 previewSize[i] = new Size(session.getPreviewWidth(), session.getPreviewHeight());
                 cameraThread.setCurrentSession(cameraSession[i], i);

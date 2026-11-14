@@ -3,6 +3,8 @@ package org.telegram.ui.Components;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
@@ -24,6 +26,7 @@ import android.view.MotionEvent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
@@ -214,9 +217,10 @@ public class TranscribeButton {
         }
         clickedToOpen = false;
         boolean processClick, toOpen = !shouldBeOpen;
+        final boolean local = NanogramOnDevice.localOnly(NanogramOnDeviceTranscription.isEnabledCached(), premium);
         if (!shouldBeOpen) {
             processClick = !loading;
-            if ((premium || canTranscribeTrial(parent.getMessageObject())) && parent.getMessageObject().isSent()) {
+            if ((premium || local || canTranscribeTrial(parent.getMessageObject())) && parent.getMessageObject().isSent()) {
                 setLoading(true, true);
             }
         } else {
@@ -230,7 +234,7 @@ public class TranscribeButton {
         }
         pressed = false;
         if (processClick) {
-            if (!premium && toOpen) {
+            if (!premium && !local && toOpen) {
                 if (canTranscribeTrial(parent.getMessageObject()) || parent.getMessageObject() != null && parent.getMessageObject().messageOwner != null && !TextUtils.isEmpty(parent.getMessageObject().messageOwner.voiceTranscription)) {
                     transcribePressed(parent.getMessageObject(), toOpen, parent.getDelegate());
                 } else {
@@ -697,6 +701,11 @@ public class TranscribeButton {
             } else if (allowOnDevice && transcribeOnDevice(messageObject, dialogId, messageId, delegate, start, minDuration)) {
                 return;
             } else {
+                if (!NanogramOnDevice.mayCallServer(NanogramOnDeviceTranscription.isEnabledCached(), UserConfig.getInstance(account).isPremium())) {
+                    FileLog.d("transcription stays on the phone, no server request, msg_id=" + messageId);
+                    finishFailed(messageObject, NanogramOnDeviceTranscription.FAIL_GENERIC);
+                    return;
+                }
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("sending Transcription request, msg_id=" + messageId + " dialog_id=" + dialogId);
                 }
@@ -787,34 +796,155 @@ public class TranscribeButton {
         }
     }
 
-    // On-device recognizer when the Nanogram switch is on and the voice file is already downloaded; false means use the server.
+    // On-device recognizer when the Nanogram switch is on; a missing voice file is downloaded first. False means use the server.
     private static boolean transcribeOnDevice(MessageObject messageObject, long dialogId, int messageId, ChatMessageCell.ChatMessageCellDelegate delegate, long start, long minDuration) {
         final Context context = ApplicationLoader.applicationContext;
-        if (Build.VERSION.SDK_INT < 33 || context == null || !NanogramOnDeviceTranscription.isEnabled(context)) {
-            return false;
-        }
-        final int account = messageObject.currentAccount;
-        final File file = FileLoader.getInstance(account).getPathToMessage(messageObject.messageOwner);
-        if (file == null || !file.exists()) {
+        if (Build.VERSION.SDK_INT < 33 || context == null || !NanogramOnDeviceTranscription.isEnabledCached()) {
             return false;
         }
         if (transcribeOperationsByDialogPosition == null) {
             transcribeOperationsByDialogPosition = new HashMap<>();
         }
         transcribeOperationsByDialogPosition.put((Integer) reqInfoHash(messageObject), messageObject);
+        final Runnable go = () -> {
+            final File file = voiceFile(messageObject);
+            if (file == null) {
+                onDeviceFailed(messageObject, NanogramOnDeviceTranscription.FAIL_GENERIC, delegate);
+                return;
+            }
+            startOnDevice(context, messageObject, file, dialogId, messageId, delegate, start, minDuration);
+        };
+        if (voiceFile(messageObject) != null) {
+            go.run();
+        } else {
+            new OnDeviceVoiceLoader(messageObject, go, () -> onDeviceFailed(messageObject, NanogramOnDeviceTranscription.FAIL_GENERIC, delegate)).start();
+        }
+        return true;
+    }
+
+    // The file when it is fully downloaded; a partial file counts as missing.
+    private static File voiceFile(MessageObject messageObject) {
+        final File file = FileLoader.getInstance(messageObject.currentAccount).getPathToMessage(messageObject.messageOwner);
+        if (file == null || !file.exists()) {
+            return null;
+        }
+        final TLRPC.Document document = messageObject.getDocument();
+        if (document != null && document.size > 0 && file.length() < document.size) {
+            return null;
+        }
+        return file;
+    }
+
+    @RequiresApi(33)
+    private static void startOnDevice(Context context, MessageObject messageObject, File file, long dialogId, int messageId, ChatMessageCell.ChatMessageCellDelegate delegate, long start, long minDuration) {
+        final int account = messageObject.currentAccount;
         final String tag = NanogramOnDevice.speechTag(LocaleController.getInstance().getCurrentLocale().toLanguageTag());
-        NanogramOnDeviceTranscription.transcribe(context, file, tag, (long) Math.ceil(messageObject.getDuration()), text -> {
+        NanogramOnDeviceTranscription.transcribe(context, file, tag, (long) Math.ceil(messageObject.getDuration()), (text, failure) -> {
             if (text == null) {
-                transcribePressed(messageObject, true, delegate, false);
+                onDeviceFailed(messageObject, failure, delegate);
                 return;
             }
             TranscribeButton.openVideoTranscription(messageObject);
             messageObject.messageOwner.voiceTranscriptionOpen = true;
+            messageObject.messageOwner.voiceTranscriptionId = 0;
             messageObject.messageOwner.voiceTranscriptionFinal = true;
             MessagesStorage.getInstance(account).updateMessageVoiceTranscription(dialogId, messageId, text, messageObject.messageOwner);
             AndroidUtilities.runOnUIThread(() -> finishTranscription(messageObject, 0, text), Math.max(0, minDuration - (SystemClock.elapsedRealtime() - start)));
         });
-        return true;
+    }
+
+    // Non-Premium stops here with a bulletin; Premium still falls back to the server.
+    private static void onDeviceFailed(MessageObject messageObject, int failure, ChatMessageCell.ChatMessageCellDelegate delegate) {
+        final boolean premium = UserConfig.getInstance(messageObject.currentAccount).isPremium();
+        if (NanogramOnDevice.mayCallServer(true, premium)) {
+            transcribePressed(messageObject, true, delegate, false);
+        } else {
+            finishFailed(messageObject, failure);
+        }
+    }
+
+    // Never stores an empty transcription: an empty string would show as "No words recognized".
+    private static void finishFailed(MessageObject messageObject, int failure) {
+        if (messageObject == null || messageObject.messageOwner == null) {
+            return;
+        }
+        final int account = messageObject.currentAccount;
+        AndroidUtilities.runOnUIThread(() -> {
+            if (transcribeOperationsByDialogPosition != null) {
+                transcribeOperationsByDialogPosition.remove((Integer) reqInfoHash(messageObject));
+            }
+            NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject);
+            final int text;
+            if (failure == NanogramOnDeviceTranscription.FAIL_NO_LANGUAGE) {
+                text = R.string.NanogramOnDeviceTranscriptionNoLanguage;
+            } else if (failure == NanogramOnDeviceTranscription.FAIL_NO_MIC) {
+                text = R.string.NanogramOnDeviceTranscriptionNoMic;
+            } else {
+                text = R.string.NanogramOnDeviceTranscriptionFailed;
+            }
+            if (failure == NanogramOnDeviceTranscription.FAIL_NO_MIC) {
+                BulletinFactory.global().createSimpleBulletin(R.raw.permission_request_microphone, LocaleController.getString(text), LocaleController.getString(R.string.Settings), () -> {
+                    final Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ApplicationLoader.applicationContext.getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ApplicationLoader.applicationContext.startActivity(intent);
+                }).show();
+                return;
+            }
+            BulletinFactory.global().createErrorBulletin(LocaleController.getString(text)).show();
+        });
+    }
+
+    // Downloads the voice file and calls back once, on the UI thread; gives up after 60 seconds.
+    private static final class OnDeviceVoiceLoader implements NotificationCenter.NotificationCenterDelegate {
+        private final MessageObject messageObject;
+        private final Runnable loaded;
+        private final Runnable failed;
+        private final int account;
+        private final String fileName;
+        private boolean done;
+        private final Runnable timeout = () -> finish(false);
+
+        OnDeviceVoiceLoader(MessageObject messageObject, Runnable loaded, Runnable failed) {
+            this.messageObject = messageObject;
+            this.loaded = loaded;
+            this.failed = failed;
+            this.account = messageObject.currentAccount;
+            final TLRPC.Document document = messageObject.getDocument();
+            this.fileName = document == null ? null : FileLoader.getAttachFileName(document);
+        }
+
+        void start() {
+            final TLRPC.Document document = messageObject.getDocument();
+            AndroidUtilities.runOnUIThread(() -> {
+                if (document == null || fileName == null) {
+                    finish(false);
+                    return;
+                }
+                NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.fileLoaded);
+                NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.fileLoadFailed);
+                AndroidUtilities.runOnUIThread(timeout, 60_000);
+                FileLoader.getInstance(account).loadFile(document, messageObject, FileLoader.PRIORITY_NORMAL_UP, 0);
+            });
+        }
+
+        @Override
+        public void didReceivedNotification(int id, int account, Object... args) {
+            if (done || account != this.account || args.length == 0 || !fileName.equals(args[0])) {
+                return;
+            }
+            finish(id == NotificationCenter.fileLoaded);
+        }
+
+        private void finish(boolean success) {
+            if (done) {
+                return;
+            }
+            done = true;
+            AndroidUtilities.cancelRunOnUIThread(timeout);
+            NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.fileLoaded);
+            NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.fileLoadFailed);
+            (success ? loaded : failed).run();
+        }
     }
 
     public static boolean finishTranscription(MessageObject messageObject, long transcription_id, String text) {
@@ -900,7 +1030,7 @@ public class TranscribeButton {
         if (messageObject == null || messageObject.messageOwner == null) {
             return false;
         }
-        if (isFreeTranscribeInChat(messageObject)) {
+        if (isFreeTranscribeInChat(messageObject) || NanogramOnDeviceTranscription.isEnabledCached()) {
             return false;
         }
         if (!TextUtils.isEmpty(messageObject.messageOwner.voiceTranscription)) {

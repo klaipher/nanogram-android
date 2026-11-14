@@ -204,6 +204,10 @@ public class ApplicationLoader extends Application {
         applicationInited = true;
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
 
+        if (org.telegram.messenger.nanogram.NanogramFeatures.enhancedPhotos()) {
+            org.telegram.messenger.camera.NanogramCameraExtensions.warmUp();
+        }
+
         try {
             LocaleController.getInstance(); //TODO improve
         } catch (Exception e) {

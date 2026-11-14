@@ -30,6 +30,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
+import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
@@ -43,6 +44,7 @@ import org.telegram.utils.settings.SharedSettings;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.blur3.BlurredBackgroundDrawableViewFactory;
@@ -51,6 +53,7 @@ import org.telegram.ui.Components.blur3.drawable.color.BlurredBackgroundColorPro
 import org.telegram.ui.Components.voip.CellFlickerDrawable;
 import org.telegram.ui.Stories.recorder.FlashViews;
 import org.telegram.utils.recorder.round.RoundVideoSession;
+import org.telegram.utils.recorder.round.RoundVideoZoomPlan;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -79,6 +82,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private final LinearLayout buttonsLayout;
     private final FlashViews.ImageViewInvertable switchCameraButton;
     private final FlashViews.ImageViewInvertable flashButton;
+    private final RoundLensButton lensButton;
     private final ImageView muteImageView;
     private final FlashViews flashViews;
     private final int[] screenPosition = new int[2];
@@ -125,7 +129,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private float panTranslationY;
     private float animationTranslationY;
     private float pinchStartDistance;
-    private float zoomProgress;
+    private float pinchStartRatio = 1f;
     private int zoomPointerId1 = -1;
     private int zoomPointerId2 = -1;
 
@@ -258,6 +262,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         buttonsLayout.addView(flashButton, LayoutHelper.createLinear(44, 44));
         flashButton.setOnClickListener(view -> toggleFlash());
 
+        lensButton = new RoundLensButton(context);
+        lensButton.setVisibility(GONE);
+        buttonsLayout.addView(lensButton, LayoutHelper.createLinear(44, 44));
+        lensButton.setOnClickListener(view -> toggleLens());
+
         buttonIconSize = dp(isNewDesign ? 24 : 28);
         switchCameraDrawable = new RLottieDrawable(
                 R.raw.roundcamera_flip,
@@ -272,9 +281,11 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         if (!isNewDesign) {
             flashViews.add(switchCameraButton);
             flashViews.add(flashButton);
+            flashViews.add(lensButton);
         } else if (resourcesProvider != null && !resourcesProvider.isDark()) {
             switchCameraButton.setInvert(0.6f);
             flashButton.setInvert(0.6f);
+            lensButton.setInvert(0.6f);
         }
 
         muteImageView = new ImageView(context);
@@ -398,6 +409,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                 .setCameraResolution(SharedSettings.roundVideoCameraResolution.get())
                 .setFrameRate(SharedSettings.roundVideoFrameRate.get())
                 .setCompositionEnabled(SharedSettings.roundVideoComposition.get())
+                .setWideAngle(NanogramFeatures.roundWideAngle())
                 .setListener(sessionListener)
                 .setOutputListener(upload)
                 .setScreenFlashController(this::setScreenFlashEnabled)
@@ -778,6 +790,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
         @Override
         public void onCameraSwitchStarted(@NonNull RoundVideoSession.CameraFacing facing) {
+            if (zoomResetAnimator != null) zoomResetAnimator.cancel();
             startCameraFlipAnimation(facing);
         }
 
@@ -1042,7 +1055,23 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         flashButton.setEnabled(cameraControls
                 && capabilities != null
                 && capabilities.getFlashType() != RoundVideoSession.FlashType.NONE);
+        boolean wide = capabilities != null && capabilities.isWideAvailable();
+        lensButton.setVisibility(wide ? VISIBLE : GONE);
+        lensButton.setEnabled(cameraControls && wide);
+        if (wide) {
+            String label = RoundVideoZoomPlan.labelFor(capabilities.getRestingZoomRatio());
+            lensButton.setLabel(label);
+            lensButton.setContentDescription(
+                    LocaleController.formatString(R.string.AccDescrRoundLens, label)
+            );
+        }
         updateFlashIcon();
+    }
+
+    private void toggleLens() {
+        if (session == null || !session.toggleLens() || capabilities == null) return;
+        if (zoomResetAnimator != null) zoomResetAnimator.cancel();
+        animateZoomTo(capabilities.getRestingZoomRatio(), 250L);
     }
 
     private void togglePreviewMuted() {
@@ -1078,7 +1107,8 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             zoomPointerId2 = event.getPointerId(1);
             pinchStartDistance = pointerDistance(event, 0, 1);
             pinchZoomActive = pinchStartDistance > 0f;
-            zoomProgress = 0f;
+            if (zoomResetAnimator != null) zoomResetAnimator.cancel();
+            pinchStartRatio = session.getZoomRatio();
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE && pinchZoomActive) {
@@ -1092,16 +1122,17 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             float maximumZoomRatio = capabilities == null
                     ? 1f
                     : capabilities.getMaximumZoomRatio();
-            float requestedZoomRatio = 1f
-                    + Math.max(0f, scale - 1f) / ZOOM_GESTURE_EFFORT;
-            zoomProgress = maximumZoomRatio <= 1f
-                    ? 0f
-                    : clamp(
-                            (requestedZoomRatio - 1f) / (maximumZoomRatio - 1f),
-                            0f,
-                            1f
-                    );
-            session.setZoom(zoomProgress);
+            float minimumZoomRatio = capabilities == null
+                    ? 1f
+                    : capabilities.getMinimumZoomRatio();
+            float zoomRatio = RoundVideoZoomPlan.pinchRatio(
+                    pinchStartRatio,
+                    scale,
+                    minimumZoomRatio,
+                    maximumZoomRatio,
+                    ZOOM_GESTURE_EFFORT
+            );
+            session.setZoomRatio(zoomRatio);
             return true;
         }
         if (event.getActionMasked() == MotionEvent.ACTION_POINTER_UP && pinchZoomActive) {
@@ -1136,14 +1167,53 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     private void animateZoomReset() {
         if (session == null) return;
+        float resting = capabilities == null ? 1f : capabilities.getRestingZoomRatio();
+        animateZoomTo(resting, 350L);
+    }
+
+    private void animateZoomTo(float target, long duration) {
+        if (session == null) return;
         if (zoomResetAnimator != null) zoomResetAnimator.cancel();
-        zoomResetAnimator = ValueAnimator.ofFloat(zoomProgress, 0f);
-        zoomResetAnimator.setDuration(350L);
+        zoomResetAnimator = ValueAnimator.ofFloat(session.getZoomRatio(), target);
+        zoomResetAnimator.setDuration(duration);
+        if (duration != 350L) zoomResetAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
         zoomResetAnimator.addUpdateListener(animation -> {
-            zoomProgress = (float) animation.getAnimatedValue();
-            if (session != null) session.setZoom(zoomProgress);
+            if (session != null) session.setZoomRatio((float) animation.getAnimatedValue());
         });
         zoomResetAnimator.start();
+    }
+
+    private static final class RoundLensButton extends FlashViews.ImageViewInvertable {
+        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private String label = "";
+
+        RoundLensButton(Context context) {
+            super(context);
+            textPaint.setTypeface(AndroidUtilities.bold());
+            textPaint.setTextSize(dp(13));
+            textPaint.setTextAlign(Paint.Align.CENTER);
+            textPaint.setColor(Color.WHITE);
+        }
+
+        void setLabel(String value) {
+            if (label.equals(value)) return;
+            label = value;
+            invalidate();
+        }
+
+        @Override
+        public void setInvert(float invert) {
+            super.setInvert(invert);
+            textPaint.setColor(ColorUtils.blendARGB(Color.WHITE, Color.BLACK, invert));
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float y = getHeight() / 2f - (textPaint.ascent() + textPaint.descent()) / 2f;
+            canvas.drawText(label, getWidth() / 2f, y, textPaint);
+        }
     }
 
     private void setScreenFlashEnabled(boolean enabled) {
@@ -1400,10 +1470,6 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         } finally {
             handlingPreviewTextureInvalidate = false;
         }
-    }
-
-    private static float clamp(float value, float minimum, float maximum) {
-        return Math.max(minimum, Math.min(maximum, value));
     }
 
     private final class CameraContainer extends InstantCameraViewBase.InstantViewCameraContainer {

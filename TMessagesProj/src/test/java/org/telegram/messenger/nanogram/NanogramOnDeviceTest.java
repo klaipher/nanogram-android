@@ -118,4 +118,43 @@ public class NanogramOnDeviceTest {
         assertArrayEquals(a, b);
         assertEquals(100 * 2, a.length);
     }
+
+    @Test
+    public void nonPremiumWithTheSwitchNeverCallsTheServer() {
+        assertTrue(NanogramOnDevice.localOnly(true, false));
+        assertFalse(NanogramOnDevice.mayCallServer(true, false));
+        assertFalse(NanogramOnDevice.localOnly(true, true));
+        assertTrue(NanogramOnDevice.mayCallServer(true, true));
+        assertFalse(NanogramOnDevice.localOnly(false, false));
+        assertTrue(NanogramOnDevice.mayCallServer(false, false));
+        assertTrue(NanogramOnDevice.mayCallServer(false, true));
+    }
+
+    @Test
+    public void localResultIsAFinalTranscriptionWithIdZero() {
+        assertTrue(NanogramOnDevice.isLocalResult(0, true));
+        assertFalse(NanogramOnDevice.isLocalResult(0, false));
+        assertFalse(NanogramOnDevice.isLocalResult(42, true));
+        assertFalse(NanogramOnDevice.isLocalResult(42, false));
+    }
+
+    @Test
+    public void floatPcmClipsAndKeepsLength() {
+        final short[] out = NanogramOnDevice.floatToPcm16(new float[]{0f, 1f, -1f, 2.5f, -3f, 0.5f, -0.5f, Float.NaN, 9f}, 8);
+        assertEquals(8, out.length);
+        assertEquals(0, out[0]);
+        assertEquals(Short.MAX_VALUE, out[1]);
+        assertEquals(Short.MIN_VALUE, out[2]);
+        assertEquals(Short.MAX_VALUE, out[3]);
+        assertEquals(Short.MIN_VALUE, out[4]);
+        assertEquals(16384, out[5]);
+        assertEquals(-16383, out[6]);
+        assertEquals(0, out[7]);
+        assertEquals(0, NanogramOnDevice.floatToPcm16(new float[0], 0).length);
+    }
+
+    @Test
+    public void featureSwitchIsOffOnTheJvm() {
+        assertFalse(NanogramFeatures.onDeviceTranscription());
+    }
 }

@@ -142,6 +142,7 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.WebFile;
 import org.telegram.messenger.browser.Browser;
+import org.telegram.messenger.nanogram.NanogramOnDeviceTranscription;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.utils.CountdownTimer;
 import org.telegram.messenger.utils.DrawableUtils;
@@ -9930,7 +9931,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     widthForCaption = getCompactContentWidth() - getCompactSideButtonColumn();
                 }
                 if (!messageObject.isRestrictedMessage && captionLayout == null && (messageObject.caption != null || messageObject.isVoiceTranscriptionOpen())) {
-                    currentCaption = messageObject.isVoiceTranscriptionOpen() ? messageObject.getVoiceTranscription() : messageObject.caption;
+                    currentCaption = messageObject.isVoiceTranscriptionOpen() ? messageObject.getVoiceTranscription(true) : messageObject.caption;
                     if (currentCaption != null && !TextUtils.isEmpty(messageObject.messageOwner.voiceTranscription) && currentMessageObject.isVoiceTranscriptionOpen() && !currentMessageObject.messageOwner.voiceTranscriptionFinal) {
                         currentCaption += " ";
                         if (!(currentCaption instanceof Spannable)) {
@@ -11173,6 +11174,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             (!currentMessageObject.isOutOwner() || currentMessageObject.isSent()) &&
             (
                 UserConfig.getInstance(currentAccount).isPremium()
+                ||
+                NanogramOnDeviceTranscription.isEnabledCached()
                 ||
                 TranscribeButton.isFreeTranscribeInChat(currentMessageObject)
                 ||

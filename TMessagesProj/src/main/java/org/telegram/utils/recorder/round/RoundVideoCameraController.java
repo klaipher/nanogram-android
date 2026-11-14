@@ -61,6 +61,7 @@ final class RoundVideoCameraController {
         final RoundVideoSession.FrameRate frameRate;
         final Size recordingSize;
         final float maximumZoomRatio;
+        final float minimumZoomRatio;
         final boolean torchAvailable;
 
         CameraInfo(
@@ -69,6 +70,7 @@ final class RoundVideoCameraController {
                 RoundVideoSession.FrameRate frameRate,
                 Size recordingSize,
                 float maximumZoomRatio,
+                float minimumZoomRatio,
                 boolean torchAvailable
         ) {
             this.facing = facing;
@@ -76,6 +78,7 @@ final class RoundVideoCameraController {
             this.frameRate = frameRate;
             this.recordingSize = recordingSize;
             this.maximumZoomRatio = maximumZoomRatio;
+            this.minimumZoomRatio = minimumZoomRatio;
             this.torchAvailable = torchAvailable;
         }
     }
@@ -102,6 +105,7 @@ final class RoundVideoCameraController {
         final Range<Integer> fpsRange;
         final OutputPair regularFallbackPair;
         final float maximumZoomRatio;
+        final float minimumZoomRatio;
 
         CameraSelection(
                 String id,
@@ -113,7 +117,8 @@ final class RoundVideoCameraController {
                 RoundVideoSession.FrameRate frameRate,
                 Range<Integer> fpsRange,
                 OutputPair regularFallbackPair,
-                float maximumZoomRatio
+                float maximumZoomRatio,
+                float minimumZoomRatio
         ) {
             this.id = id;
             this.facing = facing;
@@ -125,6 +130,7 @@ final class RoundVideoCameraController {
             this.fpsRange = fpsRange;
             this.regularFallbackPair = regularFallbackPair;
             this.maximumZoomRatio = maximumZoomRatio;
+            this.minimumZoomRatio = minimumZoomRatio;
         }
     }
 
@@ -179,8 +185,13 @@ final class RoundVideoCameraController {
     private Range<Integer> activeFpsRange;
     private OutputPair regularFallbackPair;
     private long timelineOffsetUs;
-    private volatile float zoomProgress;
+    private volatile float zoomRatio = 1f;
     private float maximumZoomRatio = 1f;
+    private float minimumZoomRatio = 1f;
+    private volatile boolean wideAngle;
+    private volatile boolean lensWide;
+    /** The next camera open also sets the zoom to its resting ratio. */
+    private volatile boolean zoomResetPending = true;
     private boolean torchEnabled;
     private boolean torchVerificationPending;
     private int torchVerificationFrames;
@@ -321,6 +332,7 @@ final class RoundVideoCameraController {
         this.writer = writer;
         this.timelineOffsetUs = timelineOffsetUs;
         requestedFacing = facing;
+        zoomResetPending = true;
         active = true;
         stopping = false;
         frameRateFallbackAttempted = false;
@@ -344,8 +356,33 @@ final class RoundVideoCameraController {
         return true;
     }
 
+    void setWideAngle(boolean enabled) {
+        wideAngle = enabled;
+        lensWide = enabled;
+    }
+
+    void setLensWide(boolean wide) {
+        lensWide = wide;
+    }
+
     boolean setZoom(float progress) {
-        zoomProgress = clamp(progress, 0f, 1f);
+        return setZoomRatio(RoundVideoZoomPlan.progressToRatio(progress, maximumZoomRatio));
+    }
+
+    /** Returns the zoom to the resting ratio of the current lens choice. */
+    boolean resetZoom() {
+        final float ratio = RoundVideoZoomPlan.lensRatio(lensWide, minimumZoomRatio);
+        Handler handler = cameraHandler;
+        if (!active || handler == null) return false;
+        handler.post(() -> {
+            zoomRatio = ratio;
+            applyRepeatingRequest();
+        });
+        return true;
+    }
+
+    boolean setZoomRatio(float ratio) {
+        zoomRatio = ratio;
         Handler handler = cameraHandler;
         if (!active || handler == null) return false;
         handler.removeCallbacks(applyZoomRunnable);
@@ -651,6 +688,10 @@ final class RoundVideoCameraController {
         try {
             switchSelectionStartedNs = SystemClock.elapsedRealtimeNanos();
             selectCameraAndSizes(requestedFacing);
+            if (zoomResetPending) {
+                zoomResetPending = false;
+                zoomRatio = restingRatio(captureSelection());
+            }
             long selectionElapsedMs = elapsedMs(switchSelectionStartedNs);
             if (cameraDevice == null && recorder == null) {
                 prepareDualActiveSupport();
@@ -802,7 +843,9 @@ final class RoundVideoCameraController {
         notifySwitchCompletion = true;
         torchEnabled = false;
         torchVerificationPending = false;
-        zoomProgress = 0f;
+        zoomResetPending = true;
+        CameraSelection target = selectionForFacing(facing);
+        zoomRatio = target == null ? 1f : restingRatio(target);
         callback.onCameraSwitchStarted(facing);
         cameraSwitchStartedNs = SystemClock.elapsedRealtimeNanos();
         diagnostics.log("camera device switch started: from=" + activeFacing + ", to=" + facing);
@@ -899,6 +942,7 @@ final class RoundVideoCameraController {
         activeDualSessionConfigured = true;
         warmDualSessionConfigured = true;
         notifySwitchCompletion = false;
+        zoomResetPending = false;
         switchingCamera = false;
         awaitingSwitchPreviewFrame = false;
         resetCaptureFpsMeasurement();
@@ -915,6 +959,7 @@ final class RoundVideoCameraController {
                         activeFrameRate,
                         recordingSize,
                         maximumZoomRatio,
+                        minimumZoomRatio,
                         isTorchAvailable()
                 ),
                 true
@@ -1434,6 +1479,7 @@ final class RoundVideoCameraController {
                                         activeFrameRate,
                                         recordingSize,
                                         maximumZoomRatio,
+                                        minimumZoomRatio,
                                         isTorchAvailable()
                                 ),
                                 wasSwitch
@@ -1652,6 +1698,9 @@ final class RoundVideoCameraController {
             applyZoom(builder);
             applyTorch(builder);
         } else {
+            if (wideAngle && selection.minimumZoomRatio < 1f) {
+                builder.set(CaptureRequest.CONTROL_ZOOM_RATIO, selection.minimumZoomRatio);
+            }
             int[] aeModes = selection.characteristics.get(
                     CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES
             );
@@ -1852,7 +1901,7 @@ final class RoundVideoCameraController {
     }
 
     private void applyZoom(@NonNull CaptureRequest.Builder builder) {
-        float ratio = 1f + zoomProgress * (maximumZoomRatio - 1f);
+        float ratio = clamp(zoomRatio, minimumZoomRatio, maximumZoomRatio);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Range<Float> range = characteristics == null
                     ? null
@@ -1866,6 +1915,7 @@ final class RoundVideoCameraController {
                 ? null
                 : characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
         if (activeArray == null) return;
+        ratio = Math.max(1f, ratio);
         int cropWidth = Math.max(1, Math.round(activeArray.width() / ratio));
         int cropHeight = Math.max(1, Math.round(activeArray.height() / ratio));
         int left = activeArray.centerX() - cropWidth / 2;
@@ -2004,6 +2054,7 @@ final class RoundVideoCameraController {
         sourceCropSize = pair.cropSize;
         activeCameraResolution = pair.cameraResolution;
         maximumZoomRatio = readMaximumZoomRatio(selectedCharacteristics);
+        minimumZoomRatio = readMinimumZoomRatio(selectedCharacteristics);
         long recordingMinFrameDurationNs = getMinimumFrameDurationNs(
                 selectedCharacteristics,
                 recordingSize
@@ -2054,7 +2105,8 @@ final class RoundVideoCameraController {
                 activeFrameRate,
                 activeFpsRange,
                 regularFallbackPair,
-                maximumZoomRatio
+                maximumZoomRatio,
+                minimumZoomRatio
         );
     }
 
@@ -2069,6 +2121,7 @@ final class RoundVideoCameraController {
         activeFpsRange = selection.fpsRange;
         regularFallbackPair = selection.regularFallbackPair;
         maximumZoomRatio = selection.maximumZoomRatio;
+        minimumZoomRatio = selection.minimumZoomRatio;
         frameRateFallbackAttempted = false;
         resetCaptureFpsMeasurement();
     }
@@ -2188,6 +2241,37 @@ final class RoundVideoCameraController {
             if (value != null) maximum = value;
         }
         return clamp(maximum, 1f, MAXIMUM_UI_ZOOM_RATIO);
+    }
+
+    private float readMinimumZoomRatio(@NonNull CameraCharacteristics cameraCharacteristics) {
+        Float lower = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Range<Float> range = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+            if (range != null) lower = range.getLower();
+        }
+        float minimum = RoundVideoZoomPlan.minimumRatio(lower, wideAngle);
+        if (wideAngle) {
+            diagnostics.log("wide zoom: id=" + cameraId
+                    + ", zoomRange=" + (lower == null ? "none" : lower + ".." + maximumZoomRatio)
+                    + ", physicalIds=" + physicalIdsOf(cameraCharacteristics)
+                    + ", focalLengths=" + Arrays.toString(cameraCharacteristics.get(
+                    CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS))
+                    + ", minimum=" + minimum);
+        }
+        return minimum;
+    }
+
+    @NonNull
+    private static String physicalIdsOf(@NonNull CameraCharacteristics cameraCharacteristics) {
+        try {
+            return String.valueOf(cameraCharacteristics.getPhysicalCameraIds());
+        } catch (RuntimeException e) {
+            return "unknown";
+        }
+    }
+
+    private float restingRatio(@NonNull CameraSelection selection) {
+        return RoundVideoZoomPlan.lensRatio(lensWide, selection.minimumZoomRatio);
     }
 
     private boolean isTorchAvailable() {

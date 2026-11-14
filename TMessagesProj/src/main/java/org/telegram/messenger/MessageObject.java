@@ -53,6 +53,7 @@ import androidx.core.graphics.ColorUtils;
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.messenger.nanogram.NanogramLiveLocation;
+import org.telegram.messenger.nanogram.NanogramOnDevice;
 import org.telegram.messenger.ringtone.RingtoneDataStore;
 import org.telegram.messenger.utils.tlutils.AmountUtils;
 import org.telegram.messenger.utils.tlutils.TLKeyboardHelper;
@@ -7779,6 +7780,10 @@ public class MessageObject {
     }
 
     public CharSequence getVoiceTranscription() {
+        return getVoiceTranscription(false);
+    }
+
+    public CharSequence getVoiceTranscription(boolean withMark) {
         if (messageOwner == null || messageOwner.voiceTranscription == null) {
             return null;
         }
@@ -7796,12 +7801,26 @@ public class MessageObject {
         CharSequence text = translated && messageOwner.translatedVoiceTranscription != null ? messageOwner.translatedVoiceTranscription.text : messageOwner.voiceTranscription;
         if (!TextUtils.isEmpty(text)) {
             text = Emoji.replaceEmoji(text, Theme.chat_msgTextPaint.getFontMetricsInt(), false);
+            if (withMark && NanogramOnDevice.isLocalResult(messageOwner.voiceTranscriptionId, messageOwner.voiceTranscriptionFinal)) {
+                final SpannableStringBuilder marked = new SpannableStringBuilder(text);
+                marked.append("  ");
+                final int markStart = marked.length();
+                marked.append(getString(R.string.NanogramTranscribedOnDevice));
+                marked.setSpan(new CharacterStyle() {
+                    @Override
+                    public void updateDrawState(TextPaint textPaint) {
+                        textPaint.setTextSize(textPaint.getTextSize() * .8f);
+                        textPaint.setColor(Theme.chat_timePaint.getColor());
+                    }
+                }, markStart, marked.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                text = marked;
+            }
         }
         return text;
     }
 
     public float measureVoiceTranscriptionHeight() {
-        CharSequence voiceTranscription = getVoiceTranscription();
+        CharSequence voiceTranscription = getVoiceTranscription(true);
         if (voiceTranscription == null) {
             return 0;
         }

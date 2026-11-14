@@ -3,21 +3,30 @@ package org.telegram.ui;
 import static org.telegram.messenger.LocaleController.getString;
 
 import android.content.Context;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.os.Build;
+import android.util.Range;
 import android.view.View;
 
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.Utilities;
+import org.telegram.messenger.camera.NanogramCameraExtensions;
 import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.nanogram.NanogramOnDevice;
 import org.telegram.messenger.nanogram.NanogramOnDeviceTranscription;
 import org.telegram.messenger.nanogram.NanogramOnDeviceTranslation;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
+import org.telegram.utils.recorder.round.RoundVideoZoomPlan;
 
 import java.util.ArrayList;
 
@@ -32,9 +41,22 @@ public class NanogramFeaturesActivity extends UniversalFragment {
     private static final int ID_ON_DEVICE_TRANSCRIPTION = 6;
     private static final int ID_ON_DEVICE_TRANSLATION = 7;
     private static final int ID_MODELS_WIFI_ONLY = 8;
+    private static final int ID_ROUND_WIDE_ANGLE = 9;
+    private static final int ID_RECORDER_MIC_SWITCH = 10;
+    private static final int ID_ENHANCED_PHOTOS = 11;
+    private static final int ID_ENHANCED_PHOTO_MODE = 12;
+
+    // Feature C turns this on when its recorder button lands; until then its row stays hidden.
+    private static final boolean RECORDER_MIC_SWITCH_AVAILABLE = false;
+
+    // Support probes run once off the main thread; null means not known yet, and the rows then behave as supported.
+    private static volatile Boolean wideAngleSupported;
+    private static volatile int[] enhancedPhotoModes;
+    private static boolean probesStarted;
 
     @Override
     public boolean onFragmentCreate() {
+        startProbes();
         NanogramOnDeviceTranslation.setStatusListener((language, state) -> {
             if (listView != null && listView.adapter != null) {
                 listView.adapter.update(true);
@@ -47,6 +69,62 @@ public class NanogramFeaturesActivity extends UniversalFragment {
     public void onFragmentDestroy() {
         NanogramOnDeviceTranslation.setStatusListener(null);
         super.onFragmentDestroy();
+    }
+
+    private void startProbes() {
+        if (probesStarted) {
+            return;
+        }
+        probesStarted = true;
+        Utilities.globalQueue.postRunnable(() -> {
+            boolean wide = true;
+            int[] modes = null;
+            try {
+                wide = probeWideAngle();
+            } catch (Throwable ignore) {
+            }
+            try {
+                modes = probeEnhancedPhotoModes();
+            } catch (Throwable ignore) {
+            }
+            wideAngleSupported = wide;
+            enhancedPhotoModes = modes;
+            AndroidUtilities.runOnUIThread(() -> {
+                if (listView != null && listView.adapter != null) {
+                    listView.adapter.update(true);
+                }
+            });
+        });
+    }
+
+    // True when a front or back camera zooms out below 1x. Runs on globalQueue.
+    private static boolean probeWideAngle() throws Exception {
+        final CameraManager manager = (CameraManager) ApplicationLoader.applicationContext.getSystemService(Context.CAMERA_SERVICE);
+        if (manager == null) {
+            return false;
+        }
+        for (String id : manager.getCameraIdList()) {
+            final CameraCharacteristics c = manager.getCameraCharacteristics(id);
+            final Integer facing = c.get(CameraCharacteristics.LENS_FACING);
+            if (facing == null || (facing != CameraCharacteristics.LENS_FACING_FRONT && facing != CameraCharacteristics.LENS_FACING_BACK)) {
+                continue;
+            }
+            final Range<Float> range = c.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+            if (RoundVideoZoomPlan.minimumRatio(range == null ? null : range.getLower(), true) < 1f) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The modes the cameras offer, using NanogramFeatures.PHOTO_MODE_*; empty means none. Runs on globalQueue.
+    private static int[] probeEnhancedPhotoModes() {
+        return NanogramCameraExtensions.modes(ApplicationLoader.applicationContext);
+    }
+
+    private static boolean enhancedPhotosSupported() {
+        final int[] modes = enhancedPhotoModes;
+        return modes == null || modes.length > 0;
     }
 
     @Override
@@ -86,7 +164,21 @@ public class NanogramFeaturesActivity extends UniversalFragment {
 
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesRecording)));
         items.add(UItem.asButton(ID_MICROPHONE, getString(R.string.MicrophoneForRecordings), ThemeActivity.microphoneValue()));
-        items.add(UItem.asShadow(getString(R.string.NanogramMicrophoneInfo)));
+        if (RECORDER_MIC_SWITCH_AVAILABLE) {
+            items.add(UItem.asCheck(ID_RECORDER_MIC_SWITCH, getString(R.string.NanogramRecorderMicSwitch)).setChecked(NanogramFeatures.recorderMicSwitch()));
+            items.add(UItem.asShadow(getString(R.string.NanogramRecorderMicSwitchInfo)));
+        } else {
+            items.add(UItem.asShadow(getString(R.string.NanogramMicrophoneInfo)));
+        }
+
+        items.add(UItem.asHeader(getString(R.string.NanogramFeaturesCamera)));
+        items.add(UItem.asCheck(ID_ROUND_WIDE_ANGLE, getString(R.string.NanogramRoundWideAngle)).setChecked(NanogramFeatures.roundWideAngle()));
+        items.add(UItem.asCheck(ID_ENHANCED_PHOTOS, getString(R.string.NanogramEnhancedPhotos)).setChecked(NanogramFeatures.enhancedPhotos()));
+        final int[] modes = enhancedPhotoModes;
+        if (NanogramFeatures.enhancedPhotos() && modes != null && modes.length > 1) {
+            items.add(UItem.asButton(ID_ENHANCED_PHOTO_MODE, getString(R.string.NanogramEnhancedPhotosMode), photoModeTitle(NanogramFeatures.enhancedPhotoMode())));
+        }
+        items.add(UItem.asShadow(getString(R.string.NanogramRoundWideAngleInfo) + "\n\n" + getString(R.string.NanogramEnhancedPhotosInfo)));
 
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesOnDevice)));
         final Context context = getContext();
@@ -104,6 +196,38 @@ public class NanogramFeaturesActivity extends UniversalFragment {
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesPower)));
         items.add(UItem.asCheck(ID_FOLLOW_SYSTEM_POWER, getString(R.string.LiteFollowSystemSaver)).setChecked(LiteMode.isFollowSystemPowerSaver()));
         items.add(UItem.asShadow(getString(R.string.LiteFollowSystemSaverInfo)));
+    }
+
+    private static String photoModeTitle(int mode) {
+        switch (mode) {
+            case NanogramFeatures.PHOTO_MODE_HDR:
+                return getString(R.string.NanogramEnhancedPhotosHdr);
+            case NanogramFeatures.PHOTO_MODE_NIGHT:
+                return getString(R.string.NanogramEnhancedPhotosNight);
+            default:
+                return getString(R.string.NanogramEnhancedPhotosAuto);
+        }
+    }
+
+    private void showPhotoModeDialog() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        final int[] modes = enhancedPhotoModes;
+        if (modes == null || modes.length == 0) {
+            return;
+        }
+        final CharSequence[] titles = new CharSequence[modes.length];
+        for (int i = 0; i < modes.length; i++) {
+            titles[i] = photoModeTitle(modes[i]);
+        }
+        showDialog(new AlertDialog.Builder(getParentActivity())
+                .setTitle(getString(R.string.NanogramEnhancedPhotosMode))
+                .setItems(titles, (dialog, which) -> {
+                    NanogramFeatures.setEnhancedPhotoMode(modes[which]);
+                    listView.adapter.update(true);
+                })
+                .create());
     }
 
     private CharSequence onDeviceInfo(boolean transcription) {
@@ -149,6 +273,28 @@ public class NanogramFeaturesActivity extends UniversalFragment {
                 break;
             case ID_MICROPHONE:
                 ThemeActivity.showMicrophoneDialog(this, () -> listView.adapter.update(true));
+                return;
+            case ID_ROUND_WIDE_ANGLE: {
+                final Boolean supported = wideAngleSupported;
+                if (!NanogramFeatures.roundWideAngle() && supported != null && !supported) {
+                    BulletinFactory.of(this).createErrorBulletin(getString(R.string.NanogramNotSupportedOnPhone)).show();
+                    return;
+                }
+                NanogramFeatures.setRoundWideAngle(!NanogramFeatures.roundWideAngle());
+                break;
+            }
+            case ID_RECORDER_MIC_SWITCH:
+                NanogramFeatures.setRecorderMicSwitch(!NanogramFeatures.recorderMicSwitch());
+                break;
+            case ID_ENHANCED_PHOTOS:
+                if (!NanogramFeatures.enhancedPhotos() && !enhancedPhotosSupported()) {
+                    BulletinFactory.of(this).createErrorBulletin(getString(R.string.NanogramNotSupportedOnPhone)).show();
+                    return;
+                }
+                NanogramFeatures.setEnhancedPhotos(!NanogramFeatures.enhancedPhotos());
+                break;
+            case ID_ENHANCED_PHOTO_MODE:
+                showPhotoModeDialog();
                 return;
             case ID_ON_DEVICE_TRANSCRIPTION: {
                 final boolean on = !NanogramFeatures.onDeviceTranscription();

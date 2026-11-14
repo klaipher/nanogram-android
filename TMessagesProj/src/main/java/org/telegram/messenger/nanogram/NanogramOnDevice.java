@@ -16,6 +16,37 @@ public final class NanogramOnDevice {
         return sdk >= MIN_SDK_TRANSCRIPTION && onDeviceRecognizerAvailable;
     }
 
+    // With the switch on, a non-Premium account never reaches messages.transcribeAudio, trial or not.
+    public static boolean localOnly(boolean onDeviceEnabled, boolean premium) {
+        return onDeviceEnabled && !premium;
+    }
+
+    public static boolean mayCallServer(boolean onDeviceEnabled, boolean premium) {
+        return !localOnly(onDeviceEnabled, premium);
+    }
+
+    // Server transcriptions always carry a non-zero id; the phone's own result is stored with id 0.
+    public static boolean isLocalResult(long transcriptionId, boolean isFinal) {
+        return isFinal && transcriptionId == 0;
+    }
+
+    public static short[] floatToPcm16(float[] in, int n) {
+        final short[] out = new short[n];
+        for (int i = 0; i < n; ++i) {
+            final float v = in[i];
+            if (v != v) {
+                out[i] = 0;
+            } else if (v >= 1f) {
+                out[i] = Short.MAX_VALUE;
+            } else if (v <= -1f) {
+                out[i] = Short.MIN_VALUE;
+            } else {
+                out[i] = (short) Math.round(v * 32767f);
+            }
+        }
+        return out;
+    }
+
     // ML Kit translation models are keyed by bare language code ("pt", not "pt-BR").
     public static String translateCode(String telegramLang) {
         if (telegramLang == null) {
