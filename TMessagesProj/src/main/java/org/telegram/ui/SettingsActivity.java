@@ -829,7 +829,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
-        if (getMessagesController().starsPurchaseAvailable()) {
+        if (getMessagesController().starsEntryAvailable()) {
             StarsController c = StarsController.getInstance(currentAccount);
             long balance = c.getBalance().amount;
             items.add(SettingCell.Factory.of(12, 0xFFEFA612, 0xFFE77512, R.drawable.settings_stars, getString(R.string.TelegramStars), null, c.balanceAvailable() && balance > 0 ? StarsIntroActivity.formatStarsAmount(c.getBalance(), 0.85f, ' ') : ""));
@@ -844,7 +844,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(15, 0xFFF45255, 0xFFDF3955, R.drawable.settings_business, getString(R.string.TelegramBusiness)));
         }
-        if (!getMessagesController().premiumPurchaseBlocked()) {
+        if (getMessagesController().starGiftsAvailable()) {
             items.add(SettingCell.Factory.of(16, 0xFFF38B31, 0xFFE26314, R.drawable.settings_gift, getString(R.string.SendAGift)));
         }
         if (items.get(items.size() - 1).viewType != UniversalAdapter.VIEW_TYPE_SHADOW)

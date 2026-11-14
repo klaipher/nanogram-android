@@ -43,6 +43,21 @@ def apk_url(version_name: str, build: str, repo: str = PUBLIC_REPO) -> str:
     return f"https://github.com/{repo}/releases/download/{tag_name(version_name, build)}/{apk_asset_name(version_name, build)}"
 
 
+def build_tasks(release: bool, play: bool, override: str | None = None) -> list[str]:
+    """Gradle tasks for `ng build`. The Play flavor also makes the AAB, which is what Google Play takes."""
+    if override:
+        return [override]
+    if not release:
+        return [":TMessagesProj_App:assembleAfatDebug"]
+    if play:
+        return [":TMessagesProj_App:bundleAfatPlayRelease", ":TMessagesProj_App:assembleAfatPlayRelease"]
+    return [":TMessagesProj_App:assembleAfatRelease"]
+
+
+def bundle_dir(play: bool, release: bool) -> str:
+    return "afatPlayRelease" if play and release else ""
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:

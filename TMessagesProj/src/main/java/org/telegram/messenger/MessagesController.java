@@ -739,6 +739,17 @@ public class MessagesController extends BaseController implements NotificationCe
     public boolean starsPurchaseAvailable() {
         return !starsLocked && StorePurchasePolicy.current().allows(StorePurchasePolicy.Entry.STARS_TOPUP);
     }
+    // The Stars row and star gifts spend what the account owns, so only the server decides them; the purchase entry points ask the policy.
+    public boolean starsEntryAvailable() {
+        if (!starsLocked) {
+            return true;
+        }
+        final StarsController controller = StarsController.getInstance(currentAccount);
+        return controller.balanceAvailable() && (controller.hasTransactions() || controller.getBalance().positive());
+    }
+    public boolean starGiftsAvailable() {
+        return !premiumLocked;
+    }
     public boolean premiumFeaturesBlocked() {
         return premiumPurchaseBlocked() && !getUserConfig().isPremium();
     }

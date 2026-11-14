@@ -13,12 +13,12 @@ Tools/dev/ng build release                   # flavor afat, GitHub build, unchan
 `afatPlay` is a release-only product flavor next to `afat` (`TMessagesProj_App/build.gradle`). It sets
 `BuildConfig.STORE_FLAVOR = true`; `ApplicationLoaderImpl.isStoreFlavor()` hands that to the shared code, which asks
 `StorePurchasePolicy.current()`. Flipping the flag to false for any build turns every entry point back on. Output
-APKs are named `...-play.apk`; Play App Signing uses the existing release key (upload the AAB or APK signed with it).
+is `Nanogram-...-play.aab` (the bundle Google Play takes for new apps) plus `...-play.apk` for sideload testing; Play App Signing uses the existing release key.
 
 What differs from the GitHub flavor, and nothing else does:
 
 1. `StorePurchasePolicy` on: no Play Billing (the billing client never connects, the `BILLING` permission is removed
-   by `src/afatPlay/AndroidManifest.xml`), no Telegram invoice links for Premium, Stars, gifts of Premium, giveaways.
+   by `src/afatPlay/AndroidManifest.xml`), the Premium, Stars, Premium-gift and giveaway buy paths are closed at their own entry points (table below). A Telegram-issued invoice link or bot invoice still opens the payment form: there is no guard on `PaymentFormActivity`, the same residual risk as iOS and Mac.
 2. The in-app updater is off: `NanogramUpdater.isEnabled()` is false, so no update row, banner, download or install,
    and `REQUEST_INSTALL_PACKAGES` is removed from the manifest (Play forbids self-updates outside Play).
 
@@ -28,7 +28,7 @@ The GitHub flavor keeps today's behaviour (upstream's server flags decide what i
 
 Premium status, badges and every Premium feature the account has; spending Stars already owned (paid reactions, paid
 media, subscriptions, gifts paid with the existing balance); receiving, viewing, converting and selling gifts;
-applying a received Premium gift code; launching a giveaway that was already paid for (prepaid); bot payments for
+applying a received Premium gift code; the Settings and own-profile Stars row (shown when the server allows Stars, or the account has a balance or history), "Send a Gift" for star gifts paid from the balance; launching a giveaway that was already paid for (prepaid); bot payments for
 physical goods and services (3.1.3(e) and Play policy allow them).
 
 ## Entry points (all behind `StorePurchasePolicy`)
@@ -36,6 +36,7 @@ physical goods and services (3.1.3(e) and Play policy allow them).
 | Entry point | Store build |
 |---|---|
 | `MessagesController.premiumPurchaseBlocked()` / `premiumFeaturesBlocked()` | true for accounts without Premium; this is upstream's own "premium locked" mode, which already hides Premium upsells in about 90 places (settings row, profile gift row, limit-reached sheets, Premium reaction/sticker/emoji lock sheets, `tg://premium_offer` via `PremiumPreviewFragment.onFragmentCreate`) |
+| `MessagesController.starsEntryAvailable()` / `starGiftsAvailable()` | server-driven only (`!starsLocked` or a balance or history; `!premiumLocked`), so the Stars row and every "Send a Gift" entry stay in store builds |
 | `MessagesController.starsPurchaseAvailable()` | false: every "balance too low, buy Stars" branch in `StarsController` (gifts, paid media, paid reactions, subscriptions, resale, upgrades) ends in the "not supported" dialog instead of a top-up |
 | `PremiumPreviewFragment.buyPremium(...)` | returns at once; the buy button container is hidden (also for a Premium user's upgrade button) |
 | `PremiumFeatureBottomSheet`, `PremiumPreviewBottomSheet`, `DoubledLimitsBottomSheet` | `show()` does nothing for accounts without Premium (gift-link preview with a received gift still shows) |

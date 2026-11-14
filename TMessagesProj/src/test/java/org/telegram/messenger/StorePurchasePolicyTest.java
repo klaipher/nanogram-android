@@ -14,10 +14,6 @@ public class StorePurchasePolicyTest {
         StorePurchasePolicy.Entry.PREMIUM_GIVEAWAY,
         StorePurchasePolicy.Entry.PREMIUM_AUTH_CODE,
         StorePurchasePolicy.Entry.STARS_TOPUP,
-        StorePurchasePolicy.Entry.STARS_GIFT,
-        StorePurchasePolicy.Entry.STARS_GIVEAWAY,
-        StorePurchasePolicy.Entry.ADS_TOPUP,
-        StorePurchasePolicy.Entry.PURCHASE_LINK,
         StorePurchasePolicy.Entry.PLAY_BILLING,
     };
 

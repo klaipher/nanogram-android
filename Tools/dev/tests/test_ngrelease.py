@@ -115,5 +115,18 @@ class GhCommands(unittest.TestCase):
         self.assertIn("--latest=false", c)
 
 
+class BuildTasksTest(unittest.TestCase):
+    def test_play_release_builds_bundle_and_apk(self):
+        self.assertEqual(r.build_tasks(True, True), [":TMessagesProj_App:bundleAfatPlayRelease", ":TMessagesProj_App:assembleAfatPlayRelease"])
+        self.assertEqual(r.bundle_dir(True, True), "afatPlayRelease")
+
+    def test_github_release_and_debug_build_only_an_apk(self):
+        self.assertEqual(r.build_tasks(True, False), [":TMessagesProj_App:assembleAfatRelease"])
+        self.assertEqual(r.build_tasks(False, False), [":TMessagesProj_App:assembleAfatDebug"])
+
+    def test_task_override_wins(self):
+        self.assertEqual(r.build_tasks(True, True, ":x:y"), [":x:y"])
+
+
 if __name__ == "__main__":
     unittest.main()

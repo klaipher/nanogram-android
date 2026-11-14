@@ -438,9 +438,7 @@ def cmd_build(a: argparse.Namespace) -> None:
     play = getattr(a, "store", "github") == "play"
     if play and not release:
         die("--store play is a release build only (use `ng build release --store play`)")
-    flavor = "AfatPlay" if play else "Afat"
-    task = a.task or (f":TMessagesProj_App:assemble{flavor}Release" if release else ":TMessagesProj_App:assembleAfatDebug")
-    args = [task]
+    args = ngrelease.build_tasks(release, play, a.task)
     if a.clean:
         args.insert(0, "clean")
     if a.no_cache:
@@ -462,6 +460,11 @@ def cmd_build(a: argparse.Namespace) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     final = dest / f"Nanogram-{TC.get('versionName', 'dev')}-{bn}-{a.variant}-{a.abis}{'-play' if play else ''}.apk"
     shutil.copy2(apk, final)
+    if play and not a.task:
+        bundles = sorted((ROOT / "TMessagesProj_App/build/outputs/bundle" / ngrelease.bundle_dir(play, release)).glob("*.aab"), key=lambda p: p.stat().st_mtime)
+        if not bundles:
+            die("build succeeded but no AAB found (Google Play needs the bundle)")
+        shutil.copy2(bundles[-1], final.with_suffix(".aab"))
     mapping = ROOT / "TMessagesProj_App/build/outputs/mapping" / variant_dir.replace("/", "") / "mapping.txt"
     if mapping.exists():
         shutil.copy2(mapping, dest / "mapping.txt")
