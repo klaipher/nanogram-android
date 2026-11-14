@@ -207,7 +207,6 @@ add_library(tgcalls STATIC
         voip/webrtc/rtc_base/ip_address.cc
         voip/webrtc/rtc_base/data_rate_limiter.cc
         voip/webrtc/rtc_base/http_common.cc
-        voip/webrtc/rtc_base/task_queue_libevent.cc
         voip/webrtc/rtc_base/net_helpers.cc
         voip/webrtc/rtc_base/memory/aligned_malloc.cc
         voip/webrtc/rtc_base/memory/fifo_buffer.cc
@@ -404,7 +403,7 @@ add_library(tgcalls STATIC
         voip/webrtc/api/rtc_event_log/rtc_event_log.cc
         voip/webrtc/api/rtc_event_log/rtc_event_log_factory.cc
         voip/webrtc/api/create_peerconnection_factory.cc
-        voip/webrtc/api/task_queue/default_task_queue_factory_libevent.cc
+        voip/webrtc/api/task_queue/default_task_queue_factory_stdlib.cc
         voip/webrtc/api/task_queue/pending_task_safety_flag.cc
         voip/webrtc/api/task_queue/task_queue_base.cc
         voip/webrtc/api/media_types.cc
@@ -1390,20 +1389,6 @@ add_library(tgcalls STATIC
         voip/webrtc/stats/rtc_stats_report.cc
         voip/webrtc/stats/rtc_stats.cc
         voip/webrtc/stats/rtcstats_objects.cc
-        voip/third_party/libevent/buffer.c
-        voip/third_party/libevent/epoll.c
-        voip/third_party/libevent/evbuffer.c
-        voip/third_party/libevent/evdns.c
-        voip/third_party/libevent/event.c
-        voip/third_party/libevent/event_tagging.c
-        voip/third_party/libevent/evrpc.c
-        voip/third_party/libevent/evutil.c
-        voip/third_party/libevent/http.c
-        voip/third_party/libevent/log.c
-        voip/third_party/libevent/poll.c
-        voip/third_party/libevent/select.c
-        voip/third_party/libevent/signal.c
-        voip/third_party/libevent/strlcpy.c
         voip/webrtc/net/dcsctp/public/dcsctp_socket_factory.cc
         voip/webrtc/net/dcsctp/public/dcsctp_handover_state.cc
         voip/webrtc/net/dcsctp/public/text_pcap_packet_observer.cc

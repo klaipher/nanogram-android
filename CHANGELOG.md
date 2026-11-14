@@ -5,6 +5,19 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### WebRTC task queue: stdlib instead of libevent (W5.5, step 1)
+- `voip/CMakeLists.txt` compiles `api/task_queue/default_task_queue_factory_stdlib.cc` instead of
+  `default_task_queue_factory_libevent.cc` and no longer compiles `rtc_base/task_queue_libevent.cc` or any libevent file;
+  `jni/voip/third_party/libevent` (Chromium libevent 1.4.15 snapshot, 40 files) is deleted. `rtc_base/task_queue_stdlib.cc`
+  was already in the build, so the swap is one factory file. Decision: stdlib removes libevent cleanly (libevent had no
+  other user in the voip build; PhysicalSocketServer uses epoll directly), it is what iOS (stdlib) and the desktop
+  clients ship, and upstream WebRTC is moving to it (field trial `WebRTC-TaskQueue-ReplaceLibeventWithStdlib`).
+  The fork keeps its `third_party/libevent` snapshot for now (no app compiles it any more); dropping it from the fork
+  is a follow-up there.
+- Behaviour: every WebRTC task queue thread is now a `std::condition_variable` loop instead of a libevent loop. Delayed
+  task precision and ordering are the same by contract; watch call audio/video start latency and CPU in a long call.
+- Build steps (main session): `Tools/dev/ng check`; emulator: a 1:1 call and a group call of several minutes.
+
 ### tgcalls: klaipher/tgcalls branch nanogram-shared at 2a5daa0f, the one call engine for iOS, macOS and Android (W4.4)
 - `TMessagesProj/jni/tgcalls` moves from branch `nanogram-android` (545f5ae) to `nanogram-shared` at 2a5daa0f
   (`.gitmodules` branch). The shared head is the merge of 545f5ae into the iOS/macOS line, so every Android engine
