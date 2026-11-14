@@ -10721,6 +10721,13 @@ public class MessagesController extends BaseController implements NotificationCe
                                                     TL_update.TL_updateMessagePoll messagePoll = (TL_update.TL_updateMessagePoll) update;
                                                     if (messagePoll.poll != null && !messagePoll.poll.closed) {
                                                         lastViewsCheckTime = System.currentTimeMillis() - 4000;
+                                                    } else if (messagePoll.poll != null) {
+                                                        // Only an open chat applied this, so the queued object stayed "expired" and was re-fetched forever.
+                                                        AndroidUtilities.runOnUIThread(() -> {
+                                                            if (mediaPoll.poll != null && mediaPoll.poll.id == messagePoll.poll_id) {
+                                                                mediaPoll.poll = messagePoll.poll;
+                                                            }
+                                                        });
                                                     }
                                                 }
                                             }
