@@ -5,6 +5,15 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-DESIGN-2, -6, -7: deferred, no code in this stream
+- DESIGN-2 (CountDownLatch waits on the UI thread in ChatActivity/ProfileActivity and others): the async rewrite
+  changes onFragmentCreate semantics and touches heavily merged upstream files; needs a design pass of its own.
+- DESIGN-6 (SafetyNet removal, play-services-vision to ML Kit): needs owner sign-off (server-visible login reasons)
+  and TMessagesProj/build.gradle (build stream); the ML Kit part belongs to the ML work.
+- DESIGN-7 (JVM unit tests): needs `testImplementation` in TMessagesProj/build.gradle (build stream) and Android-free
+  seams (clock injection in NanogramLog, parsers out of NanogramUpdater/ProxySettings); `ng check` runs
+  `:TMessagesProj:testDebugUnitTest`, which tests nothing today.
+
 ### Narrower R8 keep for tgnet, prepared and off by default (ANDROID-R8-1)
 - `TMessagesProj/proguard-rules-tgnet-narrow.pro`: `-keepnames` plus `-keepclassmembernames { <fields>; }` for
   org.telegram.tgnet.**, and a full keep for tgnet.tl.TL_wallet** (WalletEngineBridge.cpp resolves its fields by name).
