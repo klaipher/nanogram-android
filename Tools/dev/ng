@@ -376,7 +376,10 @@ def cmd_build(a: argparse.Namespace) -> None:
             shutil.copy2(cand, dest / "mapping.txt")
             break
     # Keep unstripped native libraries for symbolication (like dSYMs on iOS).
-    syms = sorted((ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so"))
+    syms = (ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so")
+    if a.variant == "release":
+        syms = (p for p in syms if {"RelWithDebInfo", "Release"} & set(p.parts))
+    syms = sorted(syms, key=lambda p: p.stat().st_mtime, reverse=True)
     if syms:
         shutil.make_archive(str(dest / "native-symbols"), "zip", root_dir=syms[0].parents[1])
     head = subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -459,13 +462,16 @@ def cmd_release(a: argparse.Namespace) -> None:
         die(f"no release APK in {dest}; run without --skip-build")
     built = apks[-1]
     badging = ngrelease.read_badging(aapt2_path(), built)
-    version_name = badging.get("versionName") or TC.get("versionName", "dev")
-    code = int(badging.get("versionCode") or ngrelease.version_code(bn))
+    version_name = badging.get("versionName") or ""
+    missing = [k for k in ("package", "versionCode", "versionName", "minSdk") if not badging.get(k)]
+    if missing:
+        die(f"aapt2 badging of {built.name} lacks {', '.join(missing)}")
+    code = int(badging["versionCode"])
     if code != ngrelease.version_code(bn):
         die(f"APK versionCode {code} does not match build number {bn}")
-    if badging.get("package") not in (None, "org.klaipher.nanogram"):
-        die(f"unexpected package {badging.get('package')}")
-    min_sdk = int(badging.get("minSdk") or 24)
+    if badging["package"] != "org.klaipher.nanogram":
+        die(f"unexpected package {badging['package']}")
+    min_sdk = int(badging["minSdk"])
 
     out = dest / "release"
     out.mkdir(parents=True, exist_ok=True)
@@ -491,7 +497,14 @@ def cmd_release(a: argparse.Namespace) -> None:
 
     assets = [apk] + [dest / n for n in ("mapping.txt", "native-symbols.zip") if (dest / n).exists()]
     info(f"{ngrelease.tag_name(version_name, bn)}: versionCode {code}, {apk.stat().st_size / 1e6:.1f} MB, sha256 {manifest['apkSha256'][:12]}...")
-    run_gh(ngrelease.gh_private_release(assets, private_body, version_name, bn, commit), dry)
+    tag = ngrelease.tag_name(version_name, bn)
+    private_exists = not dry and subprocess.call(
+        ["gh", "release", "view", tag, "--repo", ngrelease.PRIVATE_REPO],
+        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    if private_exists:
+        info(f"private release {tag} already exists; skipping it (resuming)")
+    else:
+        run_gh(ngrelease.gh_private_release(assets, private_body, version_name, bn, commit), dry)
     run_gh(ngrelease.gh_public_release(apk, manifest_file, public_body, version_name, bn), dry)
     info(f"public: https://github.com/{ngrelease.PUBLIC_REPO}/releases/tag/{ngrelease.tag_name(version_name, bn)}")
     info(f"update manifest: {manifest_file}")
