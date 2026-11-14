@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-DESIGN-4: StrictMode thread and VM policies in debug builds
+- `NanogramStrictMode.install()` runs first in `ApplicationLoader.onCreate` (after the widget-engine-process return) when `BuildVars.DEBUG_VERSION` or the `strictmode` experimental flag is on: ThreadPolicy `detectAll` + log; VmPolicy leaked closables, registrations, SQLite objects, activity leaks, file URI exposure, and (API 31+) unsafe intent launch and content URI without permission. Release builds are unchanged. No `penaltyListener`: it would run FileLog (disk) from inside a violation. Expect upstream log noise; triage into docs/nanogram/performance.md.
+- No JVM test: the class only wraps framework calls.
 ### ANDROID-DESIGN-1: no executor per link-parse call
 - `AndroidUtilities.doSafe` runs on one shared bounded daemon pool (`NanogramSafeRunner`: 2 core, 4 max threads, idle timeout) instead of a new single-thread executor per call. `addLinksSafe` parses text up to 1000 chars inline on the caller's thread (on the same working copy, so the original keeps its spans if nothing is found); longer text keeps the 200 ms timeout guard. Result semantics unchanged. Not done: the interruptible CharSequence wrapper (Linkify works on a Spannable, so a wrapper changes span handling).
 - Tests: `NanogramSafeRunnerTest` (JVM).

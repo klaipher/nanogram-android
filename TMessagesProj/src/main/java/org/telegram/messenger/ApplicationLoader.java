@@ -38,6 +38,7 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 import org.json.JSONObject;
 import org.telegram.messenger.nanogram.NanogramDiagnostics;
 import org.telegram.messenger.nanogram.NanogramNetworkState;
+import org.telegram.messenger.nanogram.NanogramStrictMode;
 import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
@@ -335,6 +336,8 @@ public class ApplicationLoader extends Application {
         if (org.telegram.utils.twidget.WidgetEngineService.isEngineProcess()) {
             return;
         }
+
+        NanogramStrictMode.install();
 
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();
