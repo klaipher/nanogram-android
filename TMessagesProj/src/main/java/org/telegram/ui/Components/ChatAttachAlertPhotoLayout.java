@@ -92,6 +92,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.nanogram.NanogramPhotoPicker;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.messenger.camera.CameraController;
@@ -3399,7 +3400,10 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             }
         } else if (id == open_in) {
             try {
-                if (shouldLoadAllMedia()) {
+                final Intent systemPicker = NanogramPhotoPicker.createIntent(getContext(), true, shouldLoadAllMedia());
+                if (systemPicker != null) {
+                    parentAlert.baseFragment.startActivityForResult(systemPicker, parentAlert.avatarPicker != 0 ? 14 : 1);
+                } else if (shouldLoadAllMedia()) {
                     Intent videoPickerIntent = new Intent();
                     videoPickerIntent.setType("video/*");
                     videoPickerIntent.setAction(Intent.ACTION_GET_CONTENT);

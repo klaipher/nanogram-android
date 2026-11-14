@@ -6332,6 +6332,8 @@
     <string name="LiteOptionsAutoplayGifs">Autoplay GIFs</string>
     <string name="LiteOptionsParticles">Particles</string>
     <string name="LiteSmoothTransitions">Enable Smooth Transitions</string>
+    <string name="LiteFollowSystemSaver">Follow system Battery Saver and heat</string>
+    <string name="LiteFollowSystemSaverInfo">Reduce power usage when the system Battery Saver is on or the device is very hot, even if the battery slider is off.</string>
     <string name="LiteSmoothTransitionsInfo">You can disable animated transitions between different sections of the apps.</string>
     <string name="DynamicPackOrder">Dynamic Pack Order</string>
     <string name="DynamicPackOrderInfo">Automatically place recently used sticker packs at the front of the panel.</string>
@@ -11707,6 +11709,13 @@
     <string name="NanogramDiagnosticsShareInfoVerbose">Creates a zip with logs, device information and crash reports, then lets you choose where to send it. Verbose logs were on, so the logs can contain message text, phone numbers and ids. Send the zip only to the developer.</string>
     <string name="NanogramDiagnosticsVerboseInfo">Records much more detail to track down hard problems. It uses more storage and battery, so turn it on only when asked to, and off again afterwards. Its logs are kept for 3 days after you switch it off, so you can still send them; they can contain message text and phone numbers. Without it Nanogram keeps a small log of errors and key events for 3 days.</string>
     <string name="NanogramDiagnosticsClear">Clear logs</string>
+    <string name="NanogramDiagnosticsTraces">System traces</string>
+    <string name="NanogramDiagnosticsRecordTrace">Record a system trace</string>
+    <string name="NanogramDiagnosticsRecording">Recording…</string>
+    <string name="NanogramDiagnosticsTraceSaved">Trace saved. It is included when you share diagnostics.</string>
+    <string name="NanogramDiagnosticsTraceTriggers">Record traces on ANR and cold start</string>
+    <string name="NanogramDiagnosticsTraceTriggersAnr">Record traces on ANR</string>
+    <string name="NanogramDiagnosticsTracesInfo">Traces stay on this device until you share diagnostics. They can show names of threads and functions. Clear logs also deletes them.</string>
     <string name="NanogramDiagnosticsRestartHint">Restart Nanogram to apply this to the network logs.</string>
     <string name="NanogramDiagnosticsCleared">Logs cleared</string>
     <string name="NanogramDiagnosticsFailed">Could not create diagnostics.</string>

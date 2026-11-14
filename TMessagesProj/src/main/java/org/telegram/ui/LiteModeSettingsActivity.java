@@ -156,6 +156,11 @@ public class LiteModeSettingsActivity extends BaseFragment {
                     SharedConfig.setAnimationsEnabled(!animations);
                     editor.commit();
                     ((TextCell) view).setChecked(!animations);
+                } else if (item.type == SWITCH_TYPE_FOLLOW_SYSTEM) {
+                    final boolean follow = !LiteMode.isFollowSystemPowerSaver();
+                    LiteMode.setFollowSystemPowerSaver(follow);
+                    ((TextCell) view).setChecked(follow);
+                    updateValues();
                 }
             }
             GlassEngine.getCurrentGlassSettings();
@@ -255,6 +260,8 @@ public class LiteModeSettingsActivity extends BaseFragment {
                     LocaleController.getString(R.string.LiteBatteryInfoEnabled) :
                     LocaleController.formatString(R.string.LiteBatteryInfoBelow, String.format("%d%%", LiteMode.getPowerSaverLevel()))
             ));
+            items.add(Item.asSwitch(LocaleController.getString(R.string.LiteFollowSystemSaver), SWITCH_TYPE_FOLLOW_SYSTEM));
+            items.add(Item.asInfo(LocaleController.getString(R.string.LiteFollowSystemSaverInfo)));
         }
 
         items.add(Item.asHeader(LocaleController.getString(R.string.LiteOptionsTitle)));
@@ -353,6 +360,7 @@ public class LiteModeSettingsActivity extends BaseFragment {
     private static final int VIEW_TYPE_SWITCH2 = 5;
 
     public static final int SWITCH_TYPE_SMOOTH_TRANSITIONS = 1;
+    public static final int SWITCH_TYPE_FOLLOW_SYSTEM = 2;
 
     private class Adapter extends AdapterWithDiffUtils {
 
@@ -426,6 +434,8 @@ public class LiteModeSettingsActivity extends BaseFragment {
                     SharedPreferences preferences = MessagesController.getGlobalMainSettings();
                     boolean animations = preferences.getBoolean("view_animations", true);
                     textCell.setTextAndCheck(item.text, animations, false);
+                } else if (item.type == SWITCH_TYPE_FOLLOW_SYSTEM) {
+                    textCell.setTextAndCheck(item.text, LiteMode.isFollowSystemPowerSaver(), false);
                 }
             }
         }

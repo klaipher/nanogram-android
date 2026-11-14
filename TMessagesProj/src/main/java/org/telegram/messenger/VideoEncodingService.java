@@ -15,9 +15,12 @@ import android.os.IBinder;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
+import org.telegram.messenger.nanogram.NanogramProgressNotification;
+
 public class VideoEncodingService extends Service implements NotificationCenter.NotificationCenterDelegate {
 
     private NotificationCompat.Builder builder;
+    private int lastPercent;
     private MediaController.VideoConvertMessage currentMessage;
     private static VideoEncodingService instance;
 
@@ -88,6 +91,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
                 Boolean enc = (Boolean) args[3];
                 int currentProgress = (int) (progress * 100);
                 builder.setProgress(100, currentProgress, currentProgress == 0);
+                lastPercent = currentProgress;
                 updateNotification();
             }
         } else if (id == NotificationCenter.fileUploaded || id == NotificationCenter.fileUploadFailed) {
@@ -111,7 +115,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
             if (message == null) {
                 return;
             }
-            NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(4, builder.build());
+            NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(4, NanogramProgressNotification.promote(ApplicationLoader.applicationContext, builder.build(), lastPercent, lastPercent == 0));
         } catch (Throwable e) {
             FileLog.e(e);
         }
@@ -130,14 +134,14 @@ public class VideoEncodingService extends Service implements NotificationCenter.
         if (builder == null) {
             NotificationsController.checkOtherNotificationsChannel();
             builder = new NotificationCompat.Builder(ApplicationLoader.applicationContext, NotificationsController.OTHER_NOTIFICATIONS_CHANNEL);
-            builder.setSmallIcon(android.R.drawable.stat_sys_upload);
+            builder.setSmallIcon(NanogramProgressNotification.smallIcon(android.R.drawable.stat_sys_upload));
             builder.setWhen(System.currentTimeMillis());
             builder.setChannelId(NotificationsController.OTHER_NOTIFICATIONS_CHANNEL);
             builder.setContentTitle(LocaleController.getString(R.string.AppName));
         }
         setCurrentMessage(videoConvertMessage);
         try {
-            startForeground(4, builder.build());
+            startForeground(4, NanogramProgressNotification.promote(ApplicationLoader.applicationContext, builder.build(), 0, true));
         } catch (Throwable e) {
             //ignore ForegroundServiceStartNotAllowedException
             FileLog.e(e);
@@ -162,6 +166,7 @@ public class VideoEncodingService extends Service implements NotificationCenter.
             builder.setContentText(LocaleController.getString(R.string.SendingVideo));
         }
         int currentProgress = 0;
+        lastPercent = 0;
         builder.setProgress(100, currentProgress, true);
     }
 
