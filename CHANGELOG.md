@@ -7,8 +7,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ### Performance: UI (branch nanogram/perf-ui)
 - UI-1: Choreographer60FpsContent no longer posts a frame callback on every vsync from creation. It schedules on the first
-  subscription/invalidation and stops when no group, once-list or invalidation list has work (`hasWork()`); restart resets
-  the timing accumulators, so schedules are unchanged.
+  subscription/invalidation and stops when no group, once-list or invalidation list has work (`hasWork()`); a restart
+  keeps the timing accumulators unless the last tick is older than two frame intervals, so callers that re-post a
+  one-shot invalidation from draw() (spoilers, typing/recording status drawables) keep their old rate.
 - UI-5: EditTextBoldCursor (API 24-28) registers its 2 fps blink invalidation only while focused and attached.
 - UI-3: removed setPreferredMaxRefreshRate from LaunchActivity.onConfigurationChanged and from the long-lived PiP windows
   (VoIPPiPView x2, PipRoundVideoView, FloatingHost). Short-lived overlays keep it.

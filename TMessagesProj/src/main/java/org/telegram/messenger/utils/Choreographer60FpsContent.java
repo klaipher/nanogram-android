@@ -224,8 +224,12 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
     private void ensureScheduled() {
         if (!mScheduled) {
             mScheduled = true;
-            mLastVsyncNs = 0;
-            mAccumulatedNs = 0;
+            // One-shot re-posters (spoilers, typing dots) restart the loop every cycle; keep the timing then,
+            // and reset only after a real idle gap (frameTimeNanos is in the System.nanoTime domain).
+            if (mLastVsyncNs != 0 && System.nanoTime() - mLastVsyncNs > 2 * FRAME_INTERVAL_NS) {
+                mLastVsyncNs = 0;
+                mAccumulatedNs = 0;
+            }
             mChoreographer.postFrameCallback(this);
         }
     }
