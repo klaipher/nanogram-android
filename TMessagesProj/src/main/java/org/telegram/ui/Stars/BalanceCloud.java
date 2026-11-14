@@ -6,6 +6,7 @@ import android.content.Context;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -17,6 +18,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.utils.tlutils.AmountUtils;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeBind;
@@ -81,6 +83,7 @@ public class BalanceCloud extends LinearLayout implements NotificationCenter.Not
         if (currency == AmountUtils.Currency.STARS) {
             textView1.setText(StarsIntroActivity.replaceStarsWithPlain(LocaleController.formatString(R.string.Gift2MessageStarsInfo, LocaleController.formatNumber(balance.asDecimal(), ',')), .60f));
 
+            textView2.setVisibility(StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP) ? View.GONE : View.VISIBLE);
             ThemeBind.textColor(textView2, Theme.key_undo_cancelColor, resourcesProvider);
             ThemeBind.linkTextColor(textView2, Theme.key_undo_cancelColor, resourcesProvider);
             textView2.setText(AndroidUtilities.replaceArrows(AndroidUtilities.replaceSingleTag(LocaleController.getString(R.string.Gift2MessageStarsInfoLink), () -> {

@@ -18,8 +18,13 @@ public class ApplicationLoaderImpl extends ApplicationLoader {
     }
 
     @Override
+    public boolean isStoreFlavor() {
+        return BuildConfig.STORE_FLAVOR;
+    }
+
+    @Override
     public boolean isCustomUpdate() {
-        return NanogramUpdater.isEnabled();
+        return !BuildConfig.STORE_FLAVOR && NanogramUpdater.isEnabled();
     }
 
     @Override

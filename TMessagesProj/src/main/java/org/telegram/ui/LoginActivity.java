@@ -142,6 +142,7 @@ import org.telegram.messenger.PushListenerController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SRPHelper;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
@@ -10316,7 +10317,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
             button.setEnabled(true);
             button.setOnClickListener(null);
-            if (BuildVars.useInvoiceBilling()) {
+            if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_AUTH_CODE)) {
+                button.setVisibility(View.GONE);
+            } else if (BuildVars.useInvoiceBilling()) {
                 if (!TextUtils.isEmpty(currency) && amount > 0) {
                     button.setVisibility(View.VISIBLE);
                     button.setLoading(false);

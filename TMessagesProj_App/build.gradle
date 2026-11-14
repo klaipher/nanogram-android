@@ -149,6 +149,7 @@ android {
                 abiFilters(*rootProject.ext.nanogramAbiFilters)
             }
             buildConfigField "boolean", "BUNDLE", "true"
+            buildConfigField "boolean", "STORE_FLAVOR", "false"
         }
         afat {
             ndk {
@@ -164,6 +165,15 @@ android {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
             }
             buildConfigField "boolean", "BUNDLE", "false"
+            buildConfigField "boolean", "STORE_FLAVOR", "false"
+        }
+        // Google Play build: same package and signing key as afat. StorePurchasePolicy on, GitHub updater off.
+        afatPlay {
+            ndk {
+                abiFilters(*rootProject.ext.nanogramAbiFilters)
+            }
+            buildConfigField "boolean", "BUNDLE", "false"
+            buildConfigField "boolean", "STORE_FLAVOR", "true"
         }
     }
 
@@ -187,7 +197,7 @@ android {
 // Upstream's versionCode is APP_VERSION_CODE * 10 + ABI digit. Nanogram keeps the ABI digit (the app reads it) and
 // replaces the base with minutes since 2020-01-01 UTC of our build number (YYYYMMDDHHMM), so every build updates
 // the previous one while the marketing version follows upstream.
-def nanogramAbiDigit = [afat: 9, bundleAfat: 1]
+def nanogramAbiDigit = [afat: 9, afatPlay: 9, bundleAfat: 1]
 def nanogramBuildNumber = findProperty('nanogramBuildNumber')
 def nanogramVersionBase = { ->
     if (nanogramBuildNumber == null) {
@@ -205,6 +215,7 @@ def nanogramProfileBuildTypes = ['release', 'nonMinifiedRelease', 'benchmarkRele
 androidComponents {
     beforeVariants(selector().all()) { variant ->
         def flavor = variant.productFlavors.find { it.first == 'minApi' }?.second
+        // afatPlay (Google Play) is a release build only, so it falls under this rule too.
         if (variant.buildType != 'release' && flavor != 'afat') {
             variant.enable = false
         }

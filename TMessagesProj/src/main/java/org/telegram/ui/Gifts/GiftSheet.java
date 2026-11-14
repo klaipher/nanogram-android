@@ -80,6 +80,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -838,6 +839,9 @@ public class GiftSheet extends BottomSheetWithRecyclerListView implements Notifi
 
     private void updatePremiumTiers() {
         premiumTiers.clear();
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_GIFT)) {
+            return;
+        }
         if (premiumTiers.isEmpty() && options != null && !options.isEmpty()) {
             List<QueryProductDetailsParams.Product> products = new ArrayList<>();
             long pricePerMonthMax = 0;

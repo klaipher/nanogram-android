@@ -42,6 +42,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
@@ -718,6 +719,9 @@ public class PremiumPreviewBottomSheet extends BottomSheetWithRecyclerListView i
 
     @Override
     public void show() {
+        if (giftTier == null && StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_UPSELL) && !UserConfig.getInstance(currentAccount).isPremium()) {
+            return;
+        }
         super.show();
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4);
         if (animateConfetti) {

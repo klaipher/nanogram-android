@@ -55,7 +55,7 @@ public class NanogramUpdater {
     }
 
     public static boolean isEnabled() {
-        return !BuildVars.DEBUG_VERSION || getInstance().isDebugToggleOn();
+        return !StorePurchasePolicy.current().restrictsPurchases() && (!BuildVars.DEBUG_VERSION || getInstance().isDebugToggleOn());
     }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();

@@ -70,6 +70,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -1135,6 +1136,9 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
     }
 
     public static void buyPremium(BaseFragment fragment, SubscriptionTier tier, String source, boolean forcePremium, BillingFlowParams.SubscriptionUpdateParams updateParams) {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_SUBSCRIPTION)) {
+            return;
+        }
         if (BuildVars.IS_BILLING_UNAVAILABLE) {
             if (fragment == null) {
                 new PremiumNotAvailableBottomSheet(fragment).show();
@@ -1457,7 +1461,7 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
             showAdsInfoRow = rowCount++;
         }
 
-        AndroidUtilities.updateViewVisibilityAnimated(buttonContainer, !getUserConfig().isPremium() || currentSubscriptionTier != null && currentSubscriptionTier.getMonths() < subscriptionTiers.get(selectedTierIndex).getMonths() && !forcePremium, 1f, false);
+        AndroidUtilities.updateViewVisibilityAnimated(buttonContainer, !StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_UPSELL) && (!getUserConfig().isPremium() || currentSubscriptionTier != null && currentSubscriptionTier.getMonths() < subscriptionTiers.get(selectedTierIndex).getMonths() && !forcePremium), 1f, false);
 
         int buttonHeight = buttonContainer.getVisibility() == View.VISIBLE ? dp(64) : 0;
         layoutManager.setAdditionalHeight(buttonHeight + statusBarHeight - dp(16));
@@ -1933,7 +1937,7 @@ public class PremiumPreviewFragment extends BaseFragment implements Notification
                         }
                     }
 
-                    AndroidUtilities.updateViewVisibilityAnimated(buttonContainer, !getUserConfig().isPremium() || currentSubscriptionTier != null && currentSubscriptionTier.getMonths() < subscriptionTiers.get(selectedTierIndex).getMonths() && !forcePremium);
+                    AndroidUtilities.updateViewVisibilityAnimated(buttonContainer, !StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_UPSELL) && (!getUserConfig().isPremium() || currentSubscriptionTier != null && currentSubscriptionTier.getMonths() < subscriptionTiers.get(selectedTierIndex).getMonths() && !forcePremium));
                 }
             });
             Path path = new Path();

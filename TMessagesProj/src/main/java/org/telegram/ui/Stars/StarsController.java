@@ -48,6 +48,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.TopicsController;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -778,6 +779,9 @@ public class StarsController {
     }
 
     public boolean canBuy(TLRPC.InputPeer purposePeer) {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP)) {
+            return false;
+        }
         if (purposePeer != null && isInvoiceBillingDisabled(purposePeer)) {
             return BillingController.getInstance().isReady();
         }
@@ -2474,6 +2478,12 @@ public class StarsController {
     }
 
     public void buyPremiumGift(long dialogId, Object option, TLRPC.TL_textWithEntities text, Utilities.Callback2<Boolean, String> whenDone) {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_GIFT)) {
+            if (whenDone != null) {
+                whenDone.run(false, null);
+            }
+            return;
+        }
         final Context context = LaunchActivity.instance != null ? LaunchActivity.instance : ApplicationLoader.applicationContext;
         final Theme.ResourcesProvider resourcesProvider = getResourceProvider();
 

@@ -142,7 +142,7 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
     }
 
     public void startConnection() {
-        if (isReady()) {
+        if (isReady() || StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PLAY_BILLING)) {
             return;
         }
         try {

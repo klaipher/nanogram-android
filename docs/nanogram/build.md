@@ -113,3 +113,7 @@ newest per build type. ccache is capped at 8 GB (0.9 GB after a full arm64 build
   ccache output is byte-identical to a build without it; hits are shared within one worktree path, not across worktrees.
   `ng prebuild` also installs the pinned Rust toolchain and the Android targets for the selected ABIs up front.
 - Running a prebuild script by hand writes into `jni/prebuild/{lib,include,pkgconfig}` (git-ignored); point `LIB_DIR`/`INCLUDE_DIR`/`PKGCONFIG_DIR` at a cache-shaped directory with a `COMPLETE` file to build against it. It now defaults to the NDK and API pinned in `toolchain.properties` (env still wins).
+
+## Google Play flavor
+
+`Tools/dev/ng build release --store play` builds the `afatPlay` flavor (purchases of Telegram products off, GitHub updater off, same package and key). See `docs/nanogram/store-builds.md`.

@@ -22,6 +22,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -107,6 +108,9 @@ public class BoostRepository {
     }
 
     public static void payGiftCode(List<TLObject> users, TLRPC.TL_premiumGiftCodeOption option, TLRPC.Chat chat, TLRPC.TL_textWithEntities message, BaseFragment baseFragment, Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_GIFT)) {
+            return;
+        }
         invalidateGiftOptionsToCache(UserConfig.selectedAccount);
         if (!isGoogleBillingAvailable()) {
             payGiftCodeByInvoice(users, option, chat, message, baseFragment, onSuccess, onError);
@@ -335,6 +339,9 @@ public class BoostRepository {
                                    TLRPC.Chat chat, int date, boolean onlyNewSubscribers, BaseFragment baseFragment,
                                    boolean winnersVisible, boolean withAdditionPrize, String prizeDesc,
                                    Utilities.Callback<Void> onSuccess, Utilities.Callback<TLRPC.TL_error> onError) {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_GIVEAWAY)) {
+            return;
+        }
         if (!isGoogleBillingAvailable()) {
             payGiveAwayByInvoice(chats, selectedCountries, option, chat, date, onlyNewSubscribers, baseFragment, winnersVisible, withAdditionPrize, prizeDesc, onSuccess, onError);
         } else {

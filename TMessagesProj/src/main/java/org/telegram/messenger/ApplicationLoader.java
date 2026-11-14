@@ -154,6 +154,10 @@ public class ApplicationLoader extends Application {
         return false;
     }
 
+    public boolean isStoreFlavor() {
+        return false;
+    }
+
     protected boolean isBeta() {
         return false;
     }
@@ -292,7 +296,7 @@ public class ApplicationLoader extends Application {
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        if (BuildVars.IS_BILLING_UNAVAILABLE && StartupSettings.skipPlayBillingAtStartup.get()) {
+        if (BuildVars.IS_BILLING_UNAVAILABLE && (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PLAY_BILLING) || StartupSettings.skipPlayBillingAtStartup.get())) {
             BillingController.getInstance().deferConnection();
         } else {
             BillingController.getInstance().startConnection();

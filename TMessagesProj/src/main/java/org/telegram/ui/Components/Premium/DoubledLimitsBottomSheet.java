@@ -22,6 +22,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -182,6 +183,14 @@ public class DoubledLimitsBottomSheet extends BottomSheetWithRecyclerListView im
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.billingProductDetailsUpdated);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.premiumPromoUpdated);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.currentUserPremiumStatusChanged);
+    }
+
+    @Override
+    public void show() {
+        if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_UPSELL) && !UserConfig.getInstance(currentAccount).isPremium()) {
+            return;
+        }
+        super.show();
     }
 
     @Override

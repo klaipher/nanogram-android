@@ -15,6 +15,7 @@ import android.view.View;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.TLObject;
@@ -41,7 +42,7 @@ public class BoostPagerBottomSheet extends BottomSheet {
     }
 
     public static void show(BaseFragment fragment, Theme.ResourcesProvider resourcesProvider, long dialogId, TL_stories.PrepaidGiveaway prepaidGiveaway) {
-        if (instance != null) {
+        if (instance != null || prepaidGiveaway == null && StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PREMIUM_GIVEAWAY)) {
             return;
         }
         boolean forceDark = resourcesProvider instanceof DarkThemeResourceProvider;

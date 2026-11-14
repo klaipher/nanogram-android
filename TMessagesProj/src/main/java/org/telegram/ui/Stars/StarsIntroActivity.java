@@ -85,6 +85,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SvgHelper;
+import org.telegram.messenger.StorePurchasePolicy;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
@@ -521,6 +522,10 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
     private boolean twoButtons;
     private void updateButtonsLayouts(boolean two, boolean animated) {
         twoButtons = two;
+        final boolean storeBuild = StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP);
+        topupButton.setVisibility(storeBuild ? View.GONE : View.VISIBLE);
+        giftButton.setVisibility(storeBuild ? View.GONE : View.VISIBLE);
+        ((View) oneButtonsLayout.getParent()).setVisibility(storeBuild && !two ? View.GONE : View.VISIBLE);
         if (animated) {
             oneButtonsLayout.setVisibility(View.VISIBLE);
             twoButtonsLayout.setVisibility(View.VISIBLE);
@@ -2754,6 +2759,14 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
             super.dismissInternal();
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starOptionsLoaded);
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starBalanceUpdated);
+        }
+
+        @Override
+        public void show() {
+            if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP)) {
+                return;
+            }
+            super.show();
         }
 
         public StarsOptionsSheet(
