@@ -329,6 +329,7 @@ public class MessagesStorage extends BaseController {
             database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
             database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
             database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
+            NanogramDbTuning.apply(database);
 
             if (createTable) {
                 if (BuildVars.LOGS_ENABLED) {
@@ -443,6 +444,7 @@ public class MessagesStorage extends BaseController {
                 database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
                 database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
                 database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
+                NanogramDbTuning.apply(database);
             } catch (SQLiteException e) {
                 FileLog.e(new Exception(e));
                 restored = false;
@@ -806,6 +808,7 @@ public class MessagesStorage extends BaseController {
     }
 
     private void cleanupInternal(boolean deleteFiles) {
+        NanogramTranslitCache.clearShared();
         if (deleteFiles) {
             reset();
         } else {
@@ -16244,7 +16247,7 @@ public class MessagesStorage extends BaseController {
                 if (messageObject.isQuickReply()) continue;
                 SQLiteCursor cursor = null;
                 try {
-                    cursor = database.queryFinalized("SELECT data FROM messages_v2 WHERE uid = ? AND mid = ?", messageObject.getDialogId(), messageObject.getId());
+                    cursor = database.queryCached("SELECT data FROM messages_v2 WHERE uid = ? AND mid = ?", messageObject.getDialogId(), messageObject.getId());
                     if (cursor.next()) {
                         NativeByteBuffer data = cursor.byteBufferValue(0);
                         if (data != null) {
@@ -17813,7 +17816,7 @@ public class MessagesStorage extends BaseController {
             if (unknownDialogsIds.get(dialogId) != null) {
                 folderId = -1;
             } else {
-                cursor = database.queryFinalized("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
+                cursor = database.queryCached("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
                 if (cursor.next()) {
                     folderId = cursor.intValue(0);
                 } else {
@@ -17840,7 +17843,7 @@ public class MessagesStorage extends BaseController {
                 if (unknownDialogsIds.get(dialogId) != null) {
                     folderId = -1;
                 } else {
-                    cursor = database.queryFinalized("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
+                    cursor = database.queryCached("SELECT folder_id FROM dialogs WHERE did = ?", dialogId);
                     if (cursor.next()) {
                         folderId = cursor.intValue(0);
                     } else {
@@ -18396,7 +18399,7 @@ public class MessagesStorage extends BaseController {
             String savedMessages2 = "saved messages";
             String replies = LocaleController.getString(R.string.RepliesTitle).toLowerCase();
             String replies2 = "replies";
-            String search2 = LocaleController.getInstance().getTranslitString(search1);
+            String search2 = NanogramTranslitCache.translit(search1);
             if (search1.equals(search2) || search2.length() == 0) {
                 search2 = null;
             }
@@ -18409,6 +18412,9 @@ public class MessagesStorage extends BaseController {
             ArrayList<Long> usersToLoad = new ArrayList<>();
             ArrayList<Long> chatsToLoad = new ArrayList<>();
             ArrayList<Integer> encryptedToLoad = new ArrayList<>();
+            HashSet<Long> usersSeen = new HashSet<>();
+            HashSet<Long> chatsSeen = new HashSet<>();
+            HashSet<Integer> encryptedSeen = new HashSet<>();
             int resultCount = 0;
 
             LongSparseArray<DialogsSearchAdapter.DialogSearchResult> dialogsResult = new LongSparseArray<>();
@@ -18435,20 +18441,20 @@ public class MessagesStorage extends BaseController {
                         if (dialogsType == DialogsActivity.DIALOGS_TYPE_GROUPS_ONLY || dialogsType == DialogsActivity.DIALOGS_TYPE_CHANNELS_ONLY) {
                             continue;
                         }
-                        if (dialogsType != DialogsActivity.DIALOGS_TYPE_ADD_USERS_TO && !usersToLoad.contains(id)) {
+                        if (dialogsType != DialogsActivity.DIALOGS_TYPE_ADD_USERS_TO && usersSeen.add(id)) {
                             usersToLoad.add(id);
                         }
                     } else {
                         if (dialogsType == DialogsActivity.DIALOGS_TYPE_USERS_ONLY) {
                             continue;
                         }
-                        if (!chatsToLoad.contains(-id)) {
+                        if (chatsSeen.add(-id)) {
                             chatsToLoad.add(-id);
                         }
                     }
                 } else if (dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT || dialogsType == DialogsActivity.DIALOGS_TYPE_FORWARD) {
                     int encryptedChatId = DialogObject.getEncryptedChatId(id);
-                    if (!encryptedToLoad.contains(encryptedChatId)) {
+                    if (encryptedSeen.add(encryptedChatId)) {
                         encryptedToLoad.add(encryptedChatId);
                     }
                 }
@@ -18485,7 +18491,7 @@ public class MessagesStorage extends BaseController {
                 cursor = getDatabase().queryFinalized(String.format(Locale.US, "SELECT data, status, name FROM users WHERE uid IN(%s)", TextUtils.join(",", usersToLoad)));
                 while (cursor.next()) {
                     String name = cursor.stringValue(2);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
+                    String tName = NanogramTranslitCache.translit(name);
                     if (name.equals(tName)) {
                         tName = null;
                     }
@@ -18533,7 +18539,7 @@ public class MessagesStorage extends BaseController {
                 cursor = getDatabase().queryFinalized(String.format(Locale.US, "SELECT data, name FROM chats WHERE uid IN(%s)", TextUtils.join(",", chatsToLoad)));
                 while (cursor.next()) {
                     String name = cursor.stringValue(1);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
+                    String tName = NanogramTranslitCache.translit(name);
                     if (name.equals(tName)) {
                         tName = null;
                     }
@@ -18559,7 +18565,7 @@ public class MessagesStorage extends BaseController {
                                         name = "";
                                     }
                                     name = name.toLowerCase();
-                                    tName = LocaleController.getInstance().getTranslitString(name);
+                                    tName = NanogramTranslitCache.translit(name);
                                     if (name.equals(tName)) {
                                         tName = null;
                                     }
@@ -18590,7 +18596,7 @@ public class MessagesStorage extends BaseController {
                 cursor = getDatabase().queryFinalized(String.format(Locale.US, "SELECT q.data, u.name, q.user, q.g, q.authkey, q.ttl, u.data, u.status, q.layer, q.seq_in, q.seq_out, q.use_count, q.exchange_id, q.key_date, q.fprint, q.fauthkey, q.khash, q.in_seq_no, q.admin_id, q.mtproto_seq FROM enc_chats as q INNER JOIN users as u ON q.user = u.uid WHERE q.uid IN(%s)", TextUtils.join(",", encryptedToLoad)));
                 while (cursor.next()) {
                     String name = cursor.stringValue(1);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
+                    String tName = NanogramTranslitCache.translit(name);
                     if (name.equals(tName)) {
                         tName = null;
                     }
@@ -18698,7 +18704,7 @@ public class MessagesStorage extends BaseController {
                         continue;
                     }
                     String name = cursor.stringValue(2);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
+                    String tName = NanogramTranslitCache.translit(name);
                     if (name.equals(tName)) {
                         tName = null;
                     }

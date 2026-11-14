@@ -51,6 +51,7 @@ public class VideoSeekPreviewImage extends View implements NotificationCenter.No
     private int pixelWidth;
     private boolean ready;
     private Bitmap bitmapToRecycle;
+    private Bitmap scratchBitmap;
     private Bitmap bitmapToDraw;
     private Drawable frameDrawable;
 
@@ -265,7 +266,13 @@ public class VideoSeekPreviewImage extends View implements NotificationCenter.No
                 return;
             }
             final int bitmapSize = Math.max(200, dp(100));
-            Bitmap bitmap = fileDrawable.getFrameAtTime(time, false);
+            Bitmap bitmap = fileDrawable.getFrameAtTime(time, false, scratchBitmap);
+            if (bitmap != scratchBitmap) {
+                if (scratchBitmap != null) {
+                    scratchBitmap.recycle();
+                }
+                scratchBitmap = bitmap;
+            }
 //            final long resultedTime = fileDrawable.getProgressMs();
 //            if (Math.abs(time - resultedTime) > Math.max(1500, 0.10f * duration)) {
 //                bitmap = fileDrawable.getFrameAtTime(time, true);
@@ -652,6 +659,15 @@ public class VideoSeekPreviewImage extends View implements NotificationCenter.No
         }
     }
 
+    public void releaseScratchBitmap() {
+        Utilities.globalQueue.postRunnable(() -> {
+            if (scratchBitmap != null) {
+                scratchBitmap.recycle();
+                scratchBitmap = null;
+            }
+        });
+    }
+
     public void close() {
         if (loadRunnable != null) {
             Utilities.globalQueue.cancelRunnable(loadRunnable);
@@ -670,6 +686,10 @@ public class VideoSeekPreviewImage extends View implements NotificationCenter.No
             if (fileDrawable != null) {
                 fileDrawable.recycle();
                 fileDrawable = null;
+            }
+            if (scratchBitmap != null) {
+                scratchBitmap.recycle();
+                scratchBitmap = null;
             }
         });
         setVisibility(INVISIBLE);

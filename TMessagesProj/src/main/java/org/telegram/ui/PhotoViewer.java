@@ -9556,6 +9556,9 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             videoPreviewFrameAnimation.cancel();
         }
         videoPreviewFrame.setTag(show ? 1 : null);
+        if (!show) {
+            videoPreviewFrame.releaseScratchBitmap();
+        }
         videoPreviewFrameAnimation = new AnimatorSet();
         videoPreviewFrameAnimation.playTogether(
             ObjectAnimator.ofFloat(videoPreviewFrame, View.ALPHA, show ? 1.0f : 0.0f),

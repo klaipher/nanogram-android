@@ -45,6 +45,9 @@ public class SQLitePreparedStatement {
 
 
     public SQLiteCursor query(Object[] args) throws SQLiteException {
+        if (cache != null && BuildVars.LOGS_ENABLED) {
+            startTime = SystemClock.elapsedRealtime();
+        }
         if (args == null) {
             throw new IllegalArgumentException();
         }
@@ -89,7 +92,25 @@ public class SQLitePreparedStatement {
         reset(sqliteStatementHandle);
     }
 
+    private NanogramStatementCache<SQLitePreparedStatement> cache;
+
+    void setCache(NanogramStatementCache<SQLitePreparedStatement> cache) {
+        this.cache = cache;
+    }
+
     public void dispose() {
+        NanogramStatementCache<SQLitePreparedStatement> cache = this.cache;
+        if (cache != null && !isFinalized) {
+            try {
+                reset(sqliteStatementHandle);
+                logSlowQuery();
+                if (cache.release(this)) {
+                    return;
+                }
+            } catch (SQLiteException e) {
+                FileLog.e(e);
+            }
+        }
         finalizeQuery();
     }
 
@@ -99,15 +120,21 @@ public class SQLitePreparedStatement {
         }
     }
 
-    public void finalizeQuery() {
-        if (isFinalized) {
-            return;
-        }
+    private void logSlowQuery() {
         if (BuildVars.LOGS_ENABLED) {
             long diff = SystemClock.elapsedRealtime() - startTime;
             if (diff > 500) {
                 FileLog.d("sqlite query " + query + " took " + diff + "ms");
             }
+        }
+    }
+
+    public void finalizeQuery() {
+        if (isFinalized) {
+            return;
+        }
+        if (cache == null) {
+            logSlowQuery();
         }
         try {
             isFinalized = true;

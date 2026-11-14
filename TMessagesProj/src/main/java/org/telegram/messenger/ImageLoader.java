@@ -1606,6 +1606,7 @@ public class ImageLoader {
                 if (image != null && !TextUtils.isEmpty(cacheImage.filter) && cacheImage.filter.contains("wallpaper") && cacheImage.parentObject instanceof TLRPC.WallPaper) {
                     image = applyWallpaperSetting(image, (TLRPC.WallPaper) cacheImage.parentObject);
                 }
+                NanogramImageFlags.preuploadIfEnabled(image, cacheImage != null && !cacheImage.imageReceiverArray.isEmpty());
                 if ((cacheImage == null || cacheImage.filter == null || !cacheImage.filter.contains("ignoreOrientation")) && (needInvert || orientation != 0 || invert != 0)) {
                     onPostExecute(image != null ? new ExtendedBitmapDrawable(image, orientation, invert) : null);
                 } else {
@@ -2085,13 +2086,8 @@ public class ImageLoader {
         thumbGeneratingQueue.setPriority(Thread.MIN_PRIORITY);
 
         int memoryClass = ((ActivityManager) ApplicationLoader.applicationContext.getSystemService(Context.ACTIVITY_SERVICE)).getMemoryClass();
-        int maxSize;
-        if (canForce8888 = memoryClass >= 192) {
-            maxSize = 30;
-        } else {
-            maxSize = 15;
-        }
-        int cacheSize = DEBUG_MODE ? 1 : Math.min(maxSize, memoryClass / 7) * 1024 * 1024;
+        canForce8888 = memoryClass >= 192;
+        int cacheSize = DEBUG_MODE ? 1 : NanogramImageCacheSize.bytes(ApplicationLoader.applicationContext);
 
         int commonCacheSize =  DEBUG_MODE ? 1 : (int) (cacheSize * 0.8f);
         int smallImagesCacheSize =   DEBUG_MODE ? 1 : (int) (cacheSize * 0.2f);

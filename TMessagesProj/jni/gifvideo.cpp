@@ -1,4 +1,5 @@
 #include <jni.h>
+#include <atomic>
 #include <android/bitmap.h>
 #include <cstdint>
 #include <limits>
@@ -155,6 +156,9 @@ static enum AVPixelFormat get_format(AVCodecContext *ctx,
     return pix_fmts[0];
 }
 
+static // Max side (px) up to which H.264 deblocking is skipped; 0 = off. Value comes from NanogramGifDecodeFlags (Java).
+static std::atomic<int> g_skipLoopFilterMaxSide{0};
+
 int open_codec_context(int *stream_idx, AVCodecContext **dec_ctx, AVFormatContext *fmt_ctx, enum AVMediaType type) {
     int ret, stream_index;
     AVStream *st;
@@ -186,7 +190,16 @@ int open_codec_context(int *stream_idx, AVCodecContext **dec_ctx, AVFormatContex
             return ret;
         }
 
-        av_dict_set(&opts, "refcounted_frames", "1", 0);
+        // refcounted_frames was removed in FFmpeg 5 (dead option); frames are always refcounted now.
+        // Threads stay at 1 on purpose: many tiles decode at once, so per-tile threading only adds contention.
+        int skipMaxSide = g_skipLoopFilterMaxSide.load(std::memory_order_relaxed);
+        if (type == AVMEDIA_TYPE_VIDEO && skipMaxSide > 0 && st->codecpar->codec_id == AV_CODEC_ID_H264) {
+            int maxSide = st->codecpar->width > st->codecpar->height ? st->codecpar->width : st->codecpar->height;
+            if (maxSide > 0 && maxSide <= skipMaxSide) {
+                (*dec_ctx)->skip_loop_filter = AVDISCARD_ALL;
+            }
+        }
+        (*dec_ctx)->thread_count = 1;
         ret = avcodec_open2(*dec_ctx, dec, &opts);
         av_dict_free(&opts);   // frees leftover (unconsumed) options on all paths
         if (ret < 0) {
@@ -372,6 +385,10 @@ int getVideoRotation(const AVStream *stream) {
     return 0;
 }
 
+
+extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileNative_nSetSmallTileSkipLoopFilter(JNIEnv *env, jclass clazz, jint maxSide) {
+    g_skipLoopFilterMaxSide.store(maxSide > 0 ? maxSide : 0, std::memory_order_relaxed);
+}
 
 extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileNative_nGetVideoInfo(JNIEnv *env, jclass clazz, jstring src, jintArray data, jlong fileOffset) {
     VideoInfo *info = new VideoInfo();
