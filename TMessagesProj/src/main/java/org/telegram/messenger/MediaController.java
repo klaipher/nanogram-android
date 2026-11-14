@@ -6190,7 +6190,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         if (!destFile.exists()) {
                             destFile.createNewFile();
                         }
-                        long lastProgress = System.currentTimeMillis() - 500;
                         try (FileInputStream inputStream = new FileInputStream(sourceFile); FileChannel source = inputStream.getChannel(); FileChannel destination = new FileOutputStream(destFile).getChannel()) {
                             long size = source.size();
                             try {
@@ -6221,13 +6220,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                                     }
                                 });
                             });
-                        } catch (Exception e) {
-                                                FileLog.e(e);
-                                            }
-                                        });
-                                    }
-                                }
-                            }
                         } catch (Exception e) {
                             FileLog.e(e);
                             result = false;
