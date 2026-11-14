@@ -344,7 +344,7 @@ public class NanogramUpdater {
                     if (connection.getResponseCode() != 200) {
                         throw new Exception("HTTP " + connection.getResponseCode());
                     }
-                    final long total = connection.getContentLengthLong() > 0 ? connection.getContentLengthLong() : expectedSize;
+                    final long total = connection.getContentLength() > 0 ? connection.getContentLength() : expectedSize;
                     final MessageDigest digest = MessageDigest.getInstance("SHA-256");
                     long done = 0;
                     int lastPercent = -1;
