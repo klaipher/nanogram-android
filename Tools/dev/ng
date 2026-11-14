@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+"""ng: Nanogram for Android developer tool (the Android counterpart of `tg`).
+
+  ng doctor                      toolchain, caches and disk
+  ng setup                       install the pinned SDK/NDK/CMake, local.properties, hooks, submodules
+  ng prebuild [--force]          build native prebuilt libraries into the content-addressed cache
+  ng build [debug|release] [--abis arm64|all] [--build-number N] [--task T]
+  ng install [APK]               adb install -r the newest build
+  ng signing init                create the release keystore in ~/.config/nanogram-android/signing
+  ng check                       pre-push gate: unit tests + arm64 debug build
+  ng prune [--max-gb N] [--dry-run]
+  ng metrics                     show recorded build timings and sizes
+
+Secrets (api_id/api_hash, keystore passwords) are read here and passed to Gradle through
+ORG_GRADLE_PROJECT_* environment variables. They are never printed or written into the repo.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+TOOLCHAIN = ROOT / "Tools" / "dev" / "toolchain.properties"
+HOME = Path.home()
+CONFIG = HOME / ".config" / "nanogram-android"
+IOS_CREDS = HOME / ".config" / "telegram-ios" / "api-credentials.json"
+CACHE = Path(os.environ.get("NANOGRAM_ANDROID_CACHE", HOME / ".cache" / "nanogram-android"))
+LOGS = CACHE / "logs"
+METRICS = LOGS / "metrics.tsv"
+OUT = ROOT / "build-output"
+PREBUILD_SRC = ROOT / "TMessagesProj" / "jni" / "prebuild"
+MIN_FREE_GB = 25
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(f"ng: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def info(msg: str) -> None:
+    print(f"==> {msg}", flush=True)
+
+
+def props(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                out[k.strip()] = v.strip()
+    return out
+
+
+TC = props(TOOLCHAIN)
+TC.setdefault("versionName", props(ROOT / "gradle.properties").get("APP_VERSION_NAME", "dev"))
+
+
+def sdk_root() -> Path:
+    return Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or HOME / "Library/Android/sdk")
+
+
+def java_home() -> Path | None:
+    if os.environ.get("JAVA_HOME") and Path(os.environ["JAVA_HOME"], "bin/java").exists():
+        return Path(os.environ["JAVA_HOME"])
+    for cand in (
+        Path(f"/opt/homebrew/opt/openjdk@{TC.get('jdk', '21')}/libexec/openjdk.jdk/Contents/Home"),
+        Path(f"/usr/local/opt/openjdk@{TC.get('jdk', '21')}/libexec/openjdk.jdk/Contents/Home"),
+    ):
+        if (cand / "bin/java").exists():
+            return cand
+    try:
+        out = subprocess.run(["/usr/libexec/java_home", "-v", TC.get("jdk", "21")], capture_output=True, text=True)
+        if out.returncode == 0 and out.stdout.strip():
+            return Path(out.stdout.strip())
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def free_gb() -> float:
+    return shutil.disk_usage(ROOT).free / 1e9
+
+
+def disk_guard() -> None:
+    gb = free_gb()
+    if gb < MIN_FREE_GB:
+        die(f"only {gb:.1f} GB free (need {MIN_FREE_GB}); run `ng prune` first")
+
+
+def base_env() -> dict[str, str]:
+    env = dict(os.environ)
+    jh = java_home()
+    if not jh:
+        die(f"JDK {TC.get('jdk', '21')} not found: brew install openjdk@{TC.get('jdk', '21')}")
+    env["JAVA_HOME"] = str(jh)
+    env["ANDROID_HOME"] = str(sdk_root())
+    env.pop("ANDROID_SDK_ROOT", None)
+    # ccache for every native compile (CMake picks it up through NANOGRAM_CCACHE, see jni/CMakeLists.txt).
+    ccache = shutil.which("ccache")
+    if ccache:
+        env["NANOGRAM_CCACHE"] = ccache
+        env.setdefault("CCACHE_DIR", str(CACHE / "ccache"))
+        env.setdefault("CCACHE_MAXSIZE", TC.get("ccache.maxsize", "8G"))
+        env.setdefault("CCACHE_COMPRESS", "1")
+        env.setdefault("CCACHE_COMPRESSLEVEL", "1")
+        # Paths differ between worktrees; hash relative to the checkout so worktrees share hits.
+        env.setdefault("CCACHE_BASEDIR", str(ROOT))
+        env.setdefault("CCACHE_NOHASHDIR", "1")
+        env.setdefault("CCACHE_SLOPPINESS", "pch_defines,time_macros,include_file_mtime,include_file_ctime,file_stat_matches")
+    return env
+
+
+def secret_env(env: dict[str, str], release: bool) -> None:
+    """Own api_id/api_hash and release signing, passed only through the environment."""
+    if IOS_CREDS.exists():
+        creds = json.loads(IOS_CREDS.read_text())
+        env["ORG_GRADLE_PROJECT_nanogramApiId"] = str(creds["api_id"])
+        env["ORG_GRADLE_PROJECT_nanogramApiHash"] = str(creds["api_hash"])
+    elif release:
+        die(f"missing {IOS_CREDS} (own api_id/api_hash); release builds need it")
+    else:
+        print("ng: warning: no own api credentials; using upstream defaults", file=sys.stderr)
+    signing = CONFIG / "signing" / "signing.properties"
+    if signing.exists():
+        sp = props(signing)
+        env["ORG_GRADLE_PROJECT_nanogramStoreFile"] = str(CONFIG / "signing" / sp.get("storeFile", "release.jks"))
+        env["ORG_GRADLE_PROJECT_nanogramStorePassword"] = sp["storePassword"]
+        env["ORG_GRADLE_PROJECT_nanogramKeyAlias"] = sp.get("keyAlias", "nanogram")
+        env["ORG_GRADLE_PROJECT_nanogramKeyPassword"] = sp.get("keyPassword", sp["storePassword"])
+    elif release:
+        die("no release keystore; run `ng signing init`")
+    gs = CONFIG / "google-services.json"
+    target = ROOT / "TMessagesProj_App" / "google-services.json"
+    if gs.exists():
+        shutil.copyfile(gs, target)
+    elif target.exists() and not target.is_symlink():
+        target.unlink()
+
+
+def build_number(arg: str | None) -> str:
+    return arg or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M")
+
+
+def gradlew(args: list[str], env: dict[str, str], log: Path | None = None) -> int:
+    cmd = [str(ROOT / "gradlew"), "--console=plain", *args]
+    info(" ".join(cmd[1:]))
+    if log is None:
+        return subprocess.call(cmd, cwd=ROOT, env=env)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("w") as fh:
+        proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        assert proc.stdout
+        for line in proc.stdout:
+            fh.write(line)
+            if line.startswith(("> Task", "BUILD", "FAILURE", "e: ", "error:")) or "error:" in line:
+                print(line, end="", flush=True)
+        return proc.wait()
+
+
+def record(kind: str, seconds: float, extra: dict[str, object]) -> None:
+    LOGS.mkdir(parents=True, exist_ok=True)
+    new = not METRICS.exists()
+    with METRICS.open("a") as fh:
+        if new:
+            fh.write("utc\tkind\tseconds\tfree_gb\tdetails\n")
+        fh.write(f"{dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ}\t{kind}\t{seconds:.0f}\t{free_gb():.1f}\t{json.dumps(extra)}\n")
+
+
+# ---------------------------------------------------------------- doctor / setup
+
+def sdk_packages() -> list[str]:
+    return [
+        "platform-tools",
+        f"platforms;android-{TC['compileSdk']}",
+        f"build-tools;{TC['buildTools']}",
+        f"ndk;{TC['ndk']}",
+        f"cmake;{TC['cmake']}",
+    ]
+
+
+def cmd_doctor(_: argparse.Namespace) -> None:
+    jh = java_home()
+    print(f"repo         {ROOT}")
+    print(f"JDK          {jh or 'MISSING'}")
+    print(f"SDK          {sdk_root()} ({'ok' if sdk_root().exists() else 'MISSING'})")
+    for pkg in sdk_packages():
+        p = sdk_root() / pkg.replace(";", "/")
+        print(f"  {pkg:<32} {'ok' if p.exists() else 'MISSING'}")
+    for tool in ("ccache", "ninja", "cmake", "adb"):
+        print(f"{tool:<12} {shutil.which(tool) or 'not on PATH'}")
+    if shutil.which("ccache"):
+        env = base_env()
+        out = subprocess.run(["ccache", "-s"], env=env, capture_output=True, text=True).stdout
+        print("ccache       " + " | ".join(l.strip() for l in out.splitlines() if "Hits" in l or "Cache size" in l))
+    print(f"api creds    {'own (from iOS config)' if IOS_CREDS.exists() else 'MISSING (upstream defaults)'}")
+    print(f"signing      {'ok' if (CONFIG / 'signing' / 'signing.properties').exists() else 'MISSING (ng signing init)'}")
+    print(f"FCM config   {'ok' if (CONFIG / 'google-services.json').exists() else 'MISSING (push off: owner creates Firebase project)'}")
+    print(f"free disk    {free_gb():.1f} GB (builds need {MIN_FREE_GB})")
+
+
+def sdkmanager() -> str:
+    for cand in (
+        sdk_root() / "cmdline-tools/latest/bin/sdkmanager",
+        Path("/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager"),
+    ):
+        if cand.exists():
+            return str(cand)
+    found = shutil.which("sdkmanager")
+    if not found:
+        die("sdkmanager not found: brew install --cask android-commandlinetools")
+    return found
+
+
+def cmd_setup(_: argparse.Namespace) -> None:
+    env = base_env()
+    sdk_root().mkdir(parents=True, exist_ok=True)
+    sm = sdkmanager()
+    subprocess.run(f"yes | '{sm}' --sdk_root='{sdk_root()}' --licenses > /dev/null", shell=True, env=env)
+    info("SDK packages: " + ", ".join(sdk_packages()))
+    subprocess.check_call([sm, f"--sdk_root={sdk_root()}", *sdk_packages()], env=env)
+    (ROOT / "local.properties").write_text(f"sdk.dir={sdk_root()}\n")
+    subprocess.check_call(["git", "config", "core.hooksPath", "Tools/git-hooks"], cwd=ROOT)
+    info("submodules (shallow, pinned commits)")
+    subprocess.check_call(["git", "submodule", "sync", "-q", "--recursive"], cwd=ROOT)
+    subprocess.check_call(["git", "submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8"], cwd=ROOT)
+    if shutil.which("ccache"):
+        subprocess.call(["ccache", "-M", TC.get("ccache.maxsize", "8G")], env=env, stdout=subprocess.DEVNULL)
+    info("done; next: Tools/dev/ng prebuild && Tools/dev/ng build")
+
+
+# ---------------------------------------------------------------- prebuild
+
+PREBUILD_INPUTS = [
+    "TMessagesProj/jni/prebuild",
+    "TMessagesProj/jni/third_party/boringssl",
+    "TMessagesProj/jni/third_party/openh264",
+    "TMessagesProj/jni/third_party/xiph",
+    "TMessagesProj/jni/third_party/libvpx",
+    "TMessagesProj/jni/third_party/dav1d",
+    "TMessagesProj/jni/third_party/ffmpeg",
+    "TMessagesProj/jni/tlottie",
+    "TMessagesProj/jni/wallet-engine",
+    "TMessagesProj/jni/td",
+    "TMessagesProj/jni/third_party/wamr",
+]
+
+
+def prebuild_abis(arg: str | None) -> list[str]:
+    abis = arg or TC.get("abis", "arm64")
+    return ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"] if abis == "all" else ["arm64-v8a"]
+
+
+def prebuild_key(abis: list[str]) -> str:
+    h = hashlib.sha256()
+    for rel in PREBUILD_INPUTS:
+        out = subprocess.run(["git", "ls-tree", "HEAD", rel], cwd=ROOT, capture_output=True, text=True).stdout
+        h.update(out.encode())
+    # Uncommitted script edits count too.
+    for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
+        if p.is_file():
+            h.update(p.name.encode() + p.read_bytes())
+    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')}".encode())
+    return h.hexdigest()[:16]
+
+
+def prebuild_dir(abis: list[str]) -> Path:
+    return CACHE / "prebuild" / prebuild_key(abis)
+
+
+def cmd_prebuild(a: argparse.Namespace) -> Path:
+    abis = prebuild_abis(getattr(a, "abis", None))
+    dest = prebuild_dir(abis)
+    if (dest / "COMPLETE").exists() and not getattr(a, "force", False):
+        info(f"prebuild cache hit {dest}")
+        return dest
+    disk_guard()
+    env = base_env()
+    tmp = dest.with_name(dest.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    (tmp / "lib").mkdir(parents=True)
+    env.update({
+        "ABIS": " ".join(abis),
+        "NDK_VERSION": TC["ndk"],
+        "API": TC.get("prebuildApi", "23"),
+        "ANDROID_SDK_ROOT": str(sdk_root()),
+        "LIB_DIR": str(tmp / "lib"),
+        "INCLUDE_DIR": str(tmp / "include"),
+        "PKGCONFIG_DIR": str(tmp / "pkgconfig"),
+    })
+    t0 = time.time()
+    log = LOGS / f"prebuild-{dest.name}.log"
+    info(f"building native prebuilts for {' '.join(abis)} (log {log})")
+    with log.open("w") as fh:
+        rc = subprocess.call(["bash", str(PREBUILD_SRC / "build_all.sh")], cwd=PREBUILD_SRC, env=env, stdout=fh, stderr=subprocess.STDOUT)
+    # build_all.sh writes build_env.txt next to itself; keep the repo clean and store it in the cache.
+    env_txt = PREBUILD_SRC / "build_env.txt"
+    subprocess.call(["git", "checkout", "-q", "--", str(env_txt)], cwd=ROOT, stderr=subprocess.DEVNULL)
+    if rc != 0:
+        die(f"prebuild failed (exit {rc}); see {log}")
+    (tmp / "COMPLETE").write_text(json.dumps({"abis": abis, "ndk": TC["ndk"], "seconds": round(time.time() - t0)}))
+    shutil.rmtree(dest, ignore_errors=True)
+    tmp.rename(dest)
+    record("prebuild", time.time() - t0, {"key": dest.name, "abis": abis})
+    info(f"prebuilts ready in {dest} ({time.time() - t0:.0f}s)")
+    return dest
+
+
+# ---------------------------------------------------------------- build / install
+
+def cmd_build(a: argparse.Namespace) -> None:
+    disk_guard()
+    release = a.variant == "release"
+    env = base_env()
+    secret_env(env, release)
+    bn = build_number(a.build_number)
+    env["ORG_GRADLE_PROJECT_nanogramBuildNumber"] = bn
+    env["ORG_GRADLE_PROJECT_nanogramAbis"] = a.abis
+    if not a.upstream_prebuilts:
+        pre = cmd_prebuild(argparse.Namespace(abis=a.abis, force=False))
+        env["ORG_GRADLE_PROJECT_nanogramPrebuildDir"] = str(pre)
+    task = a.task or (":TMessagesProj_App:assembleAfatRelease" if release else ":TMessagesProj_App:assembleAfatDebug")
+    args = [task]
+    if a.clean:
+        args.insert(0, "clean")
+    if a.no_cache:
+        args += ["--no-build-cache", "--no-configuration-cache"]
+    log = LOGS / f"build-{bn}-{a.variant}.log"
+    t0 = time.time()
+    rc = gradlew(args, env, log)
+    secs = time.time() - t0
+    if rc != 0:
+        record(f"build-{a.variant}-FAILED", secs, {"build": bn})
+        die(f"build failed (exit {rc}); log {log}")
+    variant_dir = "afat/release" if release else "afat/debug"
+    apks = sorted((ROOT / "TMessagesProj_App/build/outputs/apk").rglob("*.apk"), key=lambda p: p.stat().st_mtime)
+    if not apks:
+        die("build succeeded but no APK found")
+    apk = apks[-1]
+    dest = OUT / bn
+    dest.mkdir(parents=True, exist_ok=True)
+    final = dest / f"Nanogram-{TC.get('versionName', 'dev')}-{bn}-{a.variant}-{a.abis}.apk"
+    shutil.copy2(apk, final)
+    mapping = ROOT / "TMessagesProj_App/build/outputs/mapping" / variant_dir.replace("/", "") / "mapping.txt"
+    for cand in [mapping, *(ROOT / "TMessagesProj_App/build/outputs/mapping").rglob("mapping.txt")]:
+        if cand.exists():
+            shutil.copy2(cand, dest / "mapping.txt")
+            break
+    # Keep unstripped native libraries for symbolication (like dSYMs on iOS).
+    syms = sorted((ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so"))
+    if syms:
+        shutil.make_archive(str(dest / "native-symbols"), "zip", root_dir=syms[0].parents[1])
+    head = subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    dirty = bool(subprocess.run(["git", "status", "--porcelain", "--ignore-submodules=dirty"], cwd=ROOT, capture_output=True, text=True).stdout.strip())
+    (dest / "BUILD-INFO.txt").write_text(
+        f"version {TC.get('versionName')}\nbuild {bn}\ncommit {head}\ndirty {'yes' if dirty else 'no'}\n"
+        f"variant {a.variant}\nabis {a.abis}\nseconds {secs:.0f}\napk_bytes {final.stat().st_size}\n")
+    record(f"build-{a.variant}", secs, {"build": bn, "apk_bytes": final.stat().st_size, "abis": a.abis, "clean": a.clean})
+    info(f"{final} ({final.stat().st_size / 1e6:.1f} MB, {secs:.0f}s)")
+
+
+def newest_apk() -> Path:
+    apks = sorted(OUT.rglob("*.apk"), key=lambda p: p.stat().st_mtime)
+    if not apks:
+        die("no APK in build-output; run `ng build`")
+    return apks[-1]
+
+
+def cmd_install(a: argparse.Namespace) -> None:
+    adb = shutil.which("adb") or str(sdk_root() / "platform-tools/adb")
+    apk = Path(a.apk) if a.apk else newest_apk()
+    info(f"installing {apk.name}")
+    sys.exit(subprocess.call([adb, "install", "-r", "-d", str(apk)]))
+
+
+# ---------------------------------------------------------------- signing
+
+def cmd_signing(a: argparse.Namespace) -> None:
+    if a.action != "init":
+        die("usage: ng signing init")
+    d = CONFIG / "signing"
+    if (d / "signing.properties").exists():
+        die(f"{d} already has a keystore; refusing to overwrite (back it up: losing it means no updates)")
+    d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
+    import secrets
+    pw = secrets.token_urlsafe(24)
+    env = base_env()
+    keytool = str(Path(env["JAVA_HOME"]) / "bin/keytool")
+    subprocess.check_call([
+        keytool, "-genkeypair", "-keystore", str(d / "release.jks"), "-storetype", "PKCS12",
+        "-alias", "nanogram", "-keyalg", "RSA", "-keysize", "4096", "-validity", "36500",
+        "-dname", "CN=Nanogram, O=Nanogram", "-storepass:env", "NG_PW", "-keypass:env", "NG_PW",
+    ], env={**env, "NG_PW": pw}, stdout=subprocess.DEVNULL)
+    (d / "signing.properties").write_text(f"storeFile=release.jks\nstorePassword={pw}\nkeyAlias=nanogram\nkeyPassword={pw}\n")
+    for f in d.iterdir():
+        os.chmod(f, 0o600)
+    info(f"release keystore created in {d} (back this folder up; it is not in git)")
+
+
+# ---------------------------------------------------------------- check / prune / metrics
+
+def cmd_check(_: argparse.Namespace) -> None:
+    disk_guard()
+    env = base_env()
+    secret_env(env, release=False)
+    env["ORG_GRADLE_PROJECT_nanogramAbis"] = "arm64"
+    pre = cmd_prebuild(argparse.Namespace(abis="arm64", force=False))
+    env["ORG_GRADLE_PROJECT_nanogramPrebuildDir"] = str(pre)
+    t0 = time.time()
+    rc = gradlew([":TMessagesProj_App:assembleAfatDebug", ":TMessagesProj:testDebugUnitTest"], env, LOGS / "check.log")
+    record("check" if rc == 0 else "check-FAILED", time.time() - t0, {})
+    if rc != 0:
+        die(f"check failed; log {LOGS / 'check.log'}")
+    info("check ok")
+
+
+def dir_size(p: Path) -> int:
+    total = 0
+    for root, _, files in os.walk(p):
+        for f in files:
+            try:
+                total += os.lstat(os.path.join(root, f)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def cmd_prune(a: argparse.Namespace) -> None:
+    before = free_gb()
+    env = base_env()
+    if shutil.which("ccache"):
+        info(f"ccache cap {TC.get('ccache.maxsize', '8G')}")
+        if not a.dry_run:
+            subprocess.call(["ccache", "-M", TC.get("ccache.maxsize", "8G")], env=env, stdout=subprocess.DEVNULL)
+            subprocess.call(["ccache", "--evict-older-than", "30d"], env=env, stdout=subprocess.DEVNULL)
+    # Prebuild cache: keep the key for HEAD plus the two newest others.
+    pre = CACHE / "prebuild"
+    if pre.exists():
+        current = {prebuild_key(prebuild_abis("arm64")), prebuild_key(prebuild_abis("all"))}
+        others = sorted((p for p in pre.iterdir() if p.name not in current), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in others[2:]:
+            info(f"remove prebuild {p.name} ({dir_size(p) / 1e9:.1f} GB)")
+            if not a.dry_run:
+                shutil.rmtree(p, ignore_errors=True)
+    # Build outputs: keep the newest five builds.
+    if OUT.exists():
+        builds = sorted((p for p in OUT.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+        for p in builds[5:]:
+            info(f"remove build-output/{p.name}")
+            if not a.dry_run:
+                shutil.rmtree(p, ignore_errors=True)
+    # Stale CMake trees for configurations other than the newest per build type.
+    cxx = ROOT / "TMessagesProj/.cxx"
+    for bt in (cxx.iterdir() if cxx.exists() else []):
+        trees = sorted((p for p in bt.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in trees[1:]:
+            info(f"remove .cxx/{bt.name}/{p.name} ({dir_size(p) / 1e9:.1f} GB)")
+            if not a.dry_run:
+                shutil.rmtree(p, ignore_errors=True)
+    if a.max_gb:
+        size = dir_size(CACHE) / 1e9
+        info(f"cache {CACHE} is {size:.1f} GB (cap {a.max_gb} GB)")
+    info(f"free disk {before:.1f} -> {free_gb():.1f} GB")
+
+
+def cmd_metrics(_: argparse.Namespace) -> None:
+    print(METRICS.read_text() if METRICS.exists() else "no metrics yet")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(prog="ng", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
+    sub.add_parser("setup").set_defaults(fn=cmd_setup)
+    p = sub.add_parser("prebuild")
+    p.add_argument("--abis", choices=["arm64", "all"], default=None)
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_prebuild)
+    p = sub.add_parser("build")
+    p.add_argument("variant", nargs="?", choices=["debug", "release"], default="debug")
+    p.add_argument("--abis", choices=["arm64", "all"], default=TC.get("abis", "arm64"))
+    p.add_argument("--build-number")
+    p.add_argument("--task", help="Gradle task to run instead of the default assemble task")
+    p.add_argument("--clean", action="store_true")
+    p.add_argument("--no-cache", action="store_true", help="disable Gradle build and configuration caches")
+    p.add_argument("--upstream-prebuilts", action="store_true", help="use the committed upstream prebuilt libraries")
+    p.set_defaults(fn=cmd_build)
+    p = sub.add_parser("install")
+    p.add_argument("apk", nargs="?")
+    p.set_defaults(fn=cmd_install)
+    p = sub.add_parser("signing")
+    p.add_argument("action", choices=["init"])
+    p.set_defaults(fn=cmd_signing)
+    sub.add_parser("check").set_defaults(fn=cmd_check)
+    p = sub.add_parser("prune")
+    p.add_argument("--max-gb", type=float)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_prune)
+    sub.add_parser("metrics").set_defaults(fn=cmd_metrics)
+    a = ap.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

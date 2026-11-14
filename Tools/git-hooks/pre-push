@@ -1,0 +1,19 @@
+#!/bin/sh
+# Nanogram for Android pre-push gate. Installed by `Tools/dev/ng setup` (core.hooksPath).
+# Product code changes run `ng check` (arm64 debug build + unit tests); docs/tools-only pushes skip it.
+root="$(git rev-parse --show-toplevel)" || exit 1
+zero=0000000000000000000000000000000000000000
+need_check=0
+records_touched=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then range="$local_sha --not --remotes"; else range="$remote_sha..$local_sha"; fi
+  files=$(git rev-list $range | while read -r c; do git diff-tree --no-commit-id --name-only -r "$c"; done | sort -u)
+  echo "$files" | grep -q -v -E '^(docs/|Tools/|README|CHANGELOG\.md|NANOGRAM-CHANGES\.md|AGENTS\.md|CLAUDE\.md|\.gitignore$)' && need_check=1
+  echo "$files" | grep -q -E '^(CHANGELOG\.md|NANOGRAM-CHANGES\.md)$' && records_touched=1
+done
+if [ "$need_check" = 1 ]; then
+  [ "$records_touched" = 1 ] || echo "pre-push: warning: product code changed but CHANGELOG.md / NANOGRAM-CHANGES.md were not updated" >&2
+  exec "$root/Tools/dev/ng" check
+fi
+exit 0
