@@ -11709,6 +11709,16 @@
     <string name="NanogramLinksInfo">Removes tracking parameters such as utm_source, fbclid and gclid when you open or copy a link. Your messages are never changed. With the second switch on, Nanogram also asks before opening t.me and tg: links.</string>
     <string name="NanogramFeaturesRecording">Recording</string>
     <string name="NanogramMicrophoneInfo">Which microphone voice messages and round videos use. Automatic picks a connected headset, otherwise the phone.</string>
+    <string name="NanogramFeaturesOnDevice">On this phone</string>
+    <string name="NanogramOnDeviceTranscription">Transcribe voice messages on this phone</string>
+    <string name="NanogramOnDeviceTranslation">Translate messages on this phone</string>
+    <string name="NanogramModelsWifiOnly">Download language models on Wi-Fi only</string>
+    <string name="NanogramOnDeviceTranscriptionInfo">Voice messages you have already downloaded are turned into text by your phone\'s own speech recognizer, so the audio is not sent to Telegram. Your phone may download a language pack the first time.</string>
+    <string name="NanogramOnDeviceTranslationInfo">Message translation runs on this phone with Google ML Kit instead of Telegram\'s servers, and the text is not sent anywhere. Each language needs a model of about 30 MB, downloaded only after you turn this on. If a message cannot be translated here, Telegram\'s normal translation is used.</string>
+    <string name="NanogramModelDownloading">Downloading the %1$s language model\u2026</string>
+    <string name="NanogramModelReady">The %1$s language model is ready.</string>
+    <string name="NanogramModelFailed">The %1$s language model could not be downloaded. Telegram\'s translation is used meanwhile.</string>
+    <string name="NanogramOnDeviceTranscriptionNoLanguage">This phone has no on-device speech model for your language. Voice messages will use Telegram\'s transcription.</string>
     <string name="NanogramFeaturesPower">Power</string>
     <string name="NanogramSendReportInfo">Creates one zip with everything the developers need: logs, crash and exit information, performance traces, the performance experiment numbers, CPU and energy numbers, device and app details, and a README listing every part and anything that was missing. It contains no messages, contacts or phone numbers.</string>
     <string name="NanogramSendReportInfoVerbose">Creates one zip with logs, crash and exit information, traces, performance and energy numbers, and device details. Verbose logs were on, so the logs can contain message text, phone numbers and ids. Send the zip only to the developer.</string>

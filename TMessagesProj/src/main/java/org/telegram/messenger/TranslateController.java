@@ -23,6 +23,8 @@ import androidx.annotation.Nullable;
 //import com.google.mlkit.nl.translate.Translator;
 //import com.google.mlkit.nl.translate.TranslatorOptions;
 
+import org.telegram.messenger.nanogram.NanogramOnDevice;
+import org.telegram.messenger.nanogram.NanogramOnDeviceTranslation;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.InputSerializedData;
 import org.telegram.tgnet.OutputSerializedData;
@@ -1015,6 +1017,7 @@ public class TranslateController extends BaseController {
         ArrayList<TLRPC.TL_textWithEntities> messageTexts = new ArrayList<>();
         ArrayList<Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String>> callbacks = new ArrayList<>();
         String language;
+        boolean serverOnly;
 
         int delay = GROUPING_TRANSLATIONS_TIMEOUT;
         int symbolsCount;
@@ -1101,6 +1104,33 @@ public class TranslateController extends BaseController {
                             pendingTranslations.remove(dialogId);
                         }
                     }
+                }
+
+                if (!pendingTranslation1.serverOnly && NanogramOnDeviceTranslation.isEnabled()) {
+                    final ArrayList<String> sourceTexts = new ArrayList<>();
+                    for (int i = 0; i < pendingTranslation1.messageTexts.size(); ++i) {
+                        sourceTexts.add(pendingTranslation1.messageTexts.get(i).text);
+                    }
+                    NanogramOnDeviceTranslation.translate(sourceTexts, pendingTranslation1.language, results -> {
+                        if (!NanogramOnDevice.allTranslated(results)) {
+                            // One failure sends the whole batch to the server, so no message is answered twice.
+                            pendingTranslation1.serverOnly = true;
+                            pendingTranslation1.runnable.run();
+                            return;
+                        }
+                        final ArrayList<Integer> ids = pendingTranslation1.messageIds;
+                        for (int i = 0; i < ids.size(); ++i) {
+                            final TLRPC.TL_textWithEntities translated = new TLRPC.TL_textWithEntities();
+                            translated.text = results[i];
+                            pendingTranslation1.callbacks.get(i).run(isTranscription, ids.get(i), translated, pendingTranslation1.language);
+                        }
+                        synchronized (TranslateController.this) {
+                            for (int i = 0; i < ids.size(); ++i) {
+                                loadingTranslations.remove(ids.get(i));
+                            }
+                        }
+                    });
+                    return;
                 }
 
                 final String method = getMessagesController().translationsAutoEnabled;

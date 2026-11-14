@@ -2,6 +2,7 @@ package org.telegram.ui.Components;
 
 import static org.telegram.messenger.AndroidUtilities.dp;
 
+import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
@@ -28,10 +29,13 @@ import androidx.core.math.MathUtils;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
@@ -39,11 +43,14 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.nanogram.NanogramOnDevice;
+import org.telegram.messenger.nanogram.NanogramOnDeviceTranscription;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.ChatMessageCell;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
@@ -667,6 +674,10 @@ public class TranscribeButton {
     }
 
     private static void transcribePressed(MessageObject messageObject, boolean open, ChatMessageCell.ChatMessageCellDelegate delegate) {
+        transcribePressed(messageObject, open, delegate, true);
+    }
+
+    private static void transcribePressed(MessageObject messageObject, boolean open, ChatMessageCell.ChatMessageCellDelegate delegate, boolean allowOnDevice) {
         if (messageObject == null || messageObject.messageOwner == null || !messageObject.isSent()) {
             return;
         }
@@ -683,6 +694,8 @@ public class TranscribeButton {
                 AndroidUtilities.runOnUIThread(() -> {
                     NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean) true, (Boolean) true);
                 });
+            } else if (allowOnDevice && transcribeOnDevice(messageObject, dialogId, messageId, delegate, start, minDuration)) {
+                return;
             } else {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("sending Transcription request, msg_id=" + messageId + " dialog_id=" + dialogId);
@@ -772,6 +785,36 @@ public class TranscribeButton {
                 NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.voiceTranscriptionUpdate, messageObject, null, null, (Boolean) false, null);
             });
         }
+    }
+
+    // On-device recognizer when the Nanogram switch is on and the voice file is already downloaded; false means use the server.
+    private static boolean transcribeOnDevice(MessageObject messageObject, long dialogId, int messageId, ChatMessageCell.ChatMessageCellDelegate delegate, long start, long minDuration) {
+        final Context context = ApplicationLoader.applicationContext;
+        if (Build.VERSION.SDK_INT < 33 || context == null || !NanogramOnDeviceTranscription.isEnabled(context)) {
+            return false;
+        }
+        final int account = messageObject.currentAccount;
+        final File file = FileLoader.getInstance(account).getPathToMessage(messageObject.messageOwner);
+        if (file == null || !file.exists()) {
+            return false;
+        }
+        if (transcribeOperationsByDialogPosition == null) {
+            transcribeOperationsByDialogPosition = new HashMap<>();
+        }
+        transcribeOperationsByDialogPosition.put((Integer) reqInfoHash(messageObject), messageObject);
+        final String tag = NanogramOnDevice.speechTag(LocaleController.getInstance().getCurrentLocale().toLanguageTag());
+        NanogramOnDeviceTranscription.transcribe(context, file, tag, text -> {
+            if (text == null) {
+                transcribePressed(messageObject, true, delegate, false);
+                return;
+            }
+            TranscribeButton.openVideoTranscription(messageObject);
+            messageObject.messageOwner.voiceTranscriptionOpen = true;
+            messageObject.messageOwner.voiceTranscriptionFinal = true;
+            MessagesStorage.getInstance(account).updateMessageVoiceTranscription(dialogId, messageId, text, messageObject.messageOwner);
+            AndroidUtilities.runOnUIThread(() -> finishTranscription(messageObject, 0, text), Math.max(0, minDuration - (SystemClock.elapsedRealtime() - start)));
+        });
+        return true;
     }
 
     public static boolean finishTranscription(MessageObject messageObject, long transcription_id, String text) {
