@@ -127,7 +127,7 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
         items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsSend)));
         items.add(UItem.asButton(ID_SHARE, R.drawable.msg_share, getString(R.string.NanogramDiagnosticsShare)).accent());
         items.add(UItem.asButton(ID_CHAT, R.drawable.msg_send, getString(R.string.NanogramDiagnosticsSendToChat)).accent());
-        items.add(UItem.asShadow(getString(R.string.NanogramDiagnosticsShareInfo)));
+        items.add(UItem.asShadow(getString(NanogramLog.verboseRecently() ? R.string.NanogramDiagnosticsShareInfoVerbose : R.string.NanogramDiagnosticsShareInfo)));
 
         items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsLogs)));
         items.add(UItem.asCheck(ID_VERBOSE, getString(R.string.NanogramDiagnosticsVerbose)).setChecked(NanogramLog.isVerbose()));

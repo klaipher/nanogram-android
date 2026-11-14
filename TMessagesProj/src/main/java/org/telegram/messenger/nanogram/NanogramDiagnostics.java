@@ -247,10 +247,14 @@ public final class NanogramDiagnostics {
 
     public static File buildZip(Context context) throws IOException {
         final File dir = zipDir(context);
+        // An earlier zip can still be uploading or waiting in a share target.
         final File[] old = dir.listFiles();
         if (old != null) {
+            final long cutoff = System.currentTimeMillis() - 60 * 60 * 1000L;
             for (File file : old) {
-                file.delete();
+                if (file.lastModified() < cutoff) {
+                    file.delete();
+                }
             }
         }
         final String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
@@ -284,6 +288,7 @@ public final class NanogramDiagnostics {
     }
 
     private static String readme(Context context) {
+        final boolean verbose = NanogramLog.verboseRecently();
         return "Nanogram diagnostics " + appLabel(context) + "\ncreated " + formatTime(System.currentTimeMillis()) + "\n"
                 + NanogramSystemInfo.summaryLine() + "\n\n"
                 + "Files\n"
@@ -291,10 +296,13 @@ public final class NanogramDiagnostics {
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"
-                + "  logs/              Nanogram log files from the last " + (NanogramLog.isVerbose() ? VERBOSE_DAYS : QUIET_DAYS) + " days (" + (NanogramLog.isVerbose() ? "verbose" : "errors, warnings and key events") + ")\n"
+                + "  logs/              Nanogram log files from the last " + (verbose ? VERBOSE_DAYS : QUIET_DAYS) + " days (" + (verbose ? "verbose" : "errors, warnings and key events") + ")\n"
                 + "  voip/              call logs from the last " + QUIET_DAYS + " days\n\n"
-                + "Not included: message text, contacts, phone numbers, account or session data, keys, push tokens, databases, media, heap dumps.\n"
-                + "Chat names and ids are not collected. Exception messages and system descriptions are copied as they are.\n";
+                + (verbose
+                ? "WARNING: verbose logs were on, so logs/ can contain message text, phone numbers, chat ids and tokens written by the app. Send this zip only to the developer, not to a shared chat.\n"
+                + "Not collected by the diagnostics themselves: contacts, databases, media, heap dumps.\n"
+                : "Not included: message text, contacts, phone numbers, account or session data, keys, push tokens, databases, media, heap dumps.\n"
+                + "Chat names and ids are not collected. Exception messages and system descriptions are copied as they are.\n");
     }
 
     private static void addCrashes(Context context, ZipOutputStream out) {
@@ -343,7 +351,7 @@ public final class NanogramDiagnostics {
     }
 
     private static void addLogs(Context context, ZipOutputStream out) {
-        final long days = NanogramLog.isVerbose() ? VERBOSE_DAYS : QUIET_DAYS;
+        final long days = NanogramLog.verboseRecently() ? VERBOSE_DAYS : QUIET_DAYS;
         addDirectory(out, "logs/", AndroidUtilities.getLogsDir(), days, MAX_LOG_BYTES_TOTAL, true);
         addDirectory(out, "voip/", new File(context.getCacheDir(), "voip_logs"), QUIET_DAYS, MAX_VOIP_BYTES_TOTAL, false);
     }
