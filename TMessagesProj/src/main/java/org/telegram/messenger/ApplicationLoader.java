@@ -215,7 +215,11 @@ public class ApplicationLoader extends Application {
                     }
 
                     boolean isSlow = isConnectionSlow();
+                    final boolean lazy = StartupSettings.lazyAccountSlots.get();
                     for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                        if (lazy && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                            continue;
+                        }
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
@@ -283,7 +287,9 @@ public class ApplicationLoader extends Application {
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        if (!(BuildVars.IS_BILLING_UNAVAILABLE && StartupSettings.skipPlayBillingAtStartup.get())) {
+        if (BuildVars.IS_BILLING_UNAVAILABLE && StartupSettings.skipPlayBillingAtStartup.get()) {
+            BillingController.getInstance().deferConnection();
+        } else {
             BillingController.getInstance().startConnection();
         }
         // HTML widgets: the isolated engine's process up front, after the app's own start, so that a widget's first
