@@ -421,7 +421,7 @@ public class NanogramUpdater {
         final Context context = ApplicationLoader.applicationContext;
         final PackageManager pm = context.getPackageManager();
         try {
-            final int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            final int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES | PackageManager.GET_SIGNATURES : PackageManager.GET_SIGNATURES;
             final PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), flags);
             if (archive == null) {
                 return "not a valid APK";
@@ -453,7 +453,8 @@ public class NanogramUpdater {
             if (signingInfo != null) {
                 signatures = signingInfo.getApkContentsSigners();
             }
-        } else {
+        }
+        if (signatures == null || signatures.length == 0) {
             signatures = info.signatures;
         }
         final TreeSet<String> digests = new TreeSet<>();
