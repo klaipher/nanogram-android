@@ -72,7 +72,7 @@ public final class NanogramSendReport {
                 progress.dismiss();
             } catch (Exception ignore) {
             }
-            if (zip == null || fragment.getParentActivity() == null || fragment.isFinishing()) {
+            if (zip == null || fragment.getParentActivity() == null) {
                 if (error != null && fragment.getParentActivity() != null) {
                     Toast.makeText(fragment.getParentActivity(), getString(R.string.NanogramDiagnosticsFailed), Toast.LENGTH_SHORT).show();
                 }
@@ -108,8 +108,9 @@ public final class NanogramSendReport {
         args.putString("selectAlertString", getString(R.string.NanogramDiagnosticsSendToText));
         args.putString("selectAlertStringGroup", getString(R.string.NanogramDiagnosticsSendToText));
         final DialogsActivity picker = new DialogsActivity(args);
-        picker.setDelegate((fragment, dids, message, param, notify, scheduleDate, scheduleRepeatPeriod, topicsFragment) -> {
-            final int account = fragment != null ? fragment.getCurrentAccount() : fragment.getCurrentAccount();
+        picker.setDelegate((pickerFragment, dids, message, param, notify, scheduleDate, scheduleRepeatPeriod, topicsFragment) -> {
+            final int account = pickerFragment != null ? pickerFragment.getCurrentAccount() : fragment.getCurrentAccount();
+            final Activity toastActivity = fragment.getParentActivity();
             final AccountInstance accountInstance = AccountInstance.getInstance(account);
             final String caption = formatString(R.string.NanogramDiagnosticsSubject, NanogramDiagnostics.appLabel(ApplicationLoader.applicationContext));
             for (MessagesStorage.TopicKey key : dids) {
@@ -125,11 +126,11 @@ public final class NanogramSendReport {
                 }
                 SendMessagesHelper.prepareSendingDocuments(accountInstance, paths, paths, null, caption, "application/zip", key.dialogId, replyTo, replyTo, null, null, null, true, 0, null, null, 0, false, 0);
             }
-            if (fragment != null) {
-                fragment.finishFragment();
+            if (pickerFragment != null) {
+                pickerFragment.finishFragment();
             }
-            if (fragment.getParentActivity() != null) {
-                Toast.makeText(fragment.getParentActivity(), getString(R.string.NanogramDiagnosticsSent), Toast.LENGTH_SHORT).show();
+            if (toastActivity != null) {
+                Toast.makeText(toastActivity, getString(R.string.NanogramDiagnosticsSent), Toast.LENGTH_SHORT).show();
             }
             return true;
         });

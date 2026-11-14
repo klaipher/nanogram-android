@@ -7,25 +7,29 @@ import java.util.Set;
 
 /**
  * Strips known tracking parameters from http(s) links when opening and copying them. Never touches t.me, tg://
- * or any other scheme (their parameters carry meaning) and never rewrites message text. Maintained list:
- * docs/nanogram/link-hygiene.md.
+ * or any other scheme (their parameters carry meaning) and never rewrites message text. Shared list:
+ * ios-integration docs/specs/link-tracking-params.txt.
  */
 public final class NanogramLinkHygiene {
 
+    // Mirror of ios-integration docs/specs/link-tracking-params.txt; change both together.
     private static final Set<String> PARAMS = new HashSet<>(Arrays.asList(
             "fbclid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "msclkid", "twclid", "ttclid", "li_fat_id",
-            "igshid", "igsh", "mc_eid", "mc_cid", "_hsenc", "_hsmi", "mkt_tok", "vero_id", "oly_enc_id",
-            "oly_anon_id", "yclid", "ysclid", "_openstat", "rb_clickid", "wickedid", "_ga", "_gl", "s_cid",
-            "ref_src", "ref_url", "fb_action_ids", "fb_action_types", "fb_source", "fb_ref", "srsltid"
+            "igshid", "igsh", "mc_eid", "mc_cid", "_hsenc", "_hsmi", "__hssc", "__hstc", "__hsfp", "hsctatracking",
+            "mkt_tok", "oly_anon_id", "oly_enc_id", "vero_id", "vero_conv", "yclid", "ysclid", "_openstat",
+            "ref_src", "ref_url", "s_cid", "spm", "scm"
     ));
 
-    private static final String[] PREFIXES = {"utm_", "hsa_", "pk_", "piwik_", "mtm_", "matomo_"};
+    private static final String[] PREFIXES = {"utm_"};
 
-    // `si` is a share id on these sites and an ordinary parameter elsewhere.
-    private static final Set<String> SI_HOSTS = new HashSet<>(Arrays.asList(
-            "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be",
-            "open.spotify.com", "spotify.link", "twitter.com", "x.com"
-    ));
+    // host|name entries; a host entry also covers its subdomains. A name ending in * is a prefix.
+    private static final String[][] HOST_PARAMS = {
+            {"youtube.com", "si"}, {"youtu.be", "si"}, {"open.spotify.com", "si"}, {"music.youtube.com", "si"},
+            {"youtube.com", "feature"}, {"youtube.com", "pp"},
+            {"amazon.com", "ref"}, {"amazon.com", "tag"}, {"amazon.com", "pd_rd_*"}, {"amazon.com", "pf_rd_*"},
+            {"tiktok.com", "share_id"}, {"tiktok.com", "is_copy_url"}, {"tiktok.com", "is_from_webapp"}, {"tiktok.com", "sender_device"},
+            {"facebook.com", "refsrc"}, {"facebook.com", "__tn__"}, {"facebook.com", "__cft__*"}
+    };
 
     private static final Set<String> TELEGRAM_HOSTS = new HashSet<>(Arrays.asList(
             "t.me", "telegram.me", "telegram.dog", "telesco.pe"
@@ -91,11 +95,17 @@ public final class NanogramLinkHygiene {
         if (PARAMS.contains(name)) {
             return true;
         }
-        if (name.equals("si")) {
-            return SI_HOSTS.contains(host);
-        }
         for (String prefix : PREFIXES) {
             if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        for (String[] entry : HOST_PARAMS) {
+            if (!host.equals(entry[0]) && !host.endsWith("." + entry[0])) {
+                continue;
+            }
+            final String pattern = entry[1];
+            if (pattern.endsWith("*") ? name.startsWith(pattern.substring(0, pattern.length() - 1)) : name.equals(pattern)) {
                 return true;
             }
         }

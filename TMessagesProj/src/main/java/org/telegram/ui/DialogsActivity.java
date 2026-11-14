@@ -3681,11 +3681,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     final boolean finalMuteAll = muteAll;
 
                     final MessagesController.DialogFilter finalFilter = filter;
-                    final boolean skipMuted = defaultTab && !getNotificationsController().showBadgeMuted;
                     for (int i = 0; i < dialogs.size(); i++) {
-                        if (skipMuted && isMutedWithoutMentions(dialogs.get(i))) {
-                            continue;
-                        }
                         if (dialogs.get(i).unread_mark || dialogs.get(i).unread_count > 0) {
                             hasUnread = true;
                         }
@@ -3742,7 +3738,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                 BulletinFactory.createMuteBulletin(DialogsActivity.this, finalMuteAll, count, null).show();
                             })
                             .addIf(hasUnread, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAllAsRead), () -> {
-                                markDialogsAsRead(dialogs, skipMuted);
+                                markDialogsAsRead(dialogs);
                             })
                             .addIf(hasShare, R.drawable.msg_share, FilterCreateActivity.withNew(filter != null && filter.isMyChatlist() ? -1 : 0, LocaleController.getString(R.string.LinkActionShare), true), () -> {
                                 if (shareEmpty[0]) {
@@ -9525,11 +9521,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         getMessagesController().markDialogAsUnread(did, null, 0);
     }
 
-    private boolean isMutedWithoutMentions(TLRPC.Dialog dialog) {
-        return dialog.unread_mentions_count == 0 && getMessagesController().isDialogMuted(dialog.id, 0);
-    }
-
-    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs, boolean skipMuted) {
+    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs) {
         debugLastUpdateAction = 2;
         int selectedDialogIndex = -1;
 
@@ -9538,9 +9530,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         for (int i = 0; i < dialogs.size(); i++) {
             long did = dialogs.get(i).id;
             TLRPC.Dialog dialog = dialogs.get(i);
-            if (skipMuted && isMutedWithoutMentions(dialog)) {
-                continue;
-            }
             if (getMessagesController().isForum(did) || getMessagesController().isMonoForumWithManageRights(did)) {
                 getMessagesController().markAllTopicsAsRead(did);
             }

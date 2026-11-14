@@ -11702,11 +11702,11 @@
     <string name="NanogramFeaturesInfo">Extra options only Nanogram has</string>
     <string name="NanogramFeaturesSearch">Search</string>
     <string name="NanogramSearchOperators">Search operators</string>
-    <string name="NanogramSearchOperatorsInfo">Narrow a search inside a chat. from:@username (a person you already know), after:2026-01-31, before:2026-02-28, date:2026-02, type:photo. Types: photo, video, file, link, voice, music, gif, round. Anything else you type is searched as normal text.</string>
+    <string name="NanogramSearchOperatorsInfo">Narrow a search inside a chat. from:@username or from:me (a person you already know), after:2026-01-31, before:2026-02-28, date:2026-02, type:photo. Types: photo, video, file, link, voice, music, gif, round, poll, pinned. Anything else you type is searched as normal text.</string>
     <string name="NanogramFeaturesLinks">Links</string>
     <string name="NanogramStripTracking">Remove tracking from links</string>
     <string name="NanogramConfirmTelegramLinks">Ask before opening Telegram links</string>
-    <string name="NanogramLinksInfo">Removes tracking parameters such as utm_source, fbclid and gclid when you open or copy a link. Your messages are never changed. Telegram links are asked about before they open.</string>
+    <string name="NanogramLinksInfo">Removes tracking parameters such as utm_source, fbclid and gclid when you open or copy a link. Your messages are never changed. With the second switch on, Nanogram also asks before opening t.me and tg: links.</string>
     <string name="NanogramFeaturesRecording">Recording</string>
     <string name="NanogramMicrophoneInfo">Which microphone voice messages and round videos use. Automatic picks a connected headset, otherwise the phone.</string>
     <string name="NanogramFeaturesPower">Power</string>

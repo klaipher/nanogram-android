@@ -25,4 +25,13 @@ public class NanogramReportPartsTest {
         assertTrue(text.contains("voip/ missing"));
         assertFalse(text.contains("logs/ missing"));
     }
+
+    @Test
+    public void failedFilePartsAreListedWithTheExceptionClass() {
+        final String text = NanogramDiagnostics.missingParts(Arrays.asList(
+                "crashes/a.txt", "traces/b.txt", "profiles/c.perfetto-trace", "logs/d.txt", "voip/e.txt"),
+                Arrays.asList("health-energy.txt: java.lang.SecurityException"));
+        assertTrue(text.contains("health-energy.txt failed: java.lang.SecurityException"));
+        assertFalse(text.contains("none"));
+    }
 }

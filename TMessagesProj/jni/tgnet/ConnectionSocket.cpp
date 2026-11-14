@@ -724,7 +724,8 @@ void ConnectionSocket::resetLastEventTime() {
 }
 
 bool ConnectionSocket::isDisconnected() {
-    return socketFd < 0;
+    // The socket is created after the host lookup; until then writes queue and flush in openConnectionInternal.
+    return socketFd < 0 && waitingForHostResolve.empty();
 }
 
 void ConnectionSocket::dropConnection() {

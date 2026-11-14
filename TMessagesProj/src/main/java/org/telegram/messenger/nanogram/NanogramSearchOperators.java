@@ -7,13 +7,13 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * Search operators for in-chat search (docs/nanogram/search-operators.md): from:, before:, after:, date:, type:.
+ * Search operators for in-chat search (shared grammar: ios-integration docs/specs/search-operators.md): from:, before:, after:, date:, type:.
  * Pure parser; the caller maps the result onto messages.search (from_id, min_date, max_date, filter).
  */
 public final class NanogramSearchOperators {
 
     public enum Type {
-        PHOTO, VIDEO, FILE, LINK, VOICE, MUSIC, GIF, ROUND
+        PHOTO, VIDEO, FILE, LINK, VOICE, MUSIC, GIF, ROUND, POLL, PINNED
     }
 
     public static final class Result {
@@ -48,8 +48,10 @@ public final class NanogramSearchOperators {
         final List<String> rest = new ArrayList<>();
         final List<String> restWithFrom = new ArrayList<>();
         String from = null;
-        int minDate = 0;
-        int maxDate = 0;
+        int afterMin = 0;
+        int beforeMax = 0;
+        int dateMin = 0;
+        int dateMax = 0;
         Type type = null;
         for (String token : tokenize(query)) {
             final int colon = token.indexOf(':');
@@ -60,7 +62,12 @@ public final class NanogramSearchOperators {
             }
             final String key = token.substring(0, colon).toLowerCase(Locale.ROOT);
             String value = token.substring(colon + 1);
-            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            if (value.indexOf('"') >= 0) {
+                if (value.length() < 3 || value.charAt(0) != '"' || value.charAt(value.length() - 1) != '"' || value.indexOf('"', 1) != value.length() - 1) {
+                    rest.add(token);
+                    restWithFrom.add(token);
+                    continue;
+                }
                 value = value.substring(1, value.length() - 1);
             }
             boolean used = false;
@@ -77,7 +84,7 @@ public final class NanogramSearchOperators {
                 case "before": {
                     final long[] span = span(value, zone, nowMillis);
                     if (span != null) {
-                        maxDate = seconds(span[0] - 1);
+                        beforeMax = seconds(span[0]);
                         used = true;
                     }
                     break;
@@ -85,7 +92,7 @@ public final class NanogramSearchOperators {
                 case "after": {
                     final long[] span = span(value, zone, nowMillis);
                     if (span != null) {
-                        minDate = seconds(span[0]);
+                        afterMin = seconds(span[1]);
                         used = true;
                     }
                     break;
@@ -93,8 +100,8 @@ public final class NanogramSearchOperators {
                 case "date": {
                     final long[] span = span(value, zone, nowMillis);
                     if (span != null) {
-                        minDate = seconds(span[0]);
-                        maxDate = seconds(span[1] - 1);
+                        dateMin = seconds(span[0]);
+                        dateMax = seconds(span[1]);
                         used = true;
                     }
                     break;
@@ -115,6 +122,8 @@ public final class NanogramSearchOperators {
                 restWithFrom.add(token);
             }
         }
+        final int minDate = Math.max(afterMin, dateMin);
+        final int maxDate = beforeMax == 0 ? dateMax : dateMax == 0 ? beforeMax : Math.min(beforeMax, dateMax);
         return new Result(String.join(" ", rest), String.join(" ", restWithFrom), from, minDate, maxDate, type);
     }
 
@@ -147,6 +156,11 @@ public final class NanogramSearchOperators {
             case "round":
             case "roundvideo":
                 return Type.ROUND;
+            case "poll":
+            case "polls":
+                return Type.POLL;
+            case "pinned":
+                return Type.PINNED;
             default:
                 return null;
         }
@@ -212,7 +226,7 @@ public final class NanogramSearchOperators {
         return n;
     }
 
-    // Whitespace separated; a double-quoted run inside a token (from:"Ann Lee") stays in one token.
+    // Whitespace separated; a quote only opens a run when a closing quote follows, so an unclosed quote stays plain text.
     private static List<String> tokenize(String query) {
         final List<String> tokens = new ArrayList<>();
         final StringBuilder current = new StringBuilder();
@@ -220,7 +234,11 @@ public final class NanogramSearchOperators {
         for (int i = 0; i < query.length(); i++) {
             final char c = query.charAt(i);
             if (c == '"') {
-                quoted = !quoted;
+                if (quoted) {
+                    quoted = false;
+                } else if (query.indexOf('"', i + 1) >= 0) {
+                    quoted = true;
+                }
                 current.append(c);
             } else if (Character.isWhitespace(c) && !quoted) {
                 if (current.length() > 0) {

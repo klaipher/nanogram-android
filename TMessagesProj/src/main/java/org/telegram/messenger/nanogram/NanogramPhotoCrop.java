@@ -53,10 +53,8 @@ public class NanogramPhotoCrop {
     }
 
     public static Bitmap bakeCropForViewer(MediaController.MediaEditState entry, Bitmap viewerBitmap, int[] viewerOrientation, int targetSize) {
-        Bitmap cropped = renderHighQualityCrop(entry, targetSize);
-        if (cropped == null && viewerBitmap != null) {
-            cropped = PhotoViewer.createCroppedBitmap(viewerBitmap, entry.cropState, viewerOrientation, true);
-        }
+        // Runs on the UI thread: crop the bitmap already in memory; the full-resolution render happens in rebuildPhoto when sending.
+        final Bitmap cropped = viewerBitmap != null ? PhotoViewer.createCroppedBitmap(viewerBitmap, entry.cropState, viewerOrientation, true) : null;
         return cropped != null ? cropped : rebakeCroppedBitmap(entry);
     }
 

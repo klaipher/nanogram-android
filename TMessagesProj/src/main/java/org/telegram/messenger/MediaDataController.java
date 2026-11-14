@@ -3873,6 +3873,8 @@ public class MediaDataController extends BaseController {
             case MUSIC: return new TLRPC.TL_inputMessagesFilterMusic();
             case GIF: return new TLRPC.TL_inputMessagesFilterGif();
             case ROUND: return new TLRPC.TL_inputMessagesFilterRoundVideo();
+            case POLL: return new TLRPC.TL_inputMessagesFilterPoll();
+            case PINNED: return new TLRPC.TL_inputMessagesFilterPinned();
             default: return new TLRPC.TL_inputMessagesFilterEmpty();
         }
     }
@@ -3880,6 +3882,10 @@ public class MediaDataController extends BaseController {
     public void searchMessagesInChat(String query, long dialogId, long mergeDialogId, int guid, int direction, long replyMessageId, boolean internal, TLRPC.User userIn, TLRPC.Chat chatIn, boolean jumpToMessage, ReactionsLayoutInBubble.VisibleReaction reaction) {
         TLRPC.User userOut = userIn;
         TLRPC.Chat chatOut = chatIn;
+        if (query == null && userOut == null && chatOut == null) {
+            userOut = lastSearchUser;
+            chatOut = lastSearchChat;
+        }
         if (!internal && query != null) {
             searchOperatorMinDate = 0;
             searchOperatorMaxDate = 0;
@@ -3890,7 +3896,7 @@ public class MediaDataController extends BaseController {
                     TLRPC.User fromUser = null;
                     TLRPC.Chat fromChat = null;
                     if (operators.from != null) {
-                        final TLObject found = getMessagesController().getUserOrChat(operators.from);
+                        final TLObject found = operators.from.equalsIgnoreCase("me") ? getUserConfig().getCurrentUser() : getMessagesController().getUserOrChat(operators.from);
                         if (found instanceof TLRPC.User) {
                             fromUser = (TLRPC.User) found;
                         } else if (found instanceof TLRPC.Chat) {

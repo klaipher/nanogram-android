@@ -82,32 +82,75 @@ public class NanogramSearchOperatorsTest {
     }
 
     @Test
-    public void afterIsStartOfDayBeforeIsOneSecondEarlier() {
+    public void afterIsEndOfRangeBeforeIsStartOfRange() {
         // 2026-05-01 00:00:00 UTC = 1777593600
-        assertEquals(1_777_593_600, parse("after:2026-05-01").minDate);
-        assertEquals(1_777_593_599, parse("before:2026-05-01").maxDate);
+        assertEquals(1_777_593_600 + 86_400, parse("after:2026-05-01").minDate);
+        assertEquals(1_777_593_600, parse("before:2026-05-01").maxDate);
         assertEquals(0, parse("after:2026-05-01").maxDate);
+        assertEquals(0, parse("before:2026-05-01").minDate);
     }
 
     @Test
     public void dateCoversWholeDayMonthOrYear() {
         final NanogramSearchOperators.Result day = parse("date:2026-05-01");
         assertEquals(1_777_593_600, day.minDate);
-        assertEquals(1_777_593_600 + 86_400 - 1, day.maxDate);
+        assertEquals(1_777_593_600 + 86_400, day.maxDate);
         final NanogramSearchOperators.Result month = parse("date:2026-02");
         assertEquals(1_769_904_000, month.minDate);
-        assertEquals(1_769_904_000 + 28 * 86_400 - 1, month.maxDate);
+        assertEquals(1_769_904_000 + 28 * 86_400, month.maxDate);
         final NanogramSearchOperators.Result year = parse("date:2026");
         assertEquals(1_767_225_600, year.minDate);
-        assertEquals(1_767_225_600 + 365 * 86_400 - 1, year.maxDate);
+        assertEquals(1_767_225_600 + 365 * 86_400, year.maxDate);
+    }
+
+    @Test
+    public void specVectorsForNovember() {
+        // 2026-11-01 00:00:00 UTC = 1793491200
+        assertEquals(1_793_491_200, parse("before:2026-11-01").maxDate);
+        assertEquals(1_793_491_200 + 86_400, parse("after:2026-11-01").minDate);
+        final NanogramSearchOperators.Result month = parse("date:2026-11");
+        assertEquals(1_793_491_200, month.minDate);
+        assertEquals(1_793_491_200 + 30 * 86_400, month.maxDate);
+        assertEquals(1_793_491_200 + 30 * 86_400, parse("after:2026-11").minDate);
+        assertEquals(1_793_491_200 - 31 * 86_400, parse("before:2026-11 before:2026-10").maxDate);
+    }
+
+    @Test
+    public void dateWithBeforeAndAfterTakesTheTighterBounds() {
+        final NanogramSearchOperators.Result r = parse("date:2026-11 after:2026-11-10 before:2026-11-20");
+        assertEquals(1_793_491_200 + 10 * 86_400, r.minDate);
+        assertEquals(1_793_491_200 + 19 * 86_400, r.maxDate);
+        final NanogramSearchOperators.Result wide = parse("date:2026-11-05 after:2026-01-01 before:2026-12-01");
+        assertEquals(1_793_491_200 + 4 * 86_400, wide.minDate);
+        assertEquals(1_793_491_200 + 5 * 86_400, wide.maxDate);
+    }
+
+    @Test
+    public void pollAndPinnedTypes() {
+        assertEquals(NanogramSearchOperators.Type.POLL, parse("type:poll").type);
+        assertEquals(NanogramSearchOperators.Type.PINNED, parse("type:Pinned x").type);
+    }
+
+    @Test
+    public void fromMeIsParsedAsMe() {
+        assertEquals("me", parse("from:me hi").from);
+    }
+
+    @Test
+    public void unclosedQuoteStaysPlainAndDoesNotSwallowTheRest() {
+        final NanogramSearchOperators.Result r = parse("from:\"Jane type:photo");
+        assertEquals("from:\"Jane", r.text);
+        assertNull(r.from);
+        assertEquals(NanogramSearchOperators.Type.PHOTO, r.type);
+        assertEquals("from:\"Jane", parse("from:\"Jane").text);
     }
 
     @Test
     public void todayAndYesterdayUseTheGivenZone() {
         final NanogramSearchOperators.Result today = parse("date:today");
         assertEquals(1_794_614_400, today.minDate);
-        assertEquals(1_794_614_400 + 86_399, today.maxDate);
-        assertEquals(1_794_614_400 - 86_400, parse("after:yesterday").minDate);
+        assertEquals(1_794_614_400 + 86_400, today.maxDate);
+        assertEquals(1_794_614_400, parse("after:yesterday").minDate);
         final NanogramSearchOperators.Result kyiv = NanogramSearchOperators.parse("date:today", TimeZone.getTimeZone("Europe/Kyiv"), NOW);
         assertEquals(1_794_614_400 - 7200, kyiv.minDate);
     }

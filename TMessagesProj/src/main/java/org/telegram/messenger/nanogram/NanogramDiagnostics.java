@@ -275,7 +275,7 @@ public final class NanogramDiagnostics {
             addTraces(context, out);
             addProfiles(context, out);
             addLogs(context, out);
-            addText(out, "README.txt", readme(context, out.names));
+            addText(out, "README.txt", readme(context, out.names, out.failed));
         } catch (IOException | RuntimeException e) {
             zip.delete();
             throw e;
@@ -286,6 +286,7 @@ public final class NanogramDiagnostics {
     // Remembers entry names so the README can list the parts that ended up empty.
     private static final class NamedZipOutputStream extends ZipOutputStream {
         final List<String> names = new ArrayList<>();
+        final List<String> failed = new ArrayList<>();
 
         NamedZipOutputStream(java.io.OutputStream out) {
             super(out);
@@ -308,7 +309,15 @@ public final class NanogramDiagnostics {
 
     /** Lines for each folder part with no entry; a part is listed as missing, never silently dropped. */
     static String missingParts(List<String> names) {
+        return missingParts(names, new ArrayList<>());
+    }
+
+    /** failed holds "file: ExceptionClass" for file parts whose collector threw. */
+    static String missingParts(List<String> names, List<String> failed) {
         final StringBuilder sb = new StringBuilder();
+        for (String part : failed) {
+            sb.append("  ").append(part.replace(": ", " failed: ")).append('\n');
+        }
         for (String[] part : FOLDER_PARTS) {
             boolean found = false;
             for (String name : names) {
@@ -328,17 +337,18 @@ public final class NanogramDiagnostics {
         String get() throws Throwable;
     }
 
-    private static void addSafely(ZipOutputStream out, String name, TextSource source) throws IOException {
+    private static void addSafely(NamedZipOutputStream out, String name, TextSource source) throws IOException {
         String text;
         try {
             text = source.get();
         } catch (Throwable e) {
             text = "failed: " + e.getClass().getName() + "\n";
+            out.failed.add(name + ": " + e.getClass().getName());
         }
         addText(out, name, text);
     }
 
-    private static String readme(Context context, List<String> names) {
+    private static String readme(Context context, List<String> names, List<String> failed) {
         final boolean verbose = NanogramLog.verboseRecently();
         return "Nanogram report " + appLabel(context) + "\ncreated " + formatTime(System.currentTimeMillis()) + "\n"
                 + NanogramSystemInfo.summaryLine() + "\n\n"
@@ -352,7 +362,7 @@ public final class NanogramDiagnostics {
                 + "  profiles/          system traces recorded on request or by ANR/cold-start triggers (Android 15+); they can show thread and function names\n"
                 + "  logs/              Nanogram log files from the last " + (verbose ? VERBOSE_DAYS : QUIET_DAYS) + " days (" + (verbose ? "verbose" : "errors, warnings and key events") + ")\n"
                 + "  voip/              call logs from the last " + QUIET_DAYS + " days\n\n"
-                + "Parts that are missing or empty in this report\n" + missingParts(names) + "\n"
+                + "Parts that are missing or empty in this report\n" + missingParts(names, failed) + "\n"
                 + (verbose
                 ? "WARNING: verbose logs were on, so logs/ can contain message text, phone numbers, chat ids and tokens written by the app. Send this zip only to the developer, not to a shared chat.\n"
                 + "Not collected by the diagnostics themselves: contacts, databases, media, heap dumps.\n"
