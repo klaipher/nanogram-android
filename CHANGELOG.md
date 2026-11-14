@@ -5,6 +5,7 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- **Build fix pin**: twidget 58053871 restores litehtml's style::add_length_property (lost in the Apple-layer merge; the Android link failed); nanogram-deps e7783ff2.
 - **Build fix pins**: quickjs 1bc6f4dc (forward declaration of js_set_uncatchable_pending; clang stopped on it), widget-sandbox e358184b, nanogram-deps 64a5d41e.
 - **Build fix: FFmpeg include path after the system headers**: the FFmpeg submodule root has a `VERSION` file, and on a case-insensitive disk `-I third_party/ffmpeg` made libc++'s `#include <version>` open it (tgcalls `CryptoHelper.cpp` failed). The native library and tgcalls now get `-idirafter <jni>/third_party/ffmpeg` instead of `-I`.
 - **Build fixes from the first combined build (2026-11-14)**: SQLite builds without the SQLCipher codec (SQLCipher 4.20 uses OpenSSL 3's EVP_MAC, which BoringSSL lacks; Android never sets a key, so the files were and stay plain SQLite; no BoringSSL link for sqlite any more); `StarsOptionsSheet.show()` had two definitions after the Play purchase policy (the policy check now opens the original method); `NanogramFeaturesActivity` implements `onLongClick`; on-device transcription passes the duration as whole seconds.
