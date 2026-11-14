@@ -5,6 +5,13 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### OpenH264: klaipher/openh264 nanogram (3583f617), the single source for iOS, macOS and Android (W2.I3)
+- `TMessagesProj/jni/third_party/openh264` moves from cisco/openh264 v2.7.0 (1bca6231) to klaipher/openh264 branch `nanogram`
+  at 3583f617 (`.gitmodules` url and branch): v2.7.0 plus the two commits iOS already ships, H.264 levels 6.0-6.2 and the
+  subcodec sprite mode (`bSubcodecMode`, default off, so normal video calls encode exactly as before).
+- No script change: `build_openh264.sh` still builds the tree with its Makefile. The submodule commit is part of the
+  `ng prebuild` key, so `jni/prebuild/lib/*/libopenh264.a` is rebuilt (build step for the main session).
+
 ### libyuv: klaipher/libyuv nanogram (947f5326), the single source for iOS, macOS and Android (W1/W2)
 - `TMessagesProj/jni/third_party/libyuv` moves from chromium.googlesource.com 28ce69c2 to klaipher/libyuv branch `nanogram`
   at 947f5326 (`.gitmodules` url and branch). The fork is upstream 0b8dd231 (version 1977, the version iOS ships) minus
