@@ -5,6 +5,27 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### tgcalls: klaipher/tgcalls branch nanogram-shared at 2a5daa0f, the one call engine for iOS, macOS and Android (W4.4)
+- `TMessagesProj/jni/tgcalls` moves from branch `nanogram-android` (545f5ae) to `nanogram-shared` at 2a5daa0f
+  (`.gitmodules` branch). The shared head is the merge of 545f5ae into the iOS/macOS line, so every Android engine
+  commit is in it; Android gains the 63 Nanogram engine commits that iOS/macOS carry (LogSinkImpl, MediaManager, group
+  audio, V2 negotiation changes).
+- `voip/CMakeLists.txt` needs no source-list change: `tools/check_android_cmake.sh` (fork) against it lists only
+  `v2/ContentNegotiationTest.cpp`, `v2/MtProtoDtlsTransportTest.cpp` and `v2/SignalingSctpOptionsTest.cpp`, the three host
+  tests that stay out. The four `platform/android/*.cpp` files exist at the same paths. The fork adds no new `#include`
+  outside what the old tree already included (checked by diffing the include sets 545f5ae..2a5daa0).
+- C++ standard stays `-std=c++17`: the shared code uses no C++20 library or language feature (grep over `tgcalls/`
+  except platform/darwin), WebRTC's own style guide is C++17, and abseil is configured at C++17, so a switch would
+  also have to move abseil (ODR of `absl::` ordering types). Revisit only if `ng check` reports a C++20 construct.
+- Interface changes that reach `org_telegram_messenger_voip_Instance.cpp` are source compatible, so the file is
+  unchanged: `EncryptionKey::value` is now `shared_ptr<const array>` (the JNI code builds a non-const array and moves it
+  in), `Descriptor` keeps `audioLevelsUpdated(float,float)` that Android sets, and the new `audioLevelUpdated`,
+  `onPlayoutFrame` and `supportsHardwareVideoDecoding` hooks default to off.
+- Build steps (main session): regenerate `voip/ReferenceCoreEmbedded.cpp` with the fork script
+  (`tgcalls/tools/build_wasm_core.sh <wasi-sdk> <out>`, wasi-sdk installed by prebuild); the wasm sha256 must equal the
+  iOS genrule output; commit the regenerated file. A stale blob against the new host code breaks v18/v19 calls.
+  Then `Tools/dev/ng check` and the emulator calls (1:1 to iOS and Mac, a group call, a livestream).
+
 ### twidget and widget-sandbox: klaipher forks on branch nanogram (a4f5391c, 1b21a48e), shared with iOS and macOS (W3.6)
 - `TMessagesProj/jni/twidget/twidget` moves from 4769d72 to klaipher/twidget `nanogram` at a4f5391c and
   `TMessagesProj/jni/twidget/widget-sandbox` from c498cef to klaipher/widget-sandbox `nanogram` at 1b21a48e
