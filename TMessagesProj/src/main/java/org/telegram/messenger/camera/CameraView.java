@@ -69,6 +69,7 @@ import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -125,6 +126,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private Drawable thumbDrawable;
 
     private final boolean useCamera2 = NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE);
+    private final long[] cameraOpenStartNanos = new long[2];
     private final CameraSessionWrapper[] cameraSession = new CameraSessionWrapper[2];
     private CameraSessionWrapper cameraSessionRecording;
 
@@ -2245,6 +2247,8 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     }
 
     private void onFirstFrameRendered(int i) {
+        NanogramPerfStats.recordSince(NanogramPerfStats.CAMERA_FIRST_FRAME, cameraOpenStartNanos[i]);
+        cameraOpenStartNanos[i] = 0;
         if (i == 0) {
             flipping = false;
             if (blurredStubView.getVisibility() == View.VISIBLE) {
@@ -2291,6 +2295,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 FileLog.d("CameraView " + "create camera"+(useCamera2 && !optimizeForBarcode ? "2" : "")+" session " + i);
             }
 
+            cameraOpenStartNanos[i] = System.nanoTime();
             final Camera2Session camera2 = useCamera2 && !optimizeForBarcode ? Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight) : null;
             if (useCamera2 && !optimizeForBarcode) {
                 NanogramExperiments.count(camera2 != null ? "camera2Opened" : "camera2Unavailable");

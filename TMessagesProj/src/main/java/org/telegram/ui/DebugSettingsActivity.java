@@ -25,13 +25,11 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatThemeController;
-import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.NanogramPerfExperiments;
+import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
-import org.telegram.messenger.NanogramDbTuning;
-import org.telegram.messenger.NanogramGifDecodeFlags;
-import org.telegram.messenger.NanogramImageFlags;
 import org.telegram.messenger.NanogramUpdater;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -112,12 +110,7 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_FORGET_HINTS = 45;
     private static final int ID_COMPACT_MODE = 46;
     private static final int ID_NANOGRAM_DIAGNOSTICS = 90;
-    private static final int ID_NANOGRAM_GPU_PREUPLOAD = 91;
-    private static final int ID_NANOGRAM_DB_TUNING = 92;
-    private static final int ID_NANOGRAM_GIF_LOOP_FILTER = 93;
-    private static final int ID_EXP_ADAPTIVE_REFRESH = 120;
-    private static final int ID_EXP_TELECOM = 121;
-    private static final int ID_EXP_CAMERA2 = 122;
+    private static final int ID_PERF_EXPERIMENT_BASE = 130;
 
     @Override
     protected boolean useSimpleActionBar() {
@@ -176,6 +169,8 @@ public class DebugSettingsActivity extends UniversalFragment {
         }
         items.add(UItem.asShadow(null));
 
+        fillPerformanceExperiments(items);
+
         items.add(UItem.asHeader("App"));
         items.add(UItem.asButton(ID_NANOGRAM_DIAGNOSTICS, getString(R.string.NanogramDiagnosticsTitle)));
         if (!BuildVars.DEBUG_VERSION) {
@@ -193,9 +188,6 @@ public class DebugSettingsActivity extends UniversalFragment {
         if (BuildVars.DEBUG_PRIVATE_VERSION) {
             items.add(UItem.asCheck(ID_FLOATING_DEBUG, getString(R.string.FloatingDebugEnable)).setChecked(SharedConfig.isFloatingDebugActive));
         }
-        items.add(UItem.asCheck(ID_NANOGRAM_GPU_PREUPLOAD, "Upload decoded images to the GPU early").setChecked(NanogramImageFlags.isGpuPreuploadEnabled()));
-        items.add(UItem.asCheck(ID_NANOGRAM_DB_TUNING, "Database tuning: cache, mmap, statements (restart)").setChecked(NanogramDbTuning.isEnabled()));
-        items.add(UItem.asCheck(ID_NANOGRAM_GIF_LOOP_FILTER, "Lighter decoding for GIFs up to 320 px").setChecked(NanogramGifDecodeFlags.isEnabled()));
         items.add(UItem.asCheck(ID_EXPERIMENTAL, "Experimental settings").setChecked(SharedSettings.experimentalSettingsAllowed.get()));
         if (BuildVars.DEBUG_VERSION) {
             items.add(UItem.asCheck(ID_NANOGRAM_UPDATER, "GitHub update check in debug build").setChecked(NanogramUpdater.getInstance().isDebugToggleOn()));
@@ -223,13 +215,10 @@ public class DebugSettingsActivity extends UniversalFragment {
             items.add(UItem.asCheck(ID_WIDGET_STATIC_LAYERS, "Widget static layers").setChecked(SharedConfig.widgetStaticLayers));
         }
         items.add(UItem.asCheck(ID_COMPACT_MODE, getString(R.string.CompactMode)).setChecked(SharedConfig.compactMode));
-        items.add(UItem.asCheck(ID_EXP_ADAPTIVE_REFRESH, "Nanogram: adaptive refresh rate hints (Android 15+)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE)));
-        items.add(UItem.asCheck(ID_EXP_TELECOM, "Nanogram: system call integration (Telecom)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.SELF_MANAGED_TELECOM)));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("Camera and media"));
         items.add(UItem.asCheck(ID_INAPP_CAMERA, getString(R.string.DebugMenuEnableCamera)).setChecked(SharedConfig.inappCamera));
-        items.add(UItem.asCheck(ID_EXP_CAMERA2, "Nanogram: Camera2 for stories and chat camera (CameraView)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE)));
         items.add(UItem.asCheck(ID_CAMERA2, "Use Camera 2 API (round video only)").setChecked(SharedConfig.isUsingCamera2(currentAccount)));
         items.add(UItem.asCheck(ID_DUAL_CAMERA, getString(R.string.DebugMenuDualOn)).setChecked(DualCameraView.dualAvailableStatic(getContext())));
         if (BuildVars.DEBUG_PRIVATE_VERSION && !InstantCameraView.allowBigSizeCameraDebug()) {
@@ -256,6 +245,21 @@ public class DebugSettingsActivity extends UniversalFragment {
         items.add(UItem.asCheck(ID_WEBVIEW_DEBUG, getString(R.string.DebugMenuEnableWebViewDebug)).setChecked(SharedConfig.debugWebView));
         items.add(UItem.asCheck(ID_BROWSER_COLORS, "Adaptive browser colors").setChecked(SharedConfig.adaptableColorInBrowser));
         items.add(UItem.asCheck(ID_INVOICE_PAYMENT, "Invoice Payment").setChecked(SharedConfig.payByInvoice));
+        items.add(UItem.asShadow(null));
+    }
+
+    private void fillPerformanceExperiments(ArrayList<UItem> items) {
+        items.add(UItem.asHeader("Performance experiments"));
+        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nAll switches start off. Change one at a time, as the test guide says. Numbers are since the app started; reopen this screen to refresh. Send them with Nanogram diagnostics."));
+        final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();
+        for (NanogramPerfExperiments.Experiment experiment : NanogramPerfExperiments.Experiment.values()) {
+            if (!experiment.isSupported(Build.VERSION.SDK_INT)) {
+                items.add(UItem.asShadow(experiment.title + ": not available on this phone (needs Android API " + experiment.minSdk + ")."));
+                continue;
+            }
+            items.add(UItem.asCheck(ID_PERF_EXPERIMENT_BASE + experiment.ordinal(), experiment.title).setChecked(NanogramPerfExperiments.isEnabled(experiment)));
+            items.add(UItem.asShadow(experiment.description + " " + experiment.applyHint + "\n" + NanogramPerfExperiments.statsText(experiment, snapshot)));
+        }
         items.add(UItem.asShadow(null));
     }
 
@@ -417,15 +421,6 @@ public class DebugSettingsActivity extends UniversalFragment {
             case ID_CAMERA2:
                 SharedConfig.toggleUseCamera2(currentAccount);
                 break;
-            case ID_EXP_ADAPTIVE_REFRESH:
-                NanogramExperiments.toggle(NanogramExperiments.ADAPTIVE_REFRESH_RATE);
-                break;
-            case ID_EXP_TELECOM:
-                NanogramExperiments.toggle(NanogramExperiments.SELF_MANAGED_TELECOM);
-                break;
-            case ID_EXP_CAMERA2:
-                NanogramExperiments.toggle(NanogramExperiments.CAMERA2_CAPTURE);
-                break;
             case ID_CLEAR_MINIAPPS:
                 BotBiometry.clear();
                 BotLocation.clear();
@@ -473,15 +468,6 @@ public class DebugSettingsActivity extends UniversalFragment {
             case ID_EXPERIMENTAL:
                 SharedSettings.experimentalSettingsAllowed.toggle();
                 break;
-            case ID_NANOGRAM_GPU_PREUPLOAD:
-                NanogramImageFlags.setGpuPreuploadEnabled(!NanogramImageFlags.isGpuPreuploadEnabled());
-                break;
-            case ID_NANOGRAM_DB_TUNING:
-                NanogramDbTuning.setEnabled(!NanogramDbTuning.isEnabled());
-                break;
-            case ID_NANOGRAM_GIF_LOOP_FILTER:
-                NanogramGifDecodeFlags.setEnabled(!NanogramGifDecodeFlags.isEnabled());
-                break;
             case ID_NANOGRAM_UPDATER:
                 NanogramUpdater.getInstance().setDebugToggle(!NanogramUpdater.getInstance().isDebugToggleOn());
                 break;
@@ -497,6 +483,11 @@ public class DebugSettingsActivity extends UniversalFragment {
                 SharedConfig.toggleWidgetStaticLayers();
                 break;
             default:
+                if (item.id >= ID_PERF_EXPERIMENT_BASE && item.id < ID_PERF_EXPERIMENT_BASE + NanogramPerfExperiments.Experiment.values().length) {
+                    NanogramPerfExperiments.Experiment experiment = NanogramPerfExperiments.Experiment.values()[item.id - ID_PERF_EXPERIMENT_BASE];
+                    NanogramPerfExperiments.setEnabled(experiment, !NanogramPerfExperiments.isEnabled(experiment));
+                    break;
+                }
                 return;
         }
         if (item.viewType == UniversalAdapter.VIEW_TYPE_CHECK) {

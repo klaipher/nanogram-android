@@ -21,6 +21,7 @@ import androidx.annotation.RequiresApi;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramPerfStats;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -87,7 +88,10 @@ final class NanogramTelecomCall {
         this.video = video;
     }
 
+    private long registerStartNanos;
+
     void start(Context context, String displayName) {
+        registerStartNanos = System.nanoTime();
         try {
             TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
             PhoneAccountHandle handle = new PhoneAccountHandle(new ComponentName(context, TelegramConnectionService.class), ACCOUNT_ID);
@@ -106,6 +110,7 @@ final class NanogramTelecomCall {
             tm.addCall(attributes, Runnable::run, new OutcomeReceiver<CallControl, CallException>() {
                 @Override
                 public void onResult(CallControl result) {
+                    NanogramPerfStats.recordSince(NanogramPerfStats.TELECOM_REGISTER, registerStartNanos);
                     onControl(result);
                 }
 

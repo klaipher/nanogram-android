@@ -8,6 +8,7 @@ import android.os.Process;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramPerfExperiments;
 import org.telegram.ui.Components.ForegroundDetector;
 
 import java.io.BufferedReader;
@@ -267,6 +268,7 @@ public final class NanogramDiagnostics {
         try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(zip))) {
             addText(out, "README.txt", readme(context));
             addSafely(out, "device-info.txt", () -> NanogramSystemInfo.build(context));
+            addSafely(out, "performance-experiments.txt", NanogramPerfExperiments::currentReport);
             addSafely(out, "exit-history.txt", () -> NanogramExitInfo.describeAll(context));
             addCrashes(context, out);
             addTraces(context, out);
@@ -299,6 +301,7 @@ public final class NanogramDiagnostics {
                 + NanogramSystemInfo.summaryLine() + "\n\n"
                 + "Files\n"
                 + "  device-info.txt    device, Android version, power and network state, permissions, notification channel states, memory\n"
+                + "  performance-experiments.txt  switch states and durations of the performance experiments since the app started (no content)\n"
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"

@@ -142,6 +142,7 @@ import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.utils.pip.PipCoordinator;
+import org.telegram.messenger.NanogramFrameStats;
 import org.telegram.messenger.utils.FrameMetricsOverlayView;
 import org.telegram.messenger.utils.LeakDetector;
 import org.telegram.messenger.utils.WindowVisibilityManager;
@@ -399,6 +400,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private FrameMetricsOverlayView frameMetricsOverlayView;
+    private android.view.Window.OnFrameMetricsAvailableListener nanogramFrameStats;
     // private RefreshRateController refreshRateController;
 
     @Override
@@ -855,6 +857,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         //    refreshRateController = new RefreshRateController(this);
         //}
         checkFrameMetrics();
+        nanogramFrameStats = NanogramFrameStats.attach(this);
     }
 
     public void checkFrameMetrics() {
@@ -7152,6 +7155,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && frameMetricsOverlayView != null) {
             frameMetricsOverlayView.detach();
         }
+        NanogramFrameStats.detach(this, nanogramFrameStats);
     }
 
     private static void onDestroyStaticResources() {

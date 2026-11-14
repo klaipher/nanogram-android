@@ -6,6 +6,7 @@ import android.os.Trace;
 
 import org.telegram.messenger.AnimatedFileDrawableStream;
 import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.NanogramPerfStats;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -71,7 +72,10 @@ public class AnimatedFileNative {
 
     public int getVideoFrame(Bitmap bitmap, boolean preview, float startTimeSeconds, float endTimeSeconds, boolean loop) {
         checkNotDestroyed();
-        return getVideoFrame(mNativePtr, bitmap, mMetaData, preview, startTimeSeconds, endTimeSeconds, loop);
+        final long start = bitmap != null && !preview ? System.nanoTime() : 0;
+        final int result = getVideoFrame(mNativePtr, bitmap, mMetaData, preview, startTimeSeconds, endTimeSeconds, loop);
+        NanogramPerfStats.recordSince(NanogramPerfStats.GIF_FRAME_DECODE, start);
+        return result;
     }
 
     public void seekToMs(long ms, boolean precise) {

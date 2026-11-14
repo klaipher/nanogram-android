@@ -42,7 +42,9 @@ public class NanogramImageFlags {
         try {
             boolean hardware = bitmap.getConfig() == Bitmap.Config.HARDWARE;
             if (shouldPreupload(true, hasReceivers, bitmap.isRecycled(), hardware, bitmap.getAllocationByteCount())) {
+                long start = System.nanoTime();
                 bitmap.prepareToDraw();
+                NanogramPerfStats.recordSince(NanogramPerfStats.IMAGE_UPLOAD, start);
             }
         } catch (Throwable e) {
             FileLog.e(e, false);

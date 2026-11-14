@@ -103,6 +103,7 @@ import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
@@ -4971,6 +4972,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (USE_CONNECTION_SERVICE && state == STATE_ESTABLISHED /*&& !wasEstablished*/ && systemCallConnection != null) {
 			systemCallConnection.setActive();
 		}
+		nanogramRecordCallSetup(state);
 		nanogramTelecomStateChanged(state);
 		for (int a = 0; a < stateListeners.size(); a++) {
 			StateListener l = stateListeners.get(a);
@@ -4979,6 +4981,19 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	private Object nanogramTelecom;
+	private long nanogramSetupStartNanos;
+
+	private void nanogramRecordCallSetup(int state) {
+		if (groupCall != null) {
+			return;
+		}
+		if (state == STATE_EXCHANGING_KEYS && nanogramSetupStartNanos == 0) {
+			nanogramSetupStartNanos = System.nanoTime();
+		} else if (state == STATE_ESTABLISHED && nanogramSetupStartNanos > 0) {
+			NanogramPerfStats.recordSince(NanogramPerfStats.CALL_SETUP, nanogramSetupStartNanos);
+			nanogramSetupStartNanos = -1;
+		}
+	}
 
 	private void nanogramTelecomStateChanged(int state) {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
