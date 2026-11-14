@@ -5,6 +5,8 @@ Everything goes through `Tools/dev/ng`. First time on a Mac:
 ```sh
 brew install openjdk@21 ccache rustup meson nasm pkg-config
 brew install --cask android-commandlinetools
+rustup toolchain install 1.99.1 --profile minimal
+rustup target add --toolchain 1.99.1 aarch64-linux-android
 Tools/dev/ng setup       # pinned SDK/NDK/CMake, local.properties, hooks, shallow submodules
 Tools/dev/ng prebuild    # native static libraries into ~/.cache/nanogram-android/prebuild/<key>
 Tools/dev/ng build       # arm64 debug APK into build-output/<build>/
@@ -19,7 +21,7 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 
 | Technique | Where | Effect |
 |---|---|---|
-| Pinned, current toolchain | `Tools/dev/toolchain.properties` (read by ng and Gradle) | JDK 21, Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, build-tools 37 |
+| Pinned, current toolchain | `Tools/dev/toolchain.properties` (read by ng and Gradle) | JDK 21, Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, build-tools 37, Rust 1.99.1 |
 | arm64-v8a only | root `build.gradle` `nanogramAbiFilters` | one native build instead of four; `-PnanogramAbis=all` for all ABIs |
 | ccache for every native compile | `jni/CMakeLists.txt` `NANOGRAM_CCACHE`, cap 8 GB | clean native rebuilds become cache hits; shared across worktrees (`CCACHE_BASEDIR`) |
 | Debug native without LTO | `jni/CMakeLists.txt` | fast links in debug; release keeps upstream's full LTO |
