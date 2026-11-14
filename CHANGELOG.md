@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+## 13.2.2 (202611142111) — 2026-11-14 — second Android release (source 1639f1c; 218 commits since 202611141530 / 708358a)
+
 - **Shared pins**: twidget 4913fd0e (a SwiftPM-only folder for the Mac; no Android change) and nanogram-deps 484b22e9, so all three apps pin the same commits.
 
 - **Send Report masks phone numbers and e-mails** (owner, 2026-11-14), as on iOS and macOS: text logs (`.txt`, `.log`) in the diagnostics zip have `+` phone numbers replaced by `[phone]` and e-mail addresses by `[email]` (`NanogramReportMasking`, same patterns as iOS; tests `NanogramReportMaskingTest`). Traces, JSON and crash records are copied unchanged.
