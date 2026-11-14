@@ -265,8 +265,15 @@ def prebuild_abis(arg: str | None) -> list[str]:
 def prebuild_key(abis: list[str]) -> str:
     h = hashlib.sha256()
     for rel in PREBUILD_INPUTS:
-        out = subprocess.run(["git", "ls-tree", "HEAD", rel], cwd=ROOT, capture_output=True, text=True).stdout
-        h.update(out.encode())
+        path = ROOT / rel
+        if (path / ".git").exists():
+            # The checked-out submodule commit plus local edits, so uncommitted pin moves rebuild too.
+            head = subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+            diff = subprocess.run(["git", "-C", str(path), "diff", "HEAD"], capture_output=True, text=True).stdout
+            h.update(f"{rel}={head}".encode() + hashlib.sha256(diff.encode()).digest())
+        else:
+            out = subprocess.run(["git", "ls-tree", "HEAD", rel], cwd=ROOT, capture_output=True, text=True).stdout
+            h.update(out.encode())
     # Uncommitted script edits count too.
     for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
         if p.is_file():

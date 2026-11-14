@@ -51,8 +51,11 @@ for abi in $ABIS; do
     echo "==> Building BoringSSL for $abi"
     "$CMAKE_BIN" --build "$abi_build_dir" --target crypto ssl --parallel "$JOBS"
 
+    # Older BoringSSL writes crypto/libcrypto.a and ssl/libssl.a; current releases write both at the build root.
     crypto_lib="$abi_build_dir/crypto/libcrypto.a"
+    [[ -f "$crypto_lib" ]] || crypto_lib="$abi_build_dir/libcrypto.a"
     ssl_lib="$abi_build_dir/ssl/libssl.a"
+    [[ -f "$ssl_lib" ]] || ssl_lib="$abi_build_dir/libssl.a"
 
     [[ -f "$crypto_lib" ]] || { echo "ERROR: libcrypto.a was not produced for $abi" >&2; exit 1; }
     [[ -f "$ssl_lib" ]] || { echo "ERROR: libssl.a was not produced for $abi" >&2; exit 1; }
