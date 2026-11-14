@@ -4143,16 +4143,15 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			intent.putExtra("currentAccount", currentAccount);
 		}
 		Notification.Builder builder = new Notification.Builder(this)
-				.setContentText(name)
 				.setContentIntent(PendingIntent.getActivity(this, 50, intent, PendingIntent.FLAG_MUTABLE));
 		if (isConference()) {
-			builder.setContentTitle(LocaleController.getString(R.string.VoipConference));
+			builder.setContentText(LocaleController.getString(R.string.VoipConference));
 			builder.setSmallIcon(isMicMute() ? R.drawable.voicechat_muted : R.drawable.voicechat_active);
 		} else if (groupCall != null) {
-			builder.setContentTitle(ChatObject.isChannelOrGiga(chat) ? LocaleController.getString(R.string.VoipLiveStream) : LocaleController.getString(R.string.VoipVoiceChat));
+			builder.setContentText(ChatObject.isChannelOrGiga(chat) ? LocaleController.getString(R.string.VoipLiveStream) : LocaleController.getString(R.string.VoipVoiceChat));
 			builder.setSmallIcon(isMicMute() ? R.drawable.voicechat_muted : R.drawable.voicechat_active);
 		} else {
-			builder.setContentTitle(LocaleController.getString(R.string.VoipOutgoingCall));
+			builder.setContentText(LocaleController.getString(R.string.VoipOutgoingCall));
 			builder.setSmallIcon(R.drawable.call);
             builder.setOngoing(true);
 		}

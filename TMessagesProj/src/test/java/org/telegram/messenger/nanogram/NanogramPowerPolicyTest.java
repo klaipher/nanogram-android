@@ -105,4 +105,9 @@ public class NanogramPowerPolicyTest {
         assertTrue(f.update(0.95f, false, 10_000));
         assertFalse(f.update(0.95f, false, 30_000));
     }
+
+    @Test
+    public void pollIntervalKeepsSystemSamplerWarm() {
+        assertTrue(NanogramPowerPolicy.ThermalForecast.POLL_INTERVAL_MS < 10_000L);
+    }
 }

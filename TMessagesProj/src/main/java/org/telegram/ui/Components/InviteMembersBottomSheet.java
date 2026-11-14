@@ -179,9 +179,9 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
                     if (link == null) {
                         return;
                     }
-                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                    android.content.ClipData clip = android.content.ClipData.newPlainText("label", link);
-                    clipboard.setPrimaryClip(clip);
+                    if (!org.telegram.messenger.nanogram.NanogramClipboard.copyLink(link)) {
+                        return;
+                    }
                     dismiss();
                     BulletinFactory.createCopyLinkBulletin(parentFragment).show();
 
@@ -1291,9 +1291,9 @@ public class InviteMembersBottomSheet extends UsersAlertBase implements Notifica
                 if (invite.link == null) {
                     return;
                 }
-                android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
-                clipboard.setPrimaryClip(clip);
+                if (!org.telegram.messenger.nanogram.NanogramClipboard.copyLink(invite.link)) {
+                    return;
+                }
                 BulletinFactory.createCopyLinkBulletin(parentFragment).show();
                 dismiss();
 

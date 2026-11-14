@@ -55,8 +55,8 @@ public final class NanogramPowerPolicy {
         public static final float ENTER = 0.9f;
         public static final float LEAVE = 0.7f;
         public static final long MIN_HOLD_MS = 30_000L;
-        /** The system allows about one headroom query per 10 seconds. */
-        public static final long POLL_INTERVAL_MS = 11_000L;
+        /** The system keeps sampling only while queried at least every 10 s; slower polling always reads a one-sample buffer with no forecast. */
+        public static final long POLL_INTERVAL_MS = 5_000L;
 
         private boolean hot;
         private long hotSince;

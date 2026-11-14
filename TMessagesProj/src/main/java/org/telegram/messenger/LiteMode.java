@@ -158,7 +158,7 @@ public class LiteMode {
     // Heavy work (a call) lets the forecast lower the presets before the system reports severe heat.
     public static void setHeavyWorkActive(boolean active) {
         heavyWorkActive = active;
-        if (active) {
+        if (active && followSystemPowerSaver) {
             scheduleThermalPoll();
         }
     }
@@ -177,7 +177,7 @@ public class LiteMode {
         final boolean active = heavyWorkActive;
         float headroom = Float.NaN;
         try {
-            if (active) {
+            if (active && followSystemPowerSaver) {
                 headroom = systemPowerManager.getThermalHeadroom(10);
             }
         } catch (Throwable e) {
@@ -192,7 +192,7 @@ public class LiteMode {
             thermalForecastHot = hot;
             onSystemPowerSignalChanged();
         }
-        if (active || hot) {
+        if ((active || hot) && followSystemPowerSaver) {
             scheduleThermalPoll();
         }
     }
@@ -482,6 +482,9 @@ public class LiteMode {
 
     public static void setFollowSystemPowerSaver(boolean follow) {
         followSystemPowerSaver = follow;
+        if (follow && heavyWorkActive) {
+            scheduleThermalPoll();
+        }
         MessagesController.getGlobalMainSettings().edit().putBoolean("lite_mode_follow_system", follow).apply();
         getValue(false);
     }
