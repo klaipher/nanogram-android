@@ -98,7 +98,8 @@ export CFLAGS CXXFLAGS
 
 # Compiler launcher (ccache) for the non-CMake builds. configure keeps seeing the bare NDK compiler, so config.h,
 # FFMPEG_CONFIGURATION and vpx_config stay byte-identical; only make/meson compile steps go through the launcher.
-# ng exports NANOGRAM_CCACHE together with CCACHE_DIR/CCACHE_BASEDIR/CCACHE_NOHASHDIR/CCACHE_SLOPPINESS.
+# ng exports NANOGRAM_CCACHE together with CCACHE_DIR/CCACHE_NOHASHDIR/CCACHE_SLOPPINESS and no CCACHE_BASEDIR (a
+# basedir rewrites absolute paths and would change __FILE__ in the objects).
 CCACHE_LAUNCHER="${NANOGRAM_CCACHE:-}"
 
 # Pass these explicitly to CMake projects. Some projects/cache setups do not

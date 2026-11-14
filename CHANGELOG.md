@@ -7,10 +7,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ### Build-system modernization (prebuild caching, Rust pin, ThinLTO cache)
 - ccache now also fronts FFmpeg, libvpx (make-time `CC=`/`CXX=` override, so configure output, config.h and vpx_config
-  stay identical) and dav1d (meson cross-file `c = ['ccache', clang]`); openh264 unchanged.
+  stay identical; the prebuild runs without CCACHE_BASEDIR so object bytes match a no-ccache build too) and dav1d (meson cross-file `c = ['ccache', clang]`); openh264 unchanged.
 - Rust: `rust=1.99.1` in toolchain.properties drives tlottie (was floating `stable`) and wallet-engine (was 1.96.1) via
-  RUSTUP_TOOLCHAIN; gram-wallet/rust-toolchain.toml bumped; wallet cargo target dir persists in
-  `<cache>/prebuild-work`; dev-profile debuginfo off for bindgen; `ng setup` installs the toolchain and Android targets.
+  RUSTUP_TOOLCHAIN; (rust-toolchain.toml left as upstream; RUSTUP_TOOLCHAIN overrides it); wallet cargo target dir persists in
+  `<cache>/prebuild-work/<worktree hash>`; dev-profile debuginfo off for bindgen; `ng setup` installs the toolchain and Android targets.
+- `ng prebuild` installs the pinned Rust and Android targets before the C phase; an empty `NANOGRAM_CCACHE` disables ccache.
 - Prebuild cache key now includes cmake/ninja/meson/(nasm)/rustc/cargo versions, recorded in COMPLETE.
 - Prebuild scripts default NDK/API to toolchain.properties instead of r27/API 21 (ng still passes both).
 - Release ThinLTO cache moved to `<cache>/thinlto` (`NANOGRAM_THINLTO_CACHE_DIR`), shared across .cxx trees.
