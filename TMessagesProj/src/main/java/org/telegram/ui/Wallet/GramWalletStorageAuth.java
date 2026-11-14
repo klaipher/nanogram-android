@@ -1,15 +1,16 @@
 package org.telegram.ui.Wallet;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.CancellationSignal;
-import android.os.Handler;
-import android.os.Looper;
-import android.hardware.fingerprint.FingerprintManager;
+
+import androidx.annotation.NonNull;
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.core.content.ContextCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
@@ -20,7 +21,7 @@ import org.telegram.ui.LaunchActivity;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-/** Owns platform callbacks directly; never replaces AndroidX Biometric's activity-wide callback. */
+/** On P+ owns platform callbacks directly; never replaces AndroidX Biometric's activity-wide callback. */
 public final class GramWalletStorageAuth {
     // Reserved wallet result range. Distinct codes prevent a late result from a timed-out
     // credential screen from completing a subsequent request on the same activity.
@@ -39,7 +40,7 @@ public final class GramWalletStorageAuth {
                 if (!isCurrent.get()) { request.finish("STORAGE_CANCELED"); return; }
                 active = request;
                 LaunchActivity activity = LaunchActivity.instance;
-                if (Build.VERSION.SDK_INT < 23 || activity == null || activity.isFinishing()
+                if (Build.VERSION.SDK_INT < 24 || activity == null || activity.isFinishing()
                         || activity.isDestroyed() || activity.getSupportFragmentManager().isStateSaved()) {
                     request.finish("AUTH_UNAVAILABLE");
                     return;
@@ -105,7 +106,7 @@ public final class GramWalletStorageAuth {
         boolean credentialStarted;
         int credentialCode;
         CancellationSignal cancellation;
-        AlertDialog fingerprintDialog;
+        BiometricPrompt legacyPrompt;
 
         void finish(String error) {
             if (latch.getCount() == 0) return;
@@ -116,61 +117,57 @@ public final class GramWalletStorageAuth {
         void start(boolean credentialOnly) {
             try {
                 if (credentialOnly) credentials();
-                else if (Build.VERSION.SDK_INT >= 30) modernBiometrics();
-                else fingerprints();
+                else if (Build.VERSION.SDK_INT >= 28) platformBiometrics();
+                else androidxBiometrics();
             } catch (Exception e) { FileLog.e(e); credentials(); }
         }
 
-        @androidx.annotation.RequiresApi(30)
-        private void modernBiometrics() {
+        // Framework prompt on P+: its own callback, so it never shares AndroidX's activity-wide ViewModel with
+        // BotBiometry/PasscodeView. R+ offers device credential inside the prompt; P-Q get a "use device PIN" button.
+        @androidx.annotation.RequiresApi(28)
+        private void platformBiometrics() {
             cancellation = new CancellationSignal();
-            new android.hardware.biometrics.BiometricPrompt.Builder(activity)
-                    .setTitle(LocaleController.getString(R.string.WalletUnlock))
-                    .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
-                            | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
-                    .build().authenticate(cancellation, activity.getMainExecutor(),
-                            new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
-                                @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult result) { finish(null); }
-                                @Override public void onAuthenticationError(int code, CharSequence message) {
-                                    if (!waiting() || credentialStarted) return;
-                                    if (code == android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED
-                                            || code == android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_CANCELED) finish("AUTH_CANCELED");
-                                    else credentials();
-                                }
-                            });
+            android.hardware.biometrics.BiometricPrompt.Builder builder = new android.hardware.biometrics.BiometricPrompt.Builder(activity)
+                    .setTitle(LocaleController.getString(R.string.WalletUnlock));
+            if (Build.VERSION.SDK_INT >= 30) {
+                builder.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
+                        | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
+            } else {
+                builder.setNegativeButton(LocaleController.getString(R.string.WalletUseDevicePasscode), activity.getMainExecutor(), (dialog, which) -> credentials());
+            }
+            builder.build().authenticate(cancellation, activity.getMainExecutor(),
+                    new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                        @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult result) { finish(null); }
+                        @Override public void onAuthenticationError(int code, CharSequence message) {
+                            if (!waiting() || credentialStarted) return;
+                            if (code == android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED
+                                    || code == android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_CANCELED) finish("AUTH_CANCELED");
+                            else credentials();
+                        }
+                    });
         }
 
-        // On M-Q, own the FingerprintManager callback rather than sharing AndroidX 1.1.0's
-        // activity ViewModel with BotBiometry. No Cipher crosses the framework/OEM boundary.
-        @SuppressWarnings("deprecation")
-        private void fingerprints() {
-            FingerprintManager manager = (FingerprintManager) activity.getSystemService("fingerprint");
-            if (manager == null || !manager.isHardwareDetected() || !manager.hasEnrolledFingerprints()) {
+        // Android 7.x-8.x: AndroidX BiometricPrompt (fingerprint dialog) with a "use device PIN" button.
+        private void androidxBiometrics() {
+            if (BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
                 credentials();
                 return;
             }
-            cancellation = new CancellationSignal();
-            fingerprintDialog = new AlertDialog.Builder(activity)
-                    .setTitle(LocaleController.getString(R.string.WalletUnlock))
-                    .setMessage(LocaleController.getString(R.string.WalletTouchFingerprint))
-                    .setNegativeButton(LocaleController.getString(R.string.Cancel), (dialog, which) -> finish("AUTH_CANCELED"))
-                    .setPositiveButton(LocaleController.getString(R.string.WalletUseDevicePasscode), (dialog, which) -> credentials())
-                    .setOnCancelListener(dialog -> finish("AUTH_CANCELED"))
-                    .show();
-            manager.authenticate(null, cancellation, 0, new FingerprintManager.AuthenticationCallback() {
-                @Override public void onAuthenticationSucceeded(FingerprintManager.AuthenticationResult result) { if (!credentialStarted) finish(null); }
-                @Override public void onAuthenticationFailed() {
-                    if (waiting() && fingerprintDialog != null) fingerprintDialog.setMessage(LocaleController.getString(R.string.WalletFingerprintRetry));
+            legacyPrompt = new BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), new BiometricPrompt.AuthenticationCallback() {
+                @Override public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                    if (!credentialStarted) finish(null);
                 }
-                @Override public void onAuthenticationHelp(int code, CharSequence message) {
-                    if (waiting() && fingerprintDialog != null) fingerprintDialog.setMessage(message);
-                }
-                @Override public void onAuthenticationError(int code, CharSequence message) {
+                @Override public void onAuthenticationError(int code, @NonNull CharSequence message) {
                     if (!waiting() || credentialStarted) return;
-                    if (code == FingerprintManager.FINGERPRINT_ERROR_CANCELED) finish("AUTH_CANCELED");
+                    if (code == BiometricPrompt.ERROR_USER_CANCELED || code == BiometricPrompt.ERROR_CANCELED) finish("AUTH_CANCELED");
                     else credentials();
                 }
-            }, new Handler(Looper.getMainLooper()));
+            });
+            legacyPrompt.authenticate(new BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(LocaleController.getString(R.string.WalletUnlock))
+                    .setNegativeButtonText(LocaleController.getString(R.string.WalletUseDevicePasscode))
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .build());
         }
 
         private boolean waiting() { return !expired && latch.getCount() != 0; }
@@ -193,8 +190,8 @@ public final class GramWalletStorageAuth {
 
         private void stopBiometrics() {
             try { if (cancellation != null) cancellation.cancel(); } catch (Exception e) { FileLog.e(e); }
-            try { if (fingerprintDialog != null) fingerprintDialog.dismiss(); } catch (Exception e) { FileLog.e(e); }
-            fingerprintDialog = null;
+            try { if (legacyPrompt != null) legacyPrompt.cancelAuthentication(); } catch (Exception e) { FileLog.e(e); }
+            legacyPrompt = null;
         }
 
     }
