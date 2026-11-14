@@ -67,6 +67,7 @@ public class FilePathDatabase {
             // A path index: every autocommit used to cost a rollback-journal round with two fsyncs.
             database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
             database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
+            NanogramDbTuning.applyLight(database);
 
             if (createTable) {
                 database.executeFast("CREATE TABLE paths(document_id INTEGER, dc_id INTEGER, type INTEGER, path TEXT, flags INTEGER, PRIMARY KEY(document_id, dc_id, type));").stepThis().dispose();

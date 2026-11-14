@@ -44,19 +44,53 @@ public class NanogramDbTuning {
             list.add("PRAGMA mmap_size = 67108864");
         }
         list.add("PRAGMA wal_autocheckpoint = 1000");
+        // Refresh planner statistics only for tables whose indexes changed a lot (bit 0x10000 = analyze up to
+        // a bounded number of rows); cheap on an up-to-date database.
+        list.add("PRAGMA optimize=0x10002");
         return list;
     }
 
-    public static void apply(SQLiteDatabase database) {
-        if (!isEnabled()) {
-            return;
+    /** Small side database (file paths): small page cache, no mmap. */
+    public static List<String> lightPragmas(boolean flagOn) {
+        ArrayList<String> list = new ArrayList<>();
+        if (flagOn) {
+            list.add("PRAGMA cache_size = -2048");
+            list.add("PRAGMA optimize=0x10002");
         }
-        for (String pragma : pragmas(true, SharedConfig.getDevicePerformanceClass(), android.os.Process.is64Bit())) {
+        return list;
+    }
+
+    public static List<String> closePragmas(boolean flagOn) {
+        ArrayList<String> list = new ArrayList<>();
+        if (flagOn) {
+            list.add("PRAGMA optimize");
+        }
+        return list;
+    }
+
+    private static void run(SQLiteDatabase database, List<String> pragmas) {
+        for (String pragma : pragmas) {
             try {
                 database.executeFast(pragma).stepThis().dispose();
             } catch (SQLiteException e) {
                 FileLog.e(e);
             }
         }
+    }
+
+    public static void applyLight(SQLiteDatabase database) {
+        run(database, lightPragmas(isEnabled()));
+    }
+
+    /** Call right before close(); no-op with the flag off. */
+    public static void beforeClose(SQLiteDatabase database) {
+        run(database, closePragmas(isEnabled()));
+    }
+
+    public static void apply(SQLiteDatabase database) {
+        if (!isEnabled()) {
+            return;
+        }
+        run(database, pragmas(true, SharedConfig.getDevicePerformanceClass(), android.os.Process.is64Bit()));
     }
 }
