@@ -51,8 +51,9 @@ BUILD_ROOT="${FFMPEG_BUILD_ROOT:-$SCRIPT_DIR/build/ffmpeg}"
 WORK_DIR="$BUILD_ROOT/work"
 INSTALL_DIR="$BUILD_ROOT/install"
 
-ENABLE_SMALL="${ENABLE_SMALL:-1}"
-FFMPEG_OPTFLAGS="${FFMPEG_OPTFLAGS:-}"
+# Nanogram: speed over size; --enable-small made FFmpeg compile with -Os and pick size-first code paths.
+ENABLE_SMALL="${ENABLE_SMALL:-0}"
+FFMPEG_OPTFLAGS="${FFMPEG_OPTFLAGS--O2}"
 FFMPEG_LIBVPX_VP8="${FFMPEG_LIBVPX_VP8:-1}"
 FFMPEG_PARSERS="${FFMPEG_PARSERS:-1}"
 
