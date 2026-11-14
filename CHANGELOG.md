@@ -47,5 +47,11 @@ Newest first: version, build number, date, commit; what changed and how.
   Speed, Night), Comet notification and caller icons, intro Comet on navy + "Nanogram" title, Nanogram wordmark in
   the chat list and stories header, ~50 app-name strings say Nanogram in every language (NanogramBranding).
 
+### Default icon = Sphere, like iOS/Mac
+- The launcher default is now the Sphere (the iOS/Mac default since 2026-11-04), built from the same layers as the
+  iOS Liquid Glass icon: starry background as the adaptive background, light/sphere/sparkle as the foreground
+  (launcher parallax), the iOS mono layers as the themed icon. Comet moves to the alternates (Vintage slot); intro and
+  caller icon use the Sphere. The renderer now draws SVGs with AppKit (keeps transparency).
+
 ### Measurements
 - Release arm64: 57.5 MB APK (R8 full mode, full LTO), 182 s; debug 98.7 MB. Details in docs/nanogram/build.md.

@@ -83,7 +83,7 @@ public final class NanogramBranding {
     // Nanogram names for upstream's alternate launcher icons (the artwork is replaced in the app module).
     private static final Map<String, String> FIXED = new HashMap<>();
     static {
-        FIXED.put("AppIconVintage", "Light");
+        FIXED.put("AppIconVintage", "Comet");
         FIXED.put("AppIconAqua", "Orbit");
         FIXED.put("AppIconPremium", "Glass");
         FIXED.put("AppIconTurbo", "Speed");
@@ -177,7 +177,7 @@ public final class NanogramBranding {
         }
         if (fixedIds == null) {
             int[] resIds = {R.string.AppIconVintage, R.string.AppIconAqua, R.string.AppIconPremium, R.string.AppIconTurbo, R.string.AppIconNox};
-            String[] values = {"Light", "Orbit", "Glass", "Speed", "Night"};
+            String[] values = {"Comet", "Orbit", "Glass", "Speed", "Night"};
             fixedValues = values;
             fixedIds = resIds;
         }

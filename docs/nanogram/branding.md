@@ -7,14 +7,14 @@ name for itself. Telegram's network and products keep their names (Telegram Prem
 
 | What | Where |
 |---|---|
-| Launcher icon (adaptive + themed monochrome + legacy/round) | `TMessagesProj_App/src/main/res/mipmap-*` override upstream's resources of the same names |
-| Alternate icons (Settings > Appearance > App icon) | Upstream aliases keep their ids; artwork = iOS designs: Vintage→Light, Aqua→Orbit, Premium→Glass, Turbo→Speed, Nox→Night |
-| Notification icon, caller icon | `drawable-anydpi/notification.xml` (Comet silhouette), `drawable-*/ic_launcher_dr.png` |
-| Intro sphere | `drawable-*/intro_tg_plane.png` (Comet) and the navy disc colour in `IntroActivity` |
+| Launcher icon: Sphere, the iOS/Mac default, as adaptive layers (starry background; light, sphere and sparkle in front with launcher parallax; iOS mono layers for themed icons) + legacy/round | `TMessagesProj_App/src/main/res/mipmap-*` override upstream's resources of the same names |
+| Alternate icons (Settings > Appearance > App icon) | Upstream aliases keep their ids; artwork = iOS designs: Vintage→Comet, Aqua→Orbit, Premium→Glass, Turbo→Speed, Nox→Night |
+| Notification icon, caller icon | `drawable-anydpi/notification.xml` (sphere-and-beam silhouette), `drawable-*/ic_launcher_dr.png` (round Sphere) |
+| Intro sphere | `drawable-*/intro_tg_plane.png` (Sphere foreground) and the dark disc colour in `IntroActivity` |
 | Title text and wordmark | `NanogramBranding.wordmark()` in the chat list and stories header; intro title is the text "Nanogram" |
 | Strings naming the app | `NanogramBranding` (hooked into `LocaleController.getStringV2`) replaces "Telegram" with "Nanogram" in ~50 listed keys, in every language including cloud language packs; icon names are fixed |
 
-Artwork is rendered from the shared Nanogram SVGs (`nanogram-ios/Telegram/Telegram-iOS/AlternateIconSources`):
+Artwork is rendered from the shared Nanogram artwork (`nanogram-ios/Telegram/Telegram-iOS/Nanogram.icon` layers and `AlternateIconSources`):
 
 ```sh
 swift Tools/dev/branding/render-android-icons.swift
