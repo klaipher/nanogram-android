@@ -22,6 +22,26 @@ Newest first: version, build number, date, commit; what changed and how.
   clang enables `+outline-atomics` by default; LSE chosen at run time). Global `-march` stays ARMv8.0-A and no
   `-mtune` is added: little cores are in-order, a big-core schedule can slow them.
 - Measure: see docs/nanogram/build.md "Native speed flags".
+### Shared FFmpeg fork (klaipher/FFmpeg, branch nanogram)
+- One FFmpeg source for Android, iOS and macOS: official n9.0.2 plus our commits — mov stsd_count reset and
+  VideoToolbox attachment skip (from the iOS copy), encryption_info stack exhaustion and HEVC slice layer check
+  (Telegram Android's former patches), VERSION 9.0.2. Android's submodule points at it (d84c50b); the two patch files
+  moved into the fork; build_ffmpeg.sh reads the fork's VERSION, so the library reports 9.0.2.
+- Android gains the mov.c security fix that iOS already had.
+
+### FFmpeg 8.1 (release/8.1 @ 8dca158) -> 9.0.2 (f927fb8 submodule, 6ee351a build_ffmpeg.sh)
+- Submodule `third_party/ffmpeg` moved to tag n9.0.2 (libavcodec 63, libavformat 63, libavutil 61, libswscale 10,
+  libswresample 7), the version iOS and macOS already ship. Not built or run yet.
+- Component set unchanged: every `--enable-*` name in build_ffmpeg.sh exists in 9.0.2 (decoders, demuxers, parsers,
+  bsfs, libvpx/libdav1d/libopus detection unchanged); both local patches (encryption_info recursion, HEVC layer
+  index) still apply to 9.0.2 and are not in it.
+- The committed fallback prebuilts in jni/prebuild are still FFmpeg 8.1 (ABI differs from the 9.0.2 headers). CMake now
+  stops with an error when NANOGRAM_PREBUILD_DIR is empty and the committed ffversion.h does not match the submodule's
+  RELEASE, so only the ng path (own prebuild cache) builds until the prebuilts are refreshed from an ng prebuild.
+- Added `--disable-unstable`: 9.0 builds a new opt-in swscale backend (generated AArch64 kernels from a host tool,
+  selected only with SWS_UNSTABLE, which we never pass). Output of sws_scale is unchanged.
+- Call sites (ffmpeg_jni.cc, gifvideo.cpp, audio.c, webm_encoder.c, WebRTC h264 decoder) use no API removed in 9.0
+  (checked with -fsyntax-only against the 9.0.2 headers); av_init_packet in webm_encoder.c stays deprecated until 64.
 
 ### Native LTO for all code (ThinLTO)
 - voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose

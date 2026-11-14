@@ -11,7 +11,7 @@ Kept current with every change that alters behaviour or build compared with upst
 | versionCode | minutes since 2020-01-01 of the build number × 10 + ABI digit | Every build updates the previous one; marketing version follows upstream |
 | Toolchain | Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, compileSdk 37, Java 17 | Current toolchain; targetSdk 36 and minSdk 23 unchanged |
 | Native build | ccache, no LTO in debug, prebuilts rebuilt from submodules into a cache, 16 KB flexible page sizes, uncompressed native libs | Build speed, disk, device storage, 16 KB-page devices |
-| Native deps | TDLib = iOS pin 0e88653d (1.8.69); abseil 20260817.0; BoringSSL 0.20261105.0; OpenH264 2.7.0; boost-regex 1.92.0 | Latest releases; one TDLib for iOS and Android |
+| Native deps | FFmpeg 9.0.2 (n9.0.2, same as iOS and macOS); TDLib = iOS pin 0e88653d (1.8.69); abseil 20260817.0; BoringSSL 0.20261105.0; OpenH264 2.7.0; boost-regex 1.92.0 | Latest releases; one TDLib for iOS and Android |
 | Gradle modules | 11 of 40 media modules; Huawei/HockeyApp/Standalone/test apps only with `-Pnanogram.allModules=true` | Configuration time |
 | Biometrics | No FingerprintManager (removed from SDK 37): `androidx.biometric` 1.1.0 everywhere (FingerprintManagerCompat copy deleted); wallet uses the framework BiometricPrompt on R+ and AndroidX below; face/iris accepted where the device rates them Class 3 | Newer API on compileSdk 37, no stubs |
 | WebRTC | `Candidate::set_type` without lifetimebound | NDK r30 clang rejects it (same as Mac tg_owt) |
@@ -22,3 +22,4 @@ Kept current with every change that alters behaviour or build compared with upst
 | Updates | GitHub releases instead of Telegram's server update call: manifest + APK from `klaipher/nanogram-android-releases`, SHA-256 and signer check, PackageInstaller; Settings row "Check for updates" | Our api_id gets no updates from Telegram; friends sideload the APK |
 | Native LTO | ThinLTO on all C/C++ in release (upstream: full LTO on C files only, because voip/CMakeLists.txt resets the C++ flags) | Smaller and faster native code; parallel, cached release links |
 | Native speed | `-O2` instead of `-Oz` for tgnet, sqlite and instead of `-Os` for the main library (set per source, as linked targets' PUBLIC -Os/-O3 would otherwise win); opus `-O2`; FFmpeg and libvpx built without `--enable-small`; libvpx arm64 with run-time dotprod/i8mm kernels | Message/database/frame paths are hot; size cost is small with ThinLTO and gc-sections |
+| FFmpeg source | klaipher/FFmpeg `nanogram` (9.0.2 + 4 fixes), shared with iOS/macOS, instead of upstream FFmpeg + 2 local patches | One FFmpeg and one set of fixes for all Nanogram apps |

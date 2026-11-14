@@ -28,7 +28,12 @@ if (NANOGRAM_CCACHE)
 endif()
 if (NOT NANOGRAM_PREBUILD_DIR)
     set(NANOGRAM_PREBUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/prebuild)
-endif()
+    # The committed fallback archives must match the FFmpeg submodule: a mismatch links without any error (ABI skew).
+    file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg/RELEASE NANOGRAM_FFMPEG_SRC_VERSION LIMIT_COUNT 1)
+    file(STRINGS ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}/libavutil/ffversion.h NANOGRAM_FFMPEG_PREBUILT_VERSION REGEX "FFMPEG_VERSION")
+    if (NOT NANOGRAM_FFMPEG_PREBUILT_VERSION MATCHES "\"n?${NANOGRAM_FFMPEG_SRC_VERSION}[\".-]")
+        message(FATAL_ERROR "Committed prebuild (${NANOGRAM_FFMPEG_PREBUILT_VERSION}) does not match FFmpeg ${NANOGRAM_FFMPEG_SRC_VERSION}; build through Tools/dev/ng or refresh jni/prebuild")
+    endif()
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)

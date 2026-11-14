@@ -175,7 +175,8 @@ prepare_patched_source() {
     local source_dir="$1" destination="$2"
     local version patch_file patch_count=0
 
-    version="$(git -C "$source_dir" describe --tags --always 2>/dev/null || cat "$source_dir/RELEASE")"
+    # klaipher/FFmpeg (branch nanogram) ships VERSION; fall back to git describe, then RELEASE.
+    version="$(cat "$source_dir/VERSION" 2>/dev/null || git -C "$source_dir" describe --tags --always 2>/dev/null || cat "$source_dir/RELEASE")"
     mkdir -p "$destination"
     tar -C "$source_dir" --exclude=.git -cf - . | tar -C "$destination" -xf -
 
@@ -320,6 +321,8 @@ build_ffmpeg_for_abi() {
         --disable-avfilter
         --disable-network
         --disable-autodetect
+        # FFmpeg 9 builds an opt-in swscale backend with generated NEON kernels (host tool, only used with SWS_UNSTABLE).
+        --disable-unstable
         --disable-everything
         --enable-avcodec
         --enable-avformat
