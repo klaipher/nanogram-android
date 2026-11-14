@@ -220,8 +220,8 @@ public class DebugSettingsActivity extends UniversalFragment {
 
         items.add(UItem.asHeader("Camera and media"));
         items.add(UItem.asCheck(ID_INAPP_CAMERA, getString(R.string.DebugMenuEnableCamera)).setChecked(SharedConfig.inappCamera));
-        items.add(UItem.asCheck(ID_EXP_CAMERA2, "Nanogram: Camera2 for stories and chat camera").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE)));
-        items.add(UItem.asCheck(ID_CAMERA2, "Use Camera 2 API").setChecked(SharedConfig.isUsingCamera2(currentAccount)));
+        items.add(UItem.asCheck(ID_EXP_CAMERA2, "Nanogram: Camera2 for stories and chat camera (CameraView)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE)));
+        items.add(UItem.asCheck(ID_CAMERA2, "Use Camera 2 API (round video only)").setChecked(SharedConfig.isUsingCamera2(currentAccount)));
         items.add(UItem.asCheck(ID_DUAL_CAMERA, getString(R.string.DebugMenuDualOn)).setChecked(DualCameraView.dualAvailableStatic(getContext())));
         if (BuildVars.DEBUG_PRIVATE_VERSION && !InstantCameraView.allowBigSizeCameraDebug()) {
             items.add(UItem.asCheck(ID_BIG_ROUND_CAMERA, "Big camera for round").setChecked(SharedConfig.bigCameraForRound));
