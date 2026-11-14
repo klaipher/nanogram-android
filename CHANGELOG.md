@@ -5,6 +5,20 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### WebRTC Java: org.webrtc from the fork, in-app copy deleted (W5.5)
+- Deleted `TMessagesProj/src/main/java/org/webrtc` (173 files). `TMessagesProj/build.gradle` adds the fork's Java directories
+  as `java.srcDirs` of the `main` source set: `jni/voip/webrtc/sdk/android/api`, `sdk/android/src/java`,
+  `modules/audio_device/android/java/src` (the `org.webrtc.voiceengine` classes) and `rtc_base/java/src`. No tests are
+  on those paths. The IDE exclusion `jni/voip/webrtc` became `jni/voip/webrtc/third_party`; the `jni/third_party/absl`
+  exclusion went with the submodule.
+- Proof: all 173 deleted files map by `org/webrtc/...` path onto the four fork directories and are blob-identical there
+  (173 of 173, none missing, none different; the 28 Telegram-modified and 9 Android-only files are in the fork's
+  commit 8cf9fad2). The fork has one more class, `sdk/android/api/org/webrtc/EglThread.java` (upstream, unused by the app),
+  so the dex class list grows by exactly that class and is otherwise the same.
+- Build steps (main session): `ng check` compiles the Java (the Telegram-modified classes import `org.telegram.*`); compare
+  the class list of `org.webrtc.*` in the dex before and after (expect +1: EglThread); R8 keep rules in
+  `proguard-rules.pro` (`org.webrtc.*`, `.audio.*`, `.voiceengine.*`) are unchanged. Emulator: calls and screen-share audio.
+
 ### WebRTC C++: klaipher/webrtc nanogram (fa0b3c5f) replaces the in-tree copy and its dependencies (W5.5)
 - Deleted `TMessagesProj/jni/voip/webrtc` (4,267 files), `jni/voip/third_party/{crc32c,jni_zero}` (libevent went in the step
   above), `jni/third_party/{libsrtp,usrsctplib,pffft,rnnoise}` and the `jni/third_party/absl` submodule. Added the submodule
