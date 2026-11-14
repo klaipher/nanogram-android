@@ -433,9 +433,8 @@ def cmd_build(a: argparse.Namespace) -> None:
     bn = build_number(a.build_number)
     env["ORG_GRADLE_PROJECT_nanogramBuildNumber"] = bn
     env["ORG_GRADLE_PROJECT_nanogramAbis"] = a.abis
-    if not a.upstream_prebuilts:
-        pre = cmd_prebuild(argparse.Namespace(abis=a.abis, force=False))
-        env["ORG_GRADLE_PROJECT_nanogramPrebuildDir"] = str(pre)
+    pre = cmd_prebuild(argparse.Namespace(abis=a.abis, force=False))
+    env["ORG_GRADLE_PROJECT_nanogramPrebuildDir"] = str(pre)
     task = a.task or (":TMessagesProj_App:assembleAfatRelease" if release else ":TMessagesProj_App:assembleAfatDebug")
     args = [task]
     if a.clean:
@@ -542,7 +541,7 @@ def cmd_release(a: argparse.Namespace) -> None:
     bn = ngrelease.check_build_number(build_number(a.build_number))
     if not a.skip_build:
         cmd_build(argparse.Namespace(variant="release", abis=TC.get("abis", "arm64"), build_number=bn, task=None,
-                                     clean=False, no_cache=False, upstream_prebuilts=False))
+                                     clean=False, no_cache=False))
     dest = OUT / bn
     apks = sorted(dest.glob("*-release-*.apk"))
     if not apks:
@@ -772,7 +771,6 @@ def main() -> None:
     p.add_argument("--task", help="Gradle task to run instead of the default assemble task")
     p.add_argument("--clean", action="store_true")
     p.add_argument("--no-cache", action="store_true", help="disable Gradle build and configuration caches")
-    p.add_argument("--upstream-prebuilts", action="store_true", help="use the committed upstream prebuilt libraries")
     p.set_defaults(fn=cmd_build)
     p = sub.add_parser("install")
     p.add_argument("apk", nargs="?")

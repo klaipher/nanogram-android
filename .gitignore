@@ -16,6 +16,11 @@ TMessagesProj_AppHuawei/afat/
 
 # Nanogram
 TMessagesProj/jni/prebuild/build_env.txt
+# Output of a hand-run prebuild script (the scripts default LIB_DIR/INCLUDE_DIR/PKGCONFIG_DIR here); ng sends it to the cache.
+TMessagesProj/jni/prebuild/lib/
+TMessagesProj/jni/prebuild/include/
+TMessagesProj/jni/prebuild/pkgconfig/
+TMessagesProj/jni/prebuild/build/
 build-output/
 TMessagesProj_App/google-services.json
 .kotlin/

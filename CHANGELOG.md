@@ -7,6 +7,7 @@ Newest first: version, build number, date, commit; what changed and how.
 
 - tgcalls pin 73cc1f8d -> 7afc0b25 (fork `nanogram-shared`): ports upstream defea4a, so a group-call incoming video description with an empty ssrc group no longer reads `ssrcs[0]` of an empty vector (possible crash). `shared/` moves to nanogram-deps a17304db. Same commit as iOS and Mac.
 - Cleanup: removed the unused ndk-build `jni/Application.mk` (Gradle builds through CMake only) and the tracked, generated `jni/prebuild/build_env.txt` (now git-ignored; `ng prebuild` deletes it after the run instead of `git checkout`); dropped the stale `.gitignore` entry `jni/ffmpeg/build_android`.
+- Removed the committed upstream prebuilt fallback `jni/prebuild/lib/**` (64 `.a`, 4 ABIs) and `jni/prebuild/include/**` (FFmpeg `avconfig.h`/`ffversion.h`, wallet-engine bindings; 78 files, 203.7 MiB of blobs). `Tools/dev/ng prebuild` / `build` is the only supported path: `jni/CMakeLists.txt` stops with "run Tools/dev/ng prebuild / build" when `nanogramPrebuildDir` is missing or has no `COMPLETE` marker, the stale-fallback FFmpeg/wallet checks are gone, and `ng build --upstream-prebuilts` is removed. The hand-run script output directories are git-ignored.
 
 ### Release optimization settings (AND-OPT-2, AND-OPT-3)
 - AND-OPT-2: gram-wallet `[profile.release]` now `opt-level = 3`, `lto = "fat"` (was `"z"`, no LTO); codegen-units=1,
