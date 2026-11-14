@@ -61,6 +61,8 @@ install session (not done: the in-app updater and `adb install` ship only the AP
 | Hand-written rules | `TMessagesProj_App/src/main/baseline-prof.txt` (wildcards) | post-login paths the emulator cannot reach: chat list, open chat, images, storage, connection callbacks, emoji and theme drawing |
 | Generator | `:baselineprofile` (macrobenchmark `BaselineProfileRule`) | records the logged-out start: cold start, intro swipes, Start Messaging, permission dialogs ("Don't allow"), phone login, country picker, diagnostics screen |
 
+Note: the generated profiles (`src/main/generated/baselineProfiles/baseline-prof.txt` and `startup-prof.txt`) are not committed yet, so only the hand-written `baseline-prof.txt` and the logged-in `src/main/baselineProfiles/startup-prof.txt` are in effect until `Tools/dev/ng profile` is run on `nanogram-api36-16k` and its output committed (AND-OPT-1).
+
 Regenerate with the AVD `nanogram-api36-16k` running (API 36, not logged in):
 
 ```sh
