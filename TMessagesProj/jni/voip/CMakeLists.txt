@@ -5,6 +5,38 @@ cmake_minimum_required(VERSION 3.6.0)
 # visibility for all C++ code (tgnet, tgcalls, WebRTC, the main library).
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -DANDROID -g")
 
+# WebRTC is the shared klaipher/webrtc fork (submodule voip/webrtc, branch nanogram), the same commit iOS and macOS
+# build. Its dependencies come from the fork's own nested submodules (abseil, libsrtp, crc32c) and snapshots
+# (pffft, rnnoise-vad, jni_zero under third_party/). Which files each platform compiles:
+# voip/webrtc/nanogram/BUILD-FILES.md.
+set(NANOGRAM_WEBRTC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/voip/webrtc)
+
+# Include shims: the fork's sources keep the Bazel/GN include prefixes; Android's submodules have other layouts.
+# Symbolic links in the build tree (never in the source tree), put on the include path of the WebRTC targets.
+#   third_party/openh264/src/codec/api/wels/*.h  <- third_party/openh264 (codec/ at its root)
+#   third_party/opus/src/include/opus.h          <- third_party/xiph/opus
+set(NANOGRAM_SHIM_DIR ${CMAKE_CURRENT_BINARY_DIR}/nanogram_shims)
+file(MAKE_DIRECTORY ${NANOGRAM_SHIM_DIR}/third_party/openh264 ${NANOGRAM_SHIM_DIR}/third_party/opus)
+file(REMOVE ${NANOGRAM_SHIM_DIR}/third_party/openh264/src ${NANOGRAM_SHIM_DIR}/third_party/opus/src)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/third_party/openh264 ${NANOGRAM_SHIM_DIR}/third_party/openh264/src SYMBOLIC)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/third_party/xiph/opus ${NANOGRAM_SHIM_DIR}/third_party/opus/src SYMBOLIC)
+
+# experiments/registered_field_trials.h is generated from the fork's field_trials.py (the committed copy the app used to
+# carry was byte-identical to this output, so it could go stale).
+find_program(NANOGRAM_PYTHON NAMES python3 python REQUIRED)
+set(NANOGRAM_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/nanogram_gen)
+set(NANOGRAM_FIELD_TRIALS_HEADER ${NANOGRAM_GEN_DIR}/experiments/registered_field_trials.h)
+add_custom_command(
+        OUTPUT ${NANOGRAM_FIELD_TRIALS_HEADER}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${NANOGRAM_GEN_DIR}/experiments
+        COMMAND ${NANOGRAM_PYTHON} ${NANOGRAM_WEBRTC_DIR}/experiments/field_trials.py header --output ${NANOGRAM_FIELD_TRIALS_HEADER}
+        DEPENDS ${NANOGRAM_WEBRTC_DIR}/experiments/field_trials.py
+        COMMENT "Generating WebRTC field trials header"
+        VERBATIM)
+
+# crc32c: consumer-owned crc32c_config.h (SSE4.2 and ARMv8 CRC32C intrinsics off, portable code only).
+set(NANOGRAM_CRC32C_CONFIG_DIR voip/crc32c_config)
+
 #openh264 (prebuilt static library)
 add_library(openh264 STATIC IMPORTED)
 set_target_properties(openh264 PROPERTIES
@@ -15,103 +47,60 @@ add_library(wasm STATIC IMPORTED)
 set_target_properties(wasm PROPERTIES
         IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libiwasm.a)
 
-#rnnoise
+#rnnoise (klaipher/rnnoise, xiph 0.2 + Nanogram changes; same source and renames as iOS and macOS)
 add_library(rnnoise STATIC
-        voip/rnnoise/src/celt_lpc.c
-        voip/rnnoise/src/denoise.c
-        voip/rnnoise/src/kiss_fft.c
-        voip/rnnoise/src/pitch.c
-        voip/rnnoise/src/rnn_data.c
-        voip/rnnoise/src/rnn_reader.c
-        voip/rnnoise/src/rnn_reader.c
-        voip/rnnoise/src/rnn.c)
+        third_party/xiph/rnnoise/src/celt_lpc.c
+        third_party/xiph/rnnoise/src/denoise.c
+        third_party/xiph/rnnoise/src/kiss_fft.c
+        third_party/xiph/rnnoise/src/nnet.c
+        third_party/xiph/rnnoise/src/nnet_default.c
+        third_party/xiph/rnnoise/src/parse_lpcnet_weights.c
+        third_party/xiph/rnnoise/src/pitch.c
+        third_party/xiph/rnnoise/src/rnn.c
+        third_party/xiph/rnnoise/src/rnnoise_data.c
+        third_party/xiph/rnnoise/src/rnnoise_tables.c)
 target_compile_options(rnnoise PUBLIC
         -Wall -finline-functions -fno-strict-aliasing -O3 -frtti -Wno-unknown-pragmas -funroll-loops -fexceptions -fno-math-errno)
 set_target_properties(rnnoise PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(rnnoise PRIVATE
-        HAVE_PTHREAD __STDC_LIMIT_MACROS BSD=1 USE_KISS_FFT NULL=0 SOCKLEN_T=socklen_t LOCALE_NOT_USED _LARGEFILE_SOURCE=1 _FILE_OFFSET_BITS=64 restrict= __EMX__ OPUS_BUILD USE_ALLOCA HAVE_LRINT HAVE_LRINTF
-        _celt_autocorr=rnnoise__celt_autocorr
-        celt_fir=rnnoise_celt_fir
-        celt_iir=rnnoise_celt_iir
-        _celt_lpc=rnnoise__celt_lpc
-        celt_pitch_xcorr=rnnoise_celt_pitch_xcorr
-        compute_band_corr=rnnoise_compute_band_corr
-        compute_band_energy=rnnoise_compute_band_energy
-        compute_dense=rnnoise_compute_dense
-        compute_gru=rnnoise_compute_gru
         compute_rnn=rnnoise_compute_rnn
-        interp_band_gain=rnnoise_interp_band_gain
-        opus_fft_alloc=rnnoise_opus_fft_alloc
-        opus_fft_alloc_arch_c=rnnoise_opus_fft_alloc_arch_c
-        opus_fft_alloc_twiddles=rnnoise_opus_fft_alloc_twiddles
-        opus_fft_c=rnnoise_opus_fft_c
-        opus_fft_free=rnnoise_opus_fft_free
-        opus_fft_free_arch_c=rnnoise_opus_fft_free_arch_c
-        opus_fft_impl=rnnoise_opus_fft_impl
-        opus_ifft_c=rnnoise_opus_ifft_c
-        pitch_downsample=rnnoise_pitch_downsample
-        pitch_filter=rnnoise_pitch_filter
-        pitch_search=rnnoise_pitch_search
-        remove_doubling=rnnoise_remove_doubling)
+        eband20ms=rnnoise_eband20ms
+        init_rnnoise=rnnoise_init_rnnoise)
 target_compile_definitions(rnnoise PUBLIC
-        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 NDEBUG WEBRTC_HAVE_USRSCTP WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE __Userspace__ SCTP_SIMPLE_ALLOCATOR SCTP_PROCESS_LEVEL_LOCKS __Userspace_os_Linux)
+        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 WEBRTC_USE_H264_DECODER NDEBUG WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE)
 target_include_directories(rnnoise PUBLIC
-        voip/rnnoise/include)
+        third_party/xiph/rnnoise/include)
 
 #tgcalls_tp
 add_library(tgcalls_tp STATIC
-        third_party/rnnoise/src/rnn_vad_weights.cc
-        third_party/pffft/src/fftpack.c
-        third_party/pffft/src/pffft.c
-        third_party/libsrtp/crypto/cipher/aes_gcm_ossl.c
-        third_party/libsrtp/crypto/cipher/aes_icm_ossl.c
-        third_party/libsrtp/crypto/cipher/cipher.c
-        third_party/libsrtp/crypto/cipher/null_cipher.c
-        third_party/libsrtp/crypto/hash/auth.c
-        third_party/libsrtp/crypto/hash/hmac_ossl.c
-        third_party/libsrtp/crypto/hash/null_auth.c
-        third_party/libsrtp/crypto/kernel/alloc.c
-        third_party/libsrtp/crypto/kernel/crypto_kernel.c
-        third_party/libsrtp/crypto/kernel/err.c
-        third_party/libsrtp/crypto/kernel/key.c
-        third_party/libsrtp/crypto/math/datatypes.c
-        third_party/libsrtp/crypto/math/stat.c
-        third_party/libsrtp/crypto/replay/rdb.c
-        third_party/libsrtp/crypto/replay/rdbx.c
-        third_party/libsrtp/crypto/replay/ut_sim.c
-        third_party/libsrtp/srtp/ekt.c
-        third_party/libsrtp/srtp/srtp.c
-        third_party/usrsctplib/netinet/sctp_asconf.c
-        third_party/usrsctplib/netinet/sctp_auth.c
-        third_party/usrsctplib/netinet/sctp_bsd_addr.c
-        third_party/usrsctplib/netinet/sctp_callout.c
-        third_party/usrsctplib/netinet/sctp_cc_functions.c
-        third_party/usrsctplib/netinet/sctp_crc32.c
-        third_party/usrsctplib/netinet/sctp_indata.c
-        third_party/usrsctplib/netinet/sctp_input.c
-        third_party/usrsctplib/netinet/sctp_output.c
-        third_party/usrsctplib/netinet/sctp_pcb.c
-        third_party/usrsctplib/netinet/sctp_peeloff.c
-        third_party/usrsctplib/netinet/sctp_sha1.c
-        third_party/usrsctplib/netinet/sctp_ss_functions.c
-        third_party/usrsctplib/netinet/sctp_sysctl.c
-        third_party/usrsctplib/netinet/sctp_timer.c
-        third_party/usrsctplib/netinet/sctp_userspace.c
-        third_party/usrsctplib/netinet/sctp_usrreq.c
-        third_party/usrsctplib/netinet/sctputil.c
-        third_party/usrsctplib/netinet6/sctp6_usrreq.c
-        third_party/usrsctplib/user_environment.c
-        third_party/usrsctplib/user_mbuf.c
-        third_party/usrsctplib/user_recv_thread.c
-        third_party/usrsctplib/user_socket.c
+        voip/webrtc/third_party/rnnoise/src/rnn_vad_weights.cc
+        voip/webrtc/third_party/pffft/src/fftpack.c
+        voip/webrtc/third_party/pffft/src/pffft.c
+        voip/webrtc/third_party/libsrtp/crypto/cipher/aes_gcm_ossl.c
+        voip/webrtc/third_party/libsrtp/crypto/cipher/aes_icm_ossl.c
+        voip/webrtc/third_party/libsrtp/crypto/cipher/cipher.c
+        voip/webrtc/third_party/libsrtp/crypto/cipher/cipher_test_cases.c
+        voip/webrtc/third_party/libsrtp/crypto/cipher/null_cipher.c
+        voip/webrtc/third_party/libsrtp/crypto/hash/auth.c
+        voip/webrtc/third_party/libsrtp/crypto/hash/auth_test_cases.c
+        voip/webrtc/third_party/libsrtp/crypto/hash/hmac_ossl.c
+        voip/webrtc/third_party/libsrtp/crypto/hash/null_auth.c
+        voip/webrtc/third_party/libsrtp/crypto/kernel/alloc.c
+        voip/webrtc/third_party/libsrtp/crypto/kernel/crypto_kernel.c
+        voip/webrtc/third_party/libsrtp/crypto/kernel/err.c
+        voip/webrtc/third_party/libsrtp/crypto/kernel/key.c
+        voip/webrtc/third_party/libsrtp/crypto/math/datatypes.c
+        voip/webrtc/third_party/libsrtp/crypto/replay/rdb.c
+        voip/webrtc/third_party/libsrtp/crypto/replay/rdbx.c
+        voip/webrtc/third_party/libsrtp/srtp/srtp.c
 )
 target_compile_options(tgcalls_tp PUBLIC
         -finline-functions -ffast-math -Os )
 set_target_properties(tgcalls_tp PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(tgcalls_tp PUBLIC
-        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 NDEBUG WEBRTC_HAVE_USRSCTP WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE __Userspace__ SCTP_SIMPLE_ALLOCATOR SCTP_PROCESS_LEVEL_LOCKS __Userspace_os_Linux HAVE_WEBRTC_VIDEO __ANDROID__ TGVOIP_NO_DSP)
+        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 WEBRTC_USE_H264_DECODER NDEBUG WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE HAVE_WEBRTC_VIDEO __ANDROID__ TGVOIP_NO_DSP)
 target_include_directories(tgcalls_tp PUBLIC
         ./
         voip
@@ -120,20 +109,21 @@ target_include_directories(tgcalls_tp PUBLIC
         third_party/boringssl/include/
         openssl/include
         voip/webrtc/
-        third_party/absl
+        voip/webrtc/third_party/abseil-cpp
         third_party/xiph/opus/include
         third_party/xiph/opus/silk
         third_party/xiph/opus/silk/fixed
         third_party/xiph/opus/celt
         third_party/xiph/opus/
         third_party/libyuv/include
-        third_party/usrsctplib
-        third_party/libsrtp/include
-        third_party/libsrtp/config
-        third_party/libsrtp/crypto/include
+        voip/webrtc/third_party/libsrtp/include
+        voip/webrtc/third_party/libsrtp/crypto/include
         third_party
-        voip/third_party/crc32c/src/include
+        voip/webrtc/third_party/crc32c/src/include
 )
+# libsrtp v2.5.0 reads one shared config.h (GCM, OPENSSL, CPU_CISC, PACKAGE_VERSION) from the fork.
+target_include_directories(tgcalls_tp BEFORE PRIVATE voip/webrtc/third_party/libsrtp_config)
+target_compile_definitions(tgcalls_tp PRIVATE HAVE_CONFIG_H)
 
 #tgcalls+webrtc
 add_library(tgcalls STATIC
@@ -226,7 +216,6 @@ add_library(tgcalls STATIC
         voip/webrtc/rtc_base/ip_address.cc
         voip/webrtc/rtc_base/data_rate_limiter.cc
         voip/webrtc/rtc_base/http_common.cc
-        voip/webrtc/rtc_base/task_queue_libevent.cc
         voip/webrtc/rtc_base/net_helpers.cc
         voip/webrtc/rtc_base/memory/aligned_malloc.cc
         voip/webrtc/rtc_base/memory/fifo_buffer.cc
@@ -423,7 +412,7 @@ add_library(tgcalls STATIC
         voip/webrtc/api/rtc_event_log/rtc_event_log.cc
         voip/webrtc/api/rtc_event_log/rtc_event_log_factory.cc
         voip/webrtc/api/create_peerconnection_factory.cc
-        voip/webrtc/api/task_queue/default_task_queue_factory_libevent.cc
+        voip/webrtc/api/task_queue/default_task_queue_factory_stdlib.cc
         voip/webrtc/api/task_queue/pending_task_safety_flag.cc
         voip/webrtc/api/task_queue/task_queue_base.cc
         voip/webrtc/api/media_types.cc
@@ -1409,20 +1398,6 @@ add_library(tgcalls STATIC
         voip/webrtc/stats/rtc_stats_report.cc
         voip/webrtc/stats/rtc_stats.cc
         voip/webrtc/stats/rtcstats_objects.cc
-        voip/third_party/libevent/buffer.c
-        voip/third_party/libevent/epoll.c
-        voip/third_party/libevent/evbuffer.c
-        voip/third_party/libevent/evdns.c
-        voip/third_party/libevent/event.c
-        voip/third_party/libevent/event_tagging.c
-        voip/third_party/libevent/evrpc.c
-        voip/third_party/libevent/evutil.c
-        voip/third_party/libevent/http.c
-        voip/third_party/libevent/log.c
-        voip/third_party/libevent/poll.c
-        voip/third_party/libevent/select.c
-        voip/third_party/libevent/signal.c
-        voip/third_party/libevent/strlcpy.c
         voip/webrtc/net/dcsctp/public/dcsctp_socket_factory.cc
         voip/webrtc/net/dcsctp/public/dcsctp_handover_state.cc
         voip/webrtc/net/dcsctp/public/text_pcap_packet_observer.cc
@@ -1493,16 +1468,16 @@ add_library(tgcalls STATIC
         voip/webrtc/net/dcsctp/tx/stream_scheduler.cc
         voip/webrtc/net/dcsctp/timer/task_queue_timeout.cc
         voip/webrtc/net/dcsctp/timer/timer.cc
-        voip/third_party/crc32c/src/crc32c_portable.cc
-        voip/third_party/crc32c/src/crc32c.cc
-#        voip/third_party/jni_zero/jni_zero.cc
+        voip/webrtc/third_party/crc32c/src/src/crc32c_portable.cc
+        voip/webrtc/third_party/crc32c/src/src/crc32c.cc
+#        voip/webrtc/third_party/jni_zero/core.cc
 )
 target_compile_options(tgcalls PUBLIC
         -Wall -finline-functions -ffast-math)
 set_target_properties(tgcalls PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(tgcalls PUBLIC
-        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 WEBRTC_NS_FLOAT HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 NDEBUG WEBRTC_HAVE_USRSCTP WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE HAVE_WEBRTC_VIDEO)
+        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 WEBRTC_NS_FLOAT HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 WEBRTC_USE_H264_DECODER NDEBUG WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE HAVE_WEBRTC_VIDEO)
 target_include_directories(tgcalls PUBLIC
         ./
         voip
@@ -1510,9 +1485,9 @@ target_include_directories(tgcalls PUBLIC
         tgcalls/tgcalls
         third_party/boringssl/include
         openssl/include
-        voip/rnnoise/include
+        third_party/xiph/rnnoise/include
         voip/webrtc
-        third_party/absl
+        voip/webrtc/third_party/abseil-cpp
         third_party/wamr/core/iwasm/include
         third_party/xiph/opus/include
         third_party/xiph/opus/silk
@@ -1520,17 +1495,24 @@ target_include_directories(tgcalls PUBLIC
         third_party/xiph/opus/celt
         third_party/xiph/opus
         third_party/libyuv/include
-        third_party/libsrtp/include
-        third_party/libsrtp/config
-        third_party/libsrtp/crypto/include
-        third_party/usrsctplib
+        voip/webrtc/third_party/libsrtp/include
+        voip/webrtc/third_party/libsrtp/crypto/include
         third_party
         ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
         third_party/ffmpeg
         third_party/libvpx
         third_party/dav1d/include
-        voip/third_party/crc32c/src/include
-        voip/third_party/jni_zero)
+        voip/webrtc/third_party/crc32c/src/include
+)
+target_include_directories(tgcalls PUBLIC
+        ${NANOGRAM_SHIM_DIR}
+        voip/webrtc/nanogram/android-generated)
+target_include_directories(tgcalls BEFORE PRIVATE
+        voip/webrtc/third_party/libsrtp_config
+        ${NANOGRAM_CRC32C_CONFIG_DIR}
+        ${NANOGRAM_GEN_DIR})
+target_compile_definitions(tgcalls PRIVATE HAVE_CONFIG_H)
+target_sources(tgcalls PRIVATE ${NANOGRAM_FIELD_TRIALS_HEADER})
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
     target_sources(tgcalls PRIVATE
@@ -1544,16 +1526,20 @@ elseif(${ANDROID_ABI} STREQUAL "arm64-v8a")
             voip/webrtc/common_audio/signal_processing/filter_ar_fast_q12.c)
     target_compile_definitions(tgcalls PUBLIC
             WEBRTC_ARCH_ARM64 WEBRTC_HAS_NEON)
-elseif(${ANDROID_ABI} STREQUAL "x86")
-    target_sources(tgcalls PRIVATE
-
-    )
-    target_compile_definitions(tgcalls PUBLIC
-            HAVE_SSE2)
-elseif(${ANDROID_ABI} STREQUAL "x86_64")
-    target_sources(tgcalls PRIVATE
-
-    )
+elseif(${ANDROID_ABI} STREQUAL "x86" OR ${ANDROID_ABI} STREQUAL "x86_64")
+    # The fork enables the AVX2 dispatch (resampler, FIR, AEC3, rnn_vad); upstream compiles these files with
+    # -mavx2 -mfma and picks the kernels at run time from the CPU features. (The app used to comment the dispatch out.)
+    set(NANOGRAM_AVX2_SOURCES
+            voip/webrtc/common_audio/fir_filter_avx2.cc
+            voip/webrtc/common_audio/resampler/sinc_resampler_avx2.cc
+            voip/webrtc/modules/audio_processing/aec3/adaptive_fir_filter_avx2.cc
+            voip/webrtc/modules/audio_processing/aec3/adaptive_fir_filter_erl_avx2.cc
+            voip/webrtc/modules/audio_processing/aec3/fft_data_avx2.cc
+            voip/webrtc/modules/audio_processing/aec3/matched_filter_avx2.cc
+            voip/webrtc/modules/audio_processing/aec3/vector_math_avx2.cc
+            voip/webrtc/modules/audio_processing/agc2/rnn_vad/vector_math_avx2.cc)
+    target_sources(tgcalls PRIVATE ${NANOGRAM_AVX2_SOURCES})
+    set_source_files_properties(${NANOGRAM_AVX2_SOURCES} PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma")
     target_compile_definitions(tgcalls PUBLIC
             HAVE_SSE2)
 endif()
@@ -1691,13 +1677,12 @@ target_compile_options(voipandroid PUBLIC
 set_target_properties(voipandroid PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(voipandroid PUBLIC
-        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 WEBRTC_NS_FLOAT HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 NDEBUG WEBRTC_HAVE_USRSCTP WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE HAVE_WEBRTC_VIDEO)
+        WEBRTC_HAVE_DCSCTP RTC_DISABLE_TRACE_EVENTS WEBRTC_OPUS_SUPPORT_120MS_PTIME=1 BWE_TEST_LOGGING_COMPILE_TIME_ENABLE=0 ABSL_ALLOCATOR_NOTHROW=1 WEBRTC_NS_FLOAT HAVE_PTHREAD RTC_ENABLE_VP9 RTC_ENABLE_H265 WEBRTC_POSIX WEBRTC_LINUX WEBRTC_ANDROID WEBRTC_USE_H264 WEBRTC_USE_H264_DECODER NDEBUG WEBRTC_HAVE_SCTP WEBRTC_APM_DEBUG_DUMP=0 WEBRTC_USE_BUILTIN_ISAC_FLOAT WEBRTC_OPUS_VARIABLE_COMPLEXITY=0 HAVE_NETINET_IN_H WEBRTC_INCLUDE_INTERNAL_AUDIO_DEVICE HAVE_WEBRTC_VIDEO)
 target_include_directories(voipandroid PUBLIC
         ./
         voip
         tgcalls
         tgcalls/tgcalls
-        rlottie/src/lottie
         third_party/boringssl/include
         openssl/include
         voip/webrtc
@@ -1707,15 +1692,14 @@ target_include_directories(voipandroid PUBLIC
         third_party/xiph/opus/celt
         third_party/xiph/opus
         third_party/libyuv/include
-        third_party/libsrtp/include
-        third_party/libsrtp/config
-        third_party/libsrtp/crypto/include
-        third_party/usrsctplib
-        third_party/absl
+        voip/webrtc/third_party/libsrtp/include
+        voip/webrtc/third_party/libsrtp/crypto/include
+        voip/webrtc/third_party/abseil-cpp
         third_party
         td/tde2e
         td/tde2e/td/e2e
 )
+target_include_directories(voipandroid PRIVATE voip/webrtc/nanogram/android-generated)
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
     target_compile_definitions(voipandroid PUBLIC

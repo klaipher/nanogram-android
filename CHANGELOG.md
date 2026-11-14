@@ -251,6 +251,262 @@ Newest first: version, build number, date, commit; what changed and how.
 - Test: `NanogramVisionTest` (rotation normalization). Needs a device check: scan one QR at 3 distances and in dim
   light, avatar face hint, driver licence PDF417.
 
+### BoringSSL: klaipher/boringssl nanogram (shared with iOS)
+- `.gitmodules`: `jni/third_party/boringssl` now points at klaipher/boringssl `nanogram` (shallow), gitlink 1c764cec = official 0.20261105.0 (3dc4b638, the old pin) plus two commits: the upstream Bazel files are removed (iOS builds the same tree under Bazel) and the records. Source files are byte-identical, so the prebuilt libs do not change. `prebuild/build_boringssl.sh` and `build_tdlib.sh` use only `CMakeLists.txt` and `include/`, no deleted file. Shared pin: iOS uses the same commit.
+
+### Review fixes for the shared-source swaps
+- `TMessagesProj/build.gradle`: `java.exclude '**/org/webrtc/EglThread.java'`. The fork's `sdk/android/api` holds upstream
+  `EglThread.java` (73323d59), which the app never carried and which needs `EglBase.EglConnection`; the fork's Telegram `EglBase.java`
+  has no such type, so javac would fail. The compiled `org.webrtc` set is again exactly the old 173 files (all blob-identical).
+  The 173-files proof above never covered the 174th file; now it is excluded and recorded. Combined-build check: dex class list of `org.webrtc` equals fdd4407.
+- Recipient key: reversed the earlier bridge choice. `nativePrepareSend` and `nativeSend` take a `boolean trust_recipient_public_key`
+  that goes into `create_encrypted_comment`; `WalletEngine2` passes `TRUST_RECIPIENT_PUBLIC_KEY = false`, so Android verifies the
+  key like iOS (owner decision: check on by default, opt-in only for a confirmed rotation). The server supplies the key for every
+  recipient, so "always true" was the old no-check behaviour on every send, not a rotation path. No rotation-confirmation path exists in
+  the host yet; until one sets the flag, a recipient whose key rotated fails the check instead of being trusted. Explicit deviation from the previous Android behaviour; owner to confirm.
+- `jni/CMakeLists.txt`: the fallback to the committed `jni/prebuild` (no `nanogramPrebuildDir`, e.g. plain Gradle or Android Studio) now stops
+  with a clear error when the wallet bindings lack `trust_recipient_public_key`, instead of failing in the compiler or linking the old cisco `libopenh264.a`. Refresh `jni/prebuild` after the combined prebuild to re-enable that path.
+- `.gitmodules`: `shallow = true` on the rnnoise and sqlcipher-amalgamation entries (plan principle 8).
+- Open items, no code change: (1) libevent to stdlib task queue (b2ab0f4) deviates from plan W5.1 and changes the threading of every call thread; owner awareness needed, and the emulator call matrix must measure call start latency and CPU in a long call and a group call; the fork's unused libevent snapshot stays until then.
+  (2) `ReferenceCoreEmbedded.cpp` regeneration (W4.4, wasi-sdk plus the fork's `tools/build_wasm_core.sh`, sha256 against the iOS genrule) is a documented one-off with no tooling in `ng`; the v2wasm sources and json11 are unchanged from 545f5ae to 73cc1f8d, so the committed blob stays ABI compatible.
+  (3) Push gate: the `shared/` gitlink is still 7d5bd332 and must move to a nanogram-deps commit that sets the tgcalls commit to 73cc1f8d; `forks/android-A-manifest.patch` is obsolete (0e3f132 already carries the Android consumer paths).
+
+### tgcalls pin moved to 73cc1f8d
+- `TMessagesProj/jni/tgcalls` 2a5daa0f -> 73cc1f8d (fork `nanogram-shared`, fast-forward of 9bfb76f8). Over 2a5daa0f the fork adds only the macOS SwiftPM `ios/` exclude in `Package.swift`, host-test path defaults and doc fixes; no source Android compiles changes (`tools/check_android_cmake.sh` file set is untouched). The three apps pin one commit.
+
+### Cleanup after the tgcalls and WebRTC swaps (W6)
+- Dead-name grep over the repository (tg_owt, nanogram-security-fixes, nanogram-mac, telegram-ios-dev, tgcalls-port,
+  usrsctp, libevent, jni_zero, `voip/rnnoise`, `voip/third_party`, `third_party/{absl,libsrtp,pffft,rnnoise}`): the only hits
+  left are history (this file, the bootstrap plan, `shared-swaps-ledger.md`) and the live paths under `jni/voip/webrtc/third_party`
+  and `jni/third_party/xiph/rnnoise`. The tgcalls fork branch `nanogram-android` appears only as the historical source of 545f5ae.
+- `NANOGRAM-CHANGES.md`: the old "WebRTC" row (`Candidate::set_type`) became "WebRTC source" and "WebRTC dependencies"; the rnnoise
+  row no longer says `jni/third_party/rnnoise` is kept. `AGENTS.md` layout names the WebRTC submodule. The shared manifest
+  (`shared/shared-libraries.json`) must list webrtc fa0b3c5f once, with abseil, libsrtp and crc32c as its nested pins and the
+  Android `absl` path removed; `shared/` is not checked out here, the main session updates nanogram-deps.
+
+### WebRTC Java: org.webrtc from the fork, in-app copy deleted (W5.5)
+- Deleted `TMessagesProj/src/main/java/org/webrtc` (173 files). `TMessagesProj/build.gradle` adds the fork's Java directories
+  as `java.srcDirs` of the `main` source set: `jni/voip/webrtc/sdk/android/api`, `sdk/android/src/java`,
+  `modules/audio_device/android/java/src` (the `org.webrtc.voiceengine` classes) and `rtc_base/java/src`. No tests are
+  on those paths. The IDE exclusion `jni/voip/webrtc` became `jni/voip/webrtc/third_party`; the `jni/third_party/absl`
+  exclusion went with the submodule.
+- Proof: all 173 deleted files map by `org/webrtc/...` path onto the four fork directories and are blob-identical there
+  (173 of 173, none missing, none different; the 28 Telegram-modified and 9 Android-only files are in the fork's
+  commit 8cf9fad2). The fork has one more class, `sdk/android/api/org/webrtc/EglThread.java` (upstream, unused by the app),
+  so the dex class list grows by exactly that class and is otherwise the same.
+- Build steps (main session): `ng check` compiles the Java (the Telegram-modified classes import `org.telegram.*`); compare
+  the class list of `org.webrtc.*` in the dex before and after (expect +1: EglThread); R8 keep rules in
+  `proguard-rules.pro` (`org.webrtc.*`, `.audio.*`, `.voiceengine.*`) are unchanged. Emulator: calls and screen-share audio.
+
+### WebRTC C++: klaipher/webrtc nanogram (fa0b3c5f) replaces the in-tree copy and its dependencies (W5.5)
+- Deleted `TMessagesProj/jni/voip/webrtc` (4,267 files), `jni/voip/third_party/{crc32c,jni_zero}` (libevent went in the step
+  above), `jni/third_party/{libsrtp,usrsctplib,pffft,rnnoise}` and the `jni/third_party/absl` submodule. Added the submodule
+  `jni/voip/webrtc` = klaipher/webrtc branch `nanogram` at fa0b3c5f69209ab4eb1b1976bc31b5818bbae687 (shallow; same commit
+  as iOS and macOS). Its nested submodules arrive with `git submodule update --init --recursive`, which `ng setup` already runs:
+  abseil 2065f4de (20260817.0, the commit Android pinned itself), libsrtp a566a9cf (v2.5.0), crc32c 21fc8ef3.
+- Nothing lost (blob proofs against the fork head): of the 4,267 in-tree files 4,090 are identical, 92 generated JNI headers
+  live in the fork under `nanogram/android-generated` (identical), 7 are not carried (the generated
+  `registered_field_trials.h`, now produced at build time, and six protobuf outputs no compiled source needs), and 78 differ
+  row by row in the fork ledger (ledger-webrtc-fork.md section 5): about 30 files where Android takes the fork or Mac
+  version (older Android form, security and crash fixes it lacked), about 35 where the fork's newer or include-prefix form is
+  kept, 6 AVX2-dispatch edits that become compiler flags, 2 folded into the fork's Android commits and 4 FileLog
+  debug-counter files dropped by design (tgnet cannot be called from a shared fork). The
+  fork also carries the Android-only trees (`modules/audio_device/android`, iSAC, `common_types.h`). pffft (11), rnnoise-vad
+  (7) and jni_zero (30 files) are blob-identical to the fork's `third_party/` copies.
+- `voip/CMakeLists.txt`: every `voip/webrtc/...` source keeps its path (the submodule is mounted where the copy was), so only
+  the dependency entries moved. `gen_build_lists.py android` against the new file differs from the fork's committed Android list
+  only by the libevent to stdlib swap, the eight x86 AVX2 files and pffft/rnnoise-vad now being tracked paths.
+  - libsrtp: v2.5.0 file list (adds `cipher_test_cases.c`, `auth_test_cases.c`; no `ekt.c`, `stat.c`, `ut_sim.c`), the fork's one
+    `third_party/libsrtp_config/config.h` (`GCM`, `OPENSSL`, `CPU_CISC`, `PACKAGE_VERSION`) first on the include path with
+    `-DHAVE_CONFIG_H`. Behaviour: SRTP 2.2.0 to 2.5.0, GCM ciphers now compiled in (the old Android config never defined `GCM`).
+  - crc32c: `src/src/crc32c.cc` and `crc32c_portable.cc` from the nested submodule; the app owns `voip/crc32c_config/crc32c/
+    crc32c_config.h` (same content as before: portable code only, no SSE4.2 or ARMv8 intrinsics).
+  - usrsctp is gone and `WEBRTC_HAVE_USRSCTP`, `__Userspace__`, `SCTP_*` are no longer defined (nothing included usrsctp).
+  - `WEBRTC_USE_H264_DECODER` is defined next to `WEBRTC_USE_H264` (the fork gates the FFmpeg H.264 decoder on it).
+  - Include shims in the build tree (`<build>/nanogram_shims`, symlinks): `third_party/openh264/src` to the openh264
+    submodule and `third_party/opus/src` to `third_party/xiph/opus`, because the fork's sources use the Bazel/GN prefixes.
+    `voip/webrtc/nanogram/android-generated` is an include root for the generated JNI headers.
+  - `experiments/registered_field_trials.h` is generated at build time with `python3 voip/webrtc/experiments/field_trials.py
+    header` into `<build>/nanogram_gen` (custom command attached to the `tgcalls` target).
+  - x86 and x86_64: eight `*_avx2.cc` files compile with `-mavx2 -mfma` (the app had commented the AVX2 dispatch out of six
+    sources); arm64-v8a and armeabi-v7a are unaffected.
+  - `tgcalls` include path: `voip/rnnoise/include` (deleted earlier with the 2018 copy, leftover) became
+    `third_party/xiph/rnnoise/include`, where `GroupAudioCapturePostProcessor.cpp` finds `rnnoise.h`.
+  - `jni/CMakeLists.txt`: `add_subdirectory` for abseil and the abseil include path point at `voip/webrtc/third_party/abseil-cpp`.
+- C++ standard stays `-std=c++17` (see the tgcalls entry).
+- Build steps (main session): `git submodule sync --recursive && git submodule update --init --recursive --depth 1`, then
+  `Tools/dev/ng check` (arm64, NDK r30). Things only a build can show: BoringSSL accepts libsrtp v2.5.0's `aes_gcm_ossl.c`
+  and `hmac_ossl.c`; BoringSSL builds `openssl_stream_adapter.cc` with permute extensions on (guard it if not); `-Wundef`
+  style warnings from `WEBRTC_ENABLE_PROTOBUF`; `field_trials.py` runs on the build host (python3 required); every
+  `third_party/...` include in the fork resolves (openh264, opus, ffmpeg, libyuv, vpx). Emulator: 1:1 call (SRTP, with an
+  iOS or Mac peer), group call, screen-share audio, video call H.264 and VP8 fallback.
+
+### WebRTC task queue: stdlib instead of libevent (W5.5, step 1)
+- `voip/CMakeLists.txt` compiles `api/task_queue/default_task_queue_factory_stdlib.cc` instead of
+  `default_task_queue_factory_libevent.cc` and no longer compiles `rtc_base/task_queue_libevent.cc` or any libevent file;
+  `jni/voip/third_party/libevent` (Chromium libevent 1.4.15 snapshot, 40 files) is deleted. `rtc_base/task_queue_stdlib.cc`
+  was already in the build, so the swap is one factory file. Decision: stdlib removes libevent cleanly (libevent had no
+  other user in the voip build; PhysicalSocketServer uses epoll directly), it is what iOS (stdlib) and the desktop
+  clients ship, and upstream WebRTC is moving to it (field trial `WebRTC-TaskQueue-ReplaceLibeventWithStdlib`).
+  The fork keeps its `third_party/libevent` snapshot for now (no app compiles it any more); dropping it from the fork
+  is a follow-up there.
+- Behaviour: every WebRTC task queue thread is now a `std::condition_variable` loop instead of a libevent loop. Delayed
+  task precision and ordering are the same by contract; watch call audio/video start latency and CPU in a long call.
+- Build steps (main session): `Tools/dev/ng check`; emulator: a 1:1 call and a group call of several minutes.
+
+### tgcalls: klaipher/tgcalls branch nanogram-shared at 2a5daa0f, the one call engine for iOS, macOS and Android (W4.4)
+- `TMessagesProj/jni/tgcalls` moves from branch `nanogram-android` (545f5ae) to `nanogram-shared` at 2a5daa0f
+  (`.gitmodules` branch). The shared head is the merge of 545f5ae into the iOS/macOS line, so every Android engine
+  commit is in it; Android gains the 63 Nanogram engine commits that iOS/macOS carry (LogSinkImpl, MediaManager, group
+  audio, V2 negotiation changes).
+- `voip/CMakeLists.txt` needs no source-list change: `tools/check_android_cmake.sh` (fork) against it lists only
+  `v2/ContentNegotiationTest.cpp`, `v2/MtProtoDtlsTransportTest.cpp` and `v2/SignalingSctpOptionsTest.cpp`, the three host
+  tests that stay out. The four `platform/android/*.cpp` files exist at the same paths. The fork adds no new `#include`
+  outside what the old tree already included (checked by diffing the include sets 545f5ae..2a5daa0).
+- C++ standard stays `-std=c++17`: the shared code uses no C++20 library or language feature (grep over `tgcalls/`
+  except platform/darwin), WebRTC's own style guide is C++17, and abseil is configured at C++17, so a switch would
+  also have to move abseil (ODR of `absl::` ordering types). Revisit only if `ng check` reports a C++20 construct.
+- Interface changes that reach `org_telegram_messenger_voip_Instance.cpp` are source compatible, so the file is
+  unchanged: `EncryptionKey::value` is now `shared_ptr<const array>` (the JNI code builds a non-const array and moves it
+  in), `Descriptor` keeps `audioLevelsUpdated(float,float)` that Android sets, and the new `audioLevelUpdated`,
+  `onPlayoutFrame` and `supportsHardwareVideoDecoding` hooks default to off.
+- Build steps (main session): regenerate `voip/ReferenceCoreEmbedded.cpp` with the fork script
+  (`tgcalls/tools/build_wasm_core.sh <wasi-sdk> <out>`, wasi-sdk installed by prebuild); the wasm sha256 must equal the
+  iOS genrule output; commit the regenerated file. A stale blob against the new host code breaks v18/v19 calls.
+  Then `Tools/dev/ng check` and the emulator calls (1:1 to iOS and Mac, a group call, a livestream).
+
+### twidget and widget-sandbox: klaipher forks on branch nanogram (a4f5391c, 1b21a48e), shared with iOS and macOS (W3.6)
+- `TMessagesProj/jni/twidget/twidget` moves from 4769d72 to klaipher/twidget `nanogram` at a4f5391c and
+  `TMessagesProj/jni/twidget/widget-sandbox` from c498cef to klaipher/widget-sandbox `nanogram` at 1b21a48e
+  (`.gitmodules` branch `nanogram` for both). Android's old pins are the bases of both branches, so nothing is lost.
+- twidget gains (behaviour change for Android widgets): the gumbo parse limits (linear time, bounded memory: 100,000 nodes,
+  depth 512), the iOS litehtml edits (caps, budgets, external-DOM builder, host profile hooks, SVG `<use>` budget, many
+  fidelity fixes), the macOS canvas-size and percent-height fixes, and `core/src/renderer.cpp` changes that go with them.
+  `twidget.cmake` is unchanged: its `litehtml/src/*.cpp` glob now also compiles `telegram_external.cpp` and
+  `telegram_master_css.cpp` (portable C++, unused by the Android renderer), and `core/src` lists the same ten files.
+  Open follow-ups in the fork records: `calc()` ceiling (4,096 expressions per process), `:lang()`/`:empty` rule changes.
+- widget-sandbox: only the iOS Swift package, docs and the nested quickjs change. The nested quickjs
+  (`packages/ios/Sources/CQuickJS/quickjs`) becomes klaipher/quickjs `nanogram` f6fc68b9 = TelegramMessenger b526a817
+  (contains Android's ca3594da) + the iOS host API commits (inert unless called) and `TELEGRAM_QJS_ENABLE_DUMPS` (dumps
+  off unless defined; the Android build does not use them). Run `git submodule sync --recursive` so the nested url follows.
+- `assets/WidgetSandbox/*` and `manifest.txt` need no regeneration: the desktop bundles in widget-sandbox are unchanged
+  and equal the committed assets (proof in docs/nanogram/shared-swaps-ledger.md); QuickJS bytecode version stays 29.
+- `check_shared` note: the manifest of nanogram-deps 7d5bd332 still says `pending` for twidget, widget-sandbox and quickjs
+  with the old Android pins as transitional; the main session sets their commits to the pushed shas (a4f5391c, 1b21a48e,
+  f6fc68b9) in nanogram-deps and moves `shared/` in all three apps.
+- Build steps (main session): `Tools/dev/ng check`; emulator: widget corpus, attack and render sets.
+
+### wallet-engine: klaipher/wallet-engine nanogram (44ae85c7), the single source for iOS and Android (W2.I3)
+- `TMessagesProj/jni/wallet-engine` moves from klaipher master 5c65e47c to klaipher/wallet-engine branch `nanogram` at
+  44ae85c7 (`.gitmodules` branch). The fork is the iOS pin (i582 e59e0d89) plus Android's features (key rotation preparation
+  and preview, NFT transfer preparation, TON Connect envelope encrypt/decrypt), blob-identical to 5c65e47c for those files.
+- Deleted `jni/gram-wallet/wallet-engine.patch` (a reference copy of Android's delta; proof in
+  docs/nanogram/shared-swaps-ledger.md: it applies to i582 38147c2 and reproduces 5c65e47c, which the fork carries).
+- Recipient key (owner decision): the fork verifies a supplied comment recipient key by default (iOS behaviour). Android
+  supplies the key it got from the server for rotated recipients, so `WalletEngineBridge.cpp` passes
+  `trust_recipient_public_key = true` in `nativePrepareSend` and `nativeSend` (`create_encrypted_comment({..., recipient_key, true})`),
+  which keeps today's Android behaviour exactly.
+- `gram-wallet/Cargo.lock` is unchanged: `cargo metadata` against the fork tree (Rust 1.99.1, scratch copy) needs no lock edit.
+- Build steps (main session): `Tools/dev/ng prebuild` (regenerates the C++ bindings, which gain the new
+  `trust_recipient_public_key` record field, and builds with `--locked`; if the lock is rejected run `cargo update -w` in
+  `jni/gram-wallet` with Rust 1.99.1 and commit it) then `ng check`; emulator: wallet send with an encrypted comment to a
+  contact, preview/emulate, key rotation, NFT transfer, TON Connect.
+
+### SQLite: klaipher/sqlcipher-amalgamation nanogram (9948d5af, SQLCipher 4.20.0 / SQLite 3.54.1), shared with iOS and macOS (W2.I3)
+- Deleted `TMessagesProj/jni/sqlite/sqlite3.{c,h}` (SQLite 3.39.3, byte-identical to the pristine sqlite.org amalgamation,
+  see docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/sqlite` =
+  klaipher/sqlcipher-amalgamation branch `nanogram` at 9948d5af, the amalgamation iOS ships. Android moves from SQLite
+  3.39.3 to 3.54.1 (accepted behaviour jump; includes the 3.51.3 WAL-reset corruption fix).
+- `jni/CMakeLists.txt` `sqlite` target: compiles `third_party/sqlite/sqlite3.c` with the SQLCipher codec enabled against
+  the BoringSSL already linked (`SQLITE_HAS_CODEC=1`, `SQLCIPHER_CRYPTO_OPENSSL`, `SQLITE_EXTRA_INIT/SHUTDOWN`,
+  `SQLITE_THREADSAFE=1`, `SQLITE_TEMP_STORE=2`; BoringSSL include path; links `crypto`). No key is ever set
+  (`sqlite3_key` is never called), so cache4.db and the other databases stay plain SQLite and a 3.39 database opens
+  as before. Also `SQLITE_OMIT_LOAD_EXTENSION`, `HAVE_USLEEP=1` (busy waits in microseconds, not whole seconds) and
+  `NDEBUG=1`. Not set: `SQLITE_DQS=0`, `SQLITE_OMIT_DEPRECATED`, FTS5.
+- `SqliteWrapper.cpp` includes `<sqlcipher/sqlite3.h>` (the fork's header layout, include dir `third_party/sqlite/headers`);
+  `TMessagesProj/build.gradle` idea exclude follows the new path.
+- Build steps (main session): `Tools/dev/ng check`; emulator: open an existing cache4.db written by the 3.39 build (WAL
+  files included), chat list, search, message history, `PRAGMA temp_store = FILE` path (database clear), group-call noise
+  suppression unaffected.
+
+### libprisma: klaipher/libprisma nanogram (c061944d), the single source for iOS, macOS and Android (W2.I3)
+- `TMessagesProj/jni/third_party/libprisma` moves from Telegram's 94640c63 to klaipher/libprisma branch `nanogram` at
+  c061944d (`.gitmodules` url and branch). The fork carries Android's regex budget (`BudgetedPosition`, `weak_ptr` guard,
+  `search()`/`searchesToGiveUp`) reconciled with upstream's per-byte budget and with iOS's `TokenizeStats`/`TokenizeLimits`.
+- Deleted `jni/prisma/libprisma/*` (the four override files) and `jni/prisma/generate.js`. `prisma/CMakeLists.txt` no
+  longer copies sources into the build dir with `configure_file`; the `prisma` target compiles the submodule's
+  `libprisma/{Highlight,LanguageTree,SyntaxHighlighter,TokenList}.cpp` directly. `BOOST_REGEX_MAX_BLOCKS=1536`, the
+  `PrismaIncludes.h` force-include, `-O2` and the JNI bridge are unchanged.
+- `prisma/generate_prisma_grammars.sh` runs the submodule's `generate.js` with `PRISMA_JOIN_ALIASES=1` (every Prism CSS
+  class stays in the alias field; plain `npm start` would give the iOS grammars.dat and drop them).
+- Build steps (main session): `Tools/dev/ng check`; regenerate the asset with `TMessagesProj/jni/prisma/generate_prisma_grammars.sh`
+  (needs npm and network for `npm ci`) and check that `src/main/assets/grammars.dat` is unchanged (the committed file is
+  the output of the old Android generator at the same grammar version; a diff means the pin brought newer grammar
+  components, in which case commit the regenerated file). Emulator: code blocks incl. the regex-budget and HTML-tag attack cases.
+
+### rnnoise: klaipher/rnnoise nanogram (d2d79970), the single source for iOS, macOS and Android (W2.I3)
+- Deleted the in-tree 2018 copy `TMessagesProj/jni/voip/rnnoise` (22 files, all unmodified xiph blobs, see
+  docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/xiph/rnnoise` =
+  klaipher/rnnoise branch `nanogram` at d2d79970 (xiph v0.2 + portability headers + `denoise.c` hardening + trimmed model).
+  Not `jni/third_party/rnnoise`: that directory is Chromium's rnnoise-vad (`rnn_vad_weights`), a different library.
+- `voip/CMakeLists.txt` `rnnoise` target: sources are now the ten v0.2 files iOS builds (celt_lpc, denoise, kiss_fft, nnet,
+  nnet_default, parse_lpcnet_weights, pitch, rnn, rnnoise_data, rnnoise_tables; the dump/write tools with their own
+  `main()` are not built); the long `_celt_*`/`opus_fft_*` rename list and the Opus-style definitions
+  (`USE_KISS_FFT`, `NULL=0`, `restrict=`, `__EMX__`, ...) are gone, replaced by the three iOS renames `compute_rnn`,
+  `eband20ms`, `init_rnnoise`. PUBLIC compile options/definitions and ARM mode are unchanged.
+- Behaviour change (accepted): voice-message noise suppression uses the v0.2 built-in model (`audio.c` API unchanged).
+- Build step (main session): `ng check`; emulator: record a voice message with noise suppression on.
+
+### OpenH264: klaipher/openh264 nanogram (3583f617), the single source for iOS, macOS and Android (W2.I3)
+- `TMessagesProj/jni/third_party/openh264` moves from cisco/openh264 v2.7.0 (1bca6231) to klaipher/openh264 branch `nanogram`
+  at 3583f617 (`.gitmodules` url and branch): v2.7.0 plus the two commits iOS already ships, H.264 levels 6.0-6.2 and the
+  subcodec sprite mode (`bSubcodecMode`, default off, so normal video calls encode exactly as before).
+- No script change: `build_openh264.sh` still builds the tree with its Makefile. The submodule commit is part of the
+  `ng prebuild` key, so `jni/prebuild/lib/*/libopenh264.a` is rebuilt (build step for the main session).
+
+### libyuv: klaipher/libyuv nanogram (947f5326), the single source for iOS, macOS and Android (W1/W2)
+- `TMessagesProj/jni/third_party/libyuv` moves from chromium.googlesource.com 28ce69c2 to klaipher/libyuv branch `nanogram`
+  at 947f5326 (`.gitmodules` url and branch). The fork is upstream 0b8dd231 (version 1977, the version iOS ships) minus
+  `BUILD.bazel`, `WORKSPACE.bazel` and `libyuv.bzl`; every source file is byte-identical to upstream, so nothing local is lost.
+- No CMake change: `jni/CMakeLists.txt` still `add_subdirectory`s the upstream `CMakeLists.txt` and keeps
+  `CAN_COMPILE_SME FALSE`. Android gains the libyuv commits between 28ce69c2 and 0b8dd231 (scaling and ARM kernels).
+- Not built (agent rule): the main session's `ng check` confirms the new libyuv compiles with NDK r30 and the SME switch.
+
+### Shared libraries: one manifest, one checker, one source per library (W0.4)
+- New submodule `shared/` = klaipher/nanogram-deps (branch main, shallow), pinned at 7d5bd332, the same commit as Nanogram
+  iOS and macOS. It holds `shared-libraries.json` (every shared library with its single source and commit) and
+  `check_shared.py`. Android keeps no copy of either.
+- `Tools/git-hooks/pre-push` runs `python3 shared/check_shared.py --side android --quiet` before anything else and stops the
+  push when a pin differs from the manifest or when `shared/` is not checked out (`NG_PRE_PUSH_SHARED=0` skips it for one
+  push; `--no-verify` stays forbidden). Verified on a scratch repo: a correct gitlink passes, a skewed gitlink exits 1.
+- AGENTS.md: the shared-code rule now says one source per library and that all three pins move the same day; the
+  `tgcalls-port` and per-platform tgcalls branch wording is gone (tgcalls is one branch, `nanogram-shared`, for all apps;
+  the Android pin and `.gitmodules` branch move with the tgcalls integration step).
+
+### Shared-library sources, no new repos (W1.3)
+- `.gitmodules`: dav1d url -> https://code.videolan.org/videolan/dav1d.git (pin 54706fc, tag 1.5.4) and wamr url ->
+  https://github.com/bytecodealliance/wasm-micro-runtime.git (pin 25bd7eb); same commits, so no rebuild. Both match the
+  canonical upstream homes used by iOS and macOS.
+- Removed the dead `rlottie/src/lottie` include from voipandroid (no rlottie directory exists in this tree).
+- Rust toolchain pinned: `toolchain.properties` `rust=1.99.1` (the channel in Mac's `core-xprojects/rust-toolchain.toml`).
+  `ng prebuild` exports it as `TLOTTIE_RUST_TOOLCHAIN` and `RUSTUP_TOOLCHAIN` (tlottie defaulted to `stable` and
+  wallet-engine to its own rust-toolchain.toml, so each could build with a different compiler) and the value is part of the prebuild cache key. `ng doctor` reports it.
+  Install once: `rustup toolchain install 1.99.1 --profile minimal` and `rustup target add --toolchain 1.99.1
+  aarch64-linux-android` (the build script already prints that command when a target is missing).
+
+### Shared tlottie (dkaraush/tlottie v1.0.6, same as iOS and macOS)
+- `TMessagesProj/jni/tlottie` now points at the official dkaraush/tlottie v1.0.6 (92df98dc) instead of klaipher/tlottie
+  31f1b542 (v1.0.4 line); `.gitmodules` url changed. klaipher/tlottie carried no local commits of ours, and 31f1b542 is
+  an ancestor of 92df98dc, so nothing is lost. Android gains 6 commits: 8386793 limits overhaul (2000 px canvas, NFT
+  model sticker fix, rlottie_2019 NFT pattern compatibility, faster asset id parsing), b8ed399 v1.0.5, 0e82666 merge,
+  4ad34f6 empty JSON arrays for vectors (rlottie compatibility), a9164a0 v1.0.6, 92df98d v1.0.6 follow-up. The C API
+  header is unchanged; the prebuilt rebuilds because the submodule commit is part of the `ng prebuild` key.
+- Behaviour change on hostile input (same as iOS and macOS): v1.0.6 removes the cumulative parse and render work budgets
+  (`max_parse_work`, `max_render_work`; `Limit::ParseWork` removed, `RenderWork` -> `RenderPixels`) and raises the memory
+  caps (`max_parse_bytes` 13.0 MB -> 43.7 MB; `max_render_bytes` 36 MiB fixed -> 116 MB at 720x720, now scaled with output
+  area); most per-layer caps rise 1.2x to 8x. A crafted sticker from any chat can use more CPU and memory per frame.
+  Deferred: timing and peak-memory check of the heaviest corpus stickers in the emulator corpus run.
+
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

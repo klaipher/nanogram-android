@@ -1100,7 +1100,7 @@ public class WalletEngine2 implements AutoCloseable {
                         throw new IllegalStateException("Previous wallet send is still unresolved");
                     }
                     final PreparedSend prepared = nativePrepareSend(ptr, phrase, address, amount, commentBytes,
-                        commentRecipientPublicKey, gasless_address, UUID.randomUUID().toString());
+                        commentRecipientPublicKey, TRUST_RECIPIENT_PUBLIC_KEY, gasless_address, UUID.randomUUID().toString());
                     if (prepared != null) {
                         encryptedComment = prepared.encryptedCommentBody == null ? null
                             : encryptedCommentPayload(prepared.encryptedCommentBody);
@@ -1336,7 +1336,7 @@ public class WalletEngine2 implements AutoCloseable {
     private static native TL_wallet.walletTransaction nativeEmulateSend(long handle, String address, long amount, byte[] comment, boolean comment_encrypted);
     private static native byte[] nativeDecryptComment(long handle, byte[] phrase, String sender, String body);
     private static native byte[] nativeDecryptRawComment(byte[] phrase, String sender, String body);
-    private static native TL_wallet.walletTransaction nativeSend(long handle, byte[] phrase, String address, long amount, byte[] comment, byte[] comment_recipient_public_key, String operationId, SendCallbacks callbacks);
+    private static native TL_wallet.walletTransaction nativeSend(long handle, byte[] phrase, String address, long amount, byte[] comment, byte[] comment_recipient_public_key, boolean trust_recipient_public_key, String operationId, SendCallbacks callbacks);
     @Keep
     private static class PreparedSend {
         final TL_wallet.sendTransfer transfer;
@@ -1389,7 +1389,11 @@ public class WalletEngine2 implements AutoCloseable {
     private static native TL_wallet.walletTransaction nativeEmulateRotateKey(long handle, String address);
     private static native String nativeMessageBodyHash(String boc);
     private static native PreparedRotation nativePrepareRotateKey(long handle, byte[] phrase, String gaslessAddress);
-    private static native PreparedSend nativePrepareSend(long handle, byte[] phrase, String address, long amount, byte[] comment, byte[] comment_recipient_public_key, String gaslessAddress, String operationId);
+    // Explicit opt-in for the engine's recipient-key check: true makes the engine use the supplied key as is (no lookup,
+    // no derivation check). Only a confirmed key-rotation path may set it; the server key is not enough.
+    private static final boolean TRUST_RECIPIENT_PUBLIC_KEY = false;
+
+    private static native PreparedSend nativePrepareSend(long handle, byte[] phrase, String address, long amount, byte[] comment, byte[] comment_recipient_public_key, boolean trust_recipient_public_key, String gaslessAddress, String operationId);
     private static native SendResolution nativeResolvePending(long handle);
     private static native void nativeRotateKey(long handle, byte[] phrase, String operationId, RotationCallbacks callbacks);
     private static native long nativeBalance(long handle);

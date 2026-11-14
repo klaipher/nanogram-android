@@ -8,7 +8,6 @@ idea {
     module {
         excludeDirs += [
             file('jni/td'),
-            file('jni/third_party/absl'),
             file('jni/third_party/boringssl'),
             file('jni/third_party/dav1d'),
             file('jni/third_party/ffmpeg'),
@@ -21,8 +20,8 @@ idea {
             file('jni/third_party/boost-regex'),
             file('jni/tgcalls'),
             file('jni/tlottie'),
-            file('jni/voip/webrtc'),
-            file('jni/sqlite')
+            file('jni/voip/webrtc/third_party'),
+            file('jni/third_party/sqlite')
         ]
     }
 }
@@ -126,6 +125,23 @@ android {
         cmake {
             path 'jni/CMakeLists.txt'
             version rootProject.ext.nanogramCmake
+        }
+    }
+
+    // org.webrtc comes from the shared WebRTC fork (submodule jni/voip/webrtc, klaipher/webrtc nanogram), the same
+    // directories its Android build uses, without tests. The Java the app used to copy into src/main/java/org/webrtc
+    // is in the fork, including the Telegram-modified classes (they compile only inside this app).
+    sourceSets {
+        main {
+            java.srcDirs += [
+                'jni/voip/webrtc/sdk/android/api',
+                'jni/voip/webrtc/sdk/android/src/java',
+                'jni/voip/webrtc/modules/audio_device/android/java/src',
+                'jni/voip/webrtc/rtc_base/java/src',
+            ]
+            // Upstream-only class the app never carried: it needs EglBase.EglConnection, which the Telegram-modified
+            // EglBase.java in the fork does not have, so it cannot compile here. The other 173 files are the old org/webrtc set.
+            java.exclude '**/org/webrtc/EglThread.java'
         }
     }
 

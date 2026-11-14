@@ -1,12 +1,12 @@
 [submodule "TMessagesProj/jni/tlottie"]
 	path = TMessagesProj/jni/tlottie
-	url = https://github.com/klaipher/tlottie.git
+	url = https://github.com/dkaraush/tlottie.git
 [submodule "TMessagesProj/jni/third_party/libvpx"]
 	path = TMessagesProj/jni/third_party/libvpx
 	url = https://github.com/webmproject/libvpx.git
 [submodule "TMessagesProj/jni/third_party/dav1d"]
 	path = TMessagesProj/jni/third_party/dav1d
-	url = https://github.com/videolan/dav1d.git
+	url = https://code.videolan.org/videolan/dav1d.git
 [submodule "TMessagesProj/jni/third_party/ffmpeg"]
 	path = TMessagesProj/jni/third_party/ffmpeg
 	url = https://github.com/klaipher/FFmpeg.git
@@ -25,13 +25,17 @@
 	url = https://github.com/xiph/opus.git
 [submodule "TMessagesProj/jni/third_party/libyuv"]
 	path = TMessagesProj/jni/third_party/libyuv
-	url = https://chromium.googlesource.com/libyuv/libyuv
+	url = https://github.com/klaipher/libyuv.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/third_party/openh264"]
 	path = TMessagesProj/jni/third_party/openh264
-	url = https://github.com/cisco/openh264.git
+	url = https://github.com/klaipher/openh264.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/third_party/boringssl"]
 	path = TMessagesProj/jni/third_party/boringssl
-	url = https://github.com/google/boringssl.git
+	url = https://github.com/klaipher/boringssl.git
+	branch = nanogram
+	shallow = true
 [submodule "TMessagesProj/jni/td"]
 	path = TMessagesProj/jni/td
 	url = https://github.com/tdlib/td.git
@@ -39,28 +43,49 @@
 	path = TMessagesProj_Modules/media
 	url = https://github.com/klaipher/media.git
 	branch = nanogram-android
-[submodule "TMessagesProj/jni/third_party/absl"]
-	path = TMessagesProj/jni/third_party/absl
-	url = https://github.com/abseil/abseil-cpp.git
+[submodule "TMessagesProj/jni/voip/webrtc"]
+	path = TMessagesProj/jni/voip/webrtc
+	url = https://github.com/klaipher/webrtc.git
+	branch = nanogram
+	shallow = true
 [submodule "TMessagesProj/jni/third_party/wamr"]
 	path = TMessagesProj/jni/third_party/wamr
-	url = https://github.com/wasm-micro-runtime/wasm-micro-runtime.git
+	url = https://github.com/bytecodealliance/wasm-micro-runtime.git
 [submodule "TMessagesProj/jni/tgcalls"]
 	path = TMessagesProj/jni/tgcalls
 	url = https://github.com/klaipher/tgcalls.git
-	branch = nanogram-android
+	branch = nanogram-shared
 [submodule "TMessagesProj/jni/wallet-engine"]
 	path = TMessagesProj/jni/wallet-engine
 	url = https://github.com/klaipher/wallet-engine.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/third_party/boost-regex"]
 	path = TMessagesProj/jni/third_party/boost-regex
 	url = https://github.com/boostorg/regex.git
 [submodule "TMessagesProj/jni/third_party/libprisma"]
 	path = TMessagesProj/jni/third_party/libprisma
 	url = https://github.com/klaipher/libprisma.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/twidget/twidget"]
 	path = TMessagesProj/jni/twidget/twidget
 	url = https://github.com/klaipher/twidget.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/twidget/widget-sandbox"]
 	path = TMessagesProj/jni/twidget/widget-sandbox
 	url = https://github.com/klaipher/widget-sandbox.git
+	branch = nanogram
+[submodule "shared"]
+	path = shared
+	url = https://github.com/klaipher/nanogram-deps.git
+	branch = main
+	shallow = true
+[submodule "TMessagesProj/jni/third_party/xiph/rnnoise"]
+	path = TMessagesProj/jni/third_party/xiph/rnnoise
+	url = https://github.com/klaipher/rnnoise.git
+	branch = nanogram
+	shallow = true
+[submodule "TMessagesProj/jni/third_party/sqlite"]
+	path = TMessagesProj/jni/third_party/sqlite
+	url = https://github.com/klaipher/sqlcipher-amalgamation.git
+	branch = nanogram
+	shallow = true

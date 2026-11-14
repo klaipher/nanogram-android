@@ -1,7 +1,18 @@
 #!/bin/sh
 # Nanogram for Android pre-push gate. Installed by `Tools/dev/ng setup` (core.hooksPath).
-# Product code changes run `ng check` (arm64 debug build + unit tests); docs/tools-only pushes skip it.
+# Every push first checks the shared-library pins against shared/shared-libraries.json (klaipher/nanogram-deps).
+# Product code changes then run `ng check` (arm64 debug build + unit tests); docs/tools-only pushes skip it.
 root="$(git rev-parse --show-toplevel)" || exit 1
+if [ "${NG_PRE_PUSH_SHARED:-1}" != 0 ]; then
+  if [ ! -f "$root/shared/check_shared.py" ]; then
+    echo "pre-push: shared/ is not checked out (git submodule update --init --depth 1 shared); push stopped" >&2
+    exit 1
+  fi
+  python3 "$root/shared/check_shared.py" --side android --root "$root" --quiet || {
+    echo "pre-push: shared library pins differ from shared/shared-libraries.json; push stopped (see the lines above)" >&2
+    exit 1
+  }
+fi
 zero=0000000000000000000000000000000000000000
 need_check=0
 records_touched=0

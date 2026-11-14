@@ -5,6 +5,8 @@ Everything goes through `Tools/dev/ng`. First time on a Mac:
 ```sh
 brew install openjdk@21 ccache rustup meson nasm pkg-config
 brew install --cask android-commandlinetools
+rustup toolchain install 1.99.1 --profile minimal
+rustup target add --toolchain 1.99.1 aarch64-linux-android
 Tools/dev/ng setup       # pinned SDK/NDK/CMake, local.properties, hooks, shallow submodules
 Tools/dev/ng prebuild    # native static libraries into ~/.cache/nanogram-android/prebuild/<key>
 Tools/dev/ng build       # arm64 debug APK into build-output/<build>/
@@ -19,7 +21,7 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 
 | Technique | Where | Effect |
 |---|---|---|
-| Pinned, current toolchain | `Tools/dev/toolchain.properties` (read by ng and Gradle) | JDK 21, Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, build-tools 37 |
+| Pinned, current toolchain | `Tools/dev/toolchain.properties` (read by ng and Gradle) | JDK 21, Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, build-tools 37, Rust 1.99.1 |
 | arm64-v8a only | root `build.gradle` `nanogramAbiFilters` | one native build instead of four; `-PnanogramAbis=all` for all ABIs |
 | ccache for every native compile, including the FFmpeg, libvpx and dav1d prebuilds | `jni/CMakeLists.txt` `NANOGRAM_CCACHE`; `prebuild/common.sh` `CCACHE_LAUNCHER` (make-time `CC=`, meson cross-file list), cap 8 GB | clean native rebuilds become cache hits; shared across worktrees (`CCACHE_BASEDIR`) |
 | Shared ThinLTO cache for release links | `NANOGRAM_THINLTO_CACHE_DIR` = `~/.cache/nanogram-android/thinlto`, `jni/CMakeLists.txt` | the lld cache (2 GB, self-pruning) survives new `.cxx/<hash>` trees, prebuild-key changes and worktrees |
@@ -38,7 +40,7 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 ## Native speed flags
 
 Hot code (tgnet, sqlite, image/gif/lottie glue, opus, FFmpeg, libvpx) is built for speed (-O2, no `--enable-small`);
-cold code (tgcalls_tp/usrsctp) stays -Os. libvpx arm64 adds dotprod/i8mm kernels chosen at run time. Compare before and
+cold code (tgcalls_tp: libsrtp, pffft) stays -Os. libvpx arm64 adds dotprod/i8mm kernels chosen at run time. Compare before and
 after with `ng build release` on both commits: `ls -l` of `libtmessages.49.so` and APK size, and
 `unzip -l` for per-library sizes. Quick speed check on a device or emulator: `adb shell am start -W` cold start and
 `dumpsys gfxinfo` jank on a long chat list (sqlite), voice-message playback CPU (`top -H`), a VP9 .webm sticker

@@ -210,6 +210,17 @@ def cmd_doctor(_: argparse.Namespace) -> None:
     for pkg in sdk_packages():
         p = sdk_root() / pkg.replace(";", "/")
         print(f"  {pkg:<32} {'ok' if p.exists() else 'MISSING'}")
+    if TC.get("rust"):
+        rc = subprocess.run(["rustup", "which", "--toolchain", TC["rust"], "rustc"], capture_output=True, text=True) if shutil.which("rustup") else None
+        print(f"rust         {TC['rust']} ({'ok' if rc and rc.returncode == 0 else 'MISSING: rustup toolchain install ' + TC['rust'] + ' --profile minimal'})")
+    if TC.get("rust") and shutil.which("rustup"):
+        tg = {"arm64-v8a": "aarch64-linux-android", "armeabi-v7a": "armv7-linux-androideabi", "x86_64": "x86_64-linux-android", "x86": "i686-linux-android"}
+        have = subprocess.run(["rustup", "target", "list", "--toolchain", TC["rust"], "--installed"], capture_output=True, text=True).stdout.split()
+        miss = [tg[x] for x in prebuild_abis(None) if tg[x] not in have]
+        if miss:
+            print(f"rust targets MISSING: rustup target add --toolchain {TC['rust']} {' '.join(miss)}")
+        else:
+            print("rust targets ok")
     for tool in ("ccache", "ninja", "cmake", "adb"):
         print(f"{tool:<12} {shutil.which(tool) or 'not on PATH'}")
     if shutil.which("ccache"):

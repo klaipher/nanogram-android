@@ -46,7 +46,7 @@ rust_target_for_abi() {
     esac
 }
 
-installed_targets="$(rustup target list --installed)"
+installed_targets="$(rustup target list --installed)"  # honours RUSTUP_TOOLCHAIN
 missing_targets=()
 for abi in $ABIS; do
     target="$(rust_target_for_abi "$abi")"
@@ -56,7 +56,7 @@ for abi in $ABIS; do
 done
 if (( ${#missing_targets[@]} )); then
     echo "ERROR: missing Rust Android targets. From $ENGINE_DIR run:" >&2
-    echo "       rustup target add ${missing_targets[*]}" >&2
+    echo "       rustup target add --toolchain ${RUSTUP_TOOLCHAIN:-$(rustup show active-toolchain | cut -d' ' -f1)} ${missing_targets[*]}" >&2
     exit 1
 fi
 
