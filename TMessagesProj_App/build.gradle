@@ -55,16 +55,20 @@ android {
         }
 
         release {
-            storeFile file("../TMessagesProj/config/release.keystore")
-            storePassword RELEASE_STORE_PASSWORD
-            keyAlias RELEASE_KEY_ALIAS
-            keyPassword RELEASE_KEY_PASSWORD
+            // Our release key lives outside git (Tools/dev/ng signing init); without it, release builds use the debug key.
+            def nanogramStore = findProperty('nanogramStoreFile')
+            storeFile file(nanogramStore ?: "../TMessagesProj/config/release.keystore")
+            storePassword nanogramStore ? findProperty('nanogramStorePassword') : RELEASE_STORE_PASSWORD
+            keyAlias nanogramStore ? findProperty('nanogramKeyAlias') : RELEASE_KEY_ALIAS
+            keyPassword nanogramStore ? findProperty('nanogramKeyPassword') : RELEASE_KEY_PASSWORD
         }
     }
 
     packagingOptions {
         jniLibs {
-            useLegacyPackaging = true
+            // Nanogram: native libraries stay uncompressed and page-aligned and load straight from the APK:
+            // no second extracted copy on the device and faster first start, at the cost of a larger APK download.
+            useLegacyPackaging = false
         }
     }
 
@@ -122,7 +126,7 @@ android {
     productFlavors {
         bundleAfat {
             ndk {
-                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+                abiFilters(*rootProject.ext.nanogramAbiFilters)
             }
             ext {
                 abiVersionCode = 1
@@ -131,7 +135,7 @@ android {
         }
         afat {
             ndk {
-                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+                abiFilters(*rootProject.ext.nanogramAbiFilters)
             }
             sourceSets.debug {
                 manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest_SDK23.xml'
@@ -178,7 +182,7 @@ android {
         externalNativeBuild {
             cmake {
                 version '3.22.1'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23' // , '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
                 targets 'tmessages.49', 'twidget'
             }
         }
@@ -194,4 +198,6 @@ android {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}

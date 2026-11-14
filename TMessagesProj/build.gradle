@@ -148,6 +148,10 @@ android {
         minSdkVersion 23
         targetSdkVersion 36
 
+        // Own api_id/api_hash come from Tools/dev/ng (environment); plain Gradle builds keep upstream's public values.
+        buildConfigField "int", "NANOGRAM_API_ID", (findProperty('nanogramApiId') ?: '4').toString()
+        buildConfigField "String", "NANOGRAM_API_HASH", "\"" + (findProperty('nanogramApiHash') ?: '014b35b6184100b085b0d0572f9b5103') + "\""
+
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
         multiDexEnabled true
@@ -155,7 +159,16 @@ android {
         externalNativeBuild {
             cmake {
                 version '3.22.1'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON',
+                        "-DNANOGRAM_CCACHE=${providers.environmentVariable('NANOGRAM_CCACHE').getOrElse('')}",
+                        "-DNANOGRAM_PREBUILD_DIR=${findProperty('nanogramPrebuildDir') ?: ''}"
+            }
+        }
+        ndk {
+            abiFilters(*rootProject.ext.nanogramAbiFilters)
+        }
+        externalNativeBuild {
+            cmake {
                 targets 'tmessages.49', 'twidget'
             }
         }
@@ -255,21 +268,24 @@ def getProps(String propName) {
         return "";
     }
 }
-apply plugin: 'com.google.gms.google-services'
+// Firebase config is applied in the app module only (our own project); upstream's library config is Telegram's.
 
+def visibilityTaskNames = gradle.startParameter.taskNames
+def visibilityIsPrivateProp = project.hasProperty("IS_PRIVATE") ? project.property("IS_PRIVATE").toString() : null
+def visibilityPrivateApk = file("${projectDir}_AppHockeyApp/afat/HA_private/Telegram-Beta.apk")
 task checkVisibility {
     doFirst {
-        def isPrivateBuild = project.gradle.startParameter.taskNames.find {
+        def isPrivateBuild = visibilityTaskNames.find {
             it.contains("HA_private") || it.contains("HA_hardcore") || it.contains("Debug") || it.contains("Release")
         }
-        def isPublicAllowed = !project.hasProperty("IS_PRIVATE") || !project.property("IS_PRIVATE").toBoolean()
+        def isPublicAllowed = visibilityIsPrivateProp == null || !visibilityIsPrivateProp.toBoolean()
         if (!isPrivateBuild && !isPublicAllowed) {
             throw new GradleException("Building public version of private code!")
         }
     }
     doLast {
-        if (project.gradle.startParameter.taskNames.find { it.contains("HA_public") }) {
-            def privateBuild = file("${projectDir}_AppHockeyApp/afat/HA_private/Telegram-Beta.apk")
+        if (visibilityTaskNames.find { it.contains("HA_public") }) {
+            def privateBuild = visibilityPrivateApk
             if (privateBuild.exists()) {
                 privateBuild.delete()
             }

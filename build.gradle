@@ -17,6 +17,10 @@ repositories {
     google()
 }
 
+// Nanogram: arm64-v8a only by default (like Apple-Silicon-only on the Mac); -PnanogramAbis=all builds every ABI.
+ext.nanogramAbiFilters = (findProperty('nanogramAbis') ?: 'arm64') == 'all' ?
+        ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'] : ['arm64-v8a']
+
 // Strip JLatexMath fonts we don't ship (transitive AAR assets from
 // io.noties.markwon:ext-latex -> ru.noties:jlatexmath-android, ~764 KB total under
 // assets/org/scilab/forge/jlatexmath/fonts/). Has to live in the APK modules — a

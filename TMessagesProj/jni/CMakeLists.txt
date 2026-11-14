@@ -7,9 +7,25 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS "-DANDROID -g")
 set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g -Wno-error=implicit-function-declaration")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -flto=full")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden -flto=full")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -flto=full -Wl,--gc-sections -Wl,--icf=safe -Wl,-Bsymbolic")
+# Nanogram: release keeps upstream's full LTO; debug skips LTO so native rebuilds and links stay fast.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(NANOGRAM_LTO "")
+else()
+    set(NANOGRAM_LTO "-flto=full")
+endif()
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden ${NANOGRAM_LTO}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden ${NANOGRAM_LTO}")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NANOGRAM_LTO} -Wl,--gc-sections -Wl,--icf=safe -Wl,-Bsymbolic")
+
+# Nanogram: compiler cache (Tools/dev/ng passes it) and prebuilt libraries from the content-addressed cache.
+if (NANOGRAM_CCACHE)
+    set(CMAKE_C_COMPILER_LAUNCHER ${NANOGRAM_CCACHE})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${NANOGRAM_CCACHE})
+    set(CMAKE_ASM_COMPILER_LAUNCHER ${NANOGRAM_CCACHE})
+endif()
+if (NOT NANOGRAM_PREBUILD_DIR)
+    set(NANOGRAM_PREBUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/prebuild)
+endif()
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
@@ -55,25 +71,25 @@ target_link_libraries(webrtc_absl INTERFACE
 )
 
 add_library(avutil STATIC IMPORTED)
-set_target_properties(avutil PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libavutil.a)
+set_target_properties(avutil PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libavutil.a)
 
 add_library(avformat STATIC IMPORTED)
-set_target_properties(avformat PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libavformat.a)
+set_target_properties(avformat PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libavformat.a)
 
 add_library(avcodec STATIC IMPORTED)
-set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libavcodec.a)
+set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libavcodec.a)
 
 add_library(swresample STATIC IMPORTED)
-set_target_properties(swresample PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libswresample.a)
+set_target_properties(swresample PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libswresample.a)
 
 add_library(swscale STATIC IMPORTED)
-set_target_properties(swscale PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libswscale.a)
+set_target_properties(swscale PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libswscale.a)
 
 add_library(crypto STATIC IMPORTED)
-set_target_properties(crypto PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libcrypto.a)
+set_target_properties(crypto PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libcrypto.a)
 
 add_library(ssl STATIC IMPORTED)
-set_target_properties(ssl PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libssl.a)
+set_target_properties(ssl PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libssl.a)
 
 
 #aesige
@@ -84,19 +100,19 @@ set_target_properties(ssl PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/p
 
 
 add_library(libvpx STATIC IMPORTED)
-set_target_properties(libvpx PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libvpx.a)
+set_target_properties(libvpx PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libvpx.a)
 
 add_library(libdav1d STATIC IMPORTED)
-set_target_properties(libdav1d PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libdav1d.a)
+set_target_properties(libdav1d PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libdav1d.a)
 
 add_library(libopus STATIC IMPORTED)
-set_target_properties(libopus PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libopus.a)
+set_target_properties(libopus PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libopus.a)
 
 add_library(tde2e STATIC IMPORTED)
-set_target_properties(tde2e PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libtde2e.a)
+set_target_properties(tde2e PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libtde2e.a)
 
 add_library(tdutils STATIC IMPORTED)
-set_target_properties(tdutils PROPERTIES IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libtdutils.a)
+set_target_properties(tdutils PROPERTIES IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libtdutils.a)
 
 add_subdirectory(
         prisma
@@ -141,13 +157,13 @@ target_link_libraries(tgnet
 # tlottie (prebuilt Rust static library)
 add_library(tlottie STATIC IMPORTED)
 set_target_properties(tlottie PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libtlottie.a)
+        IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libtlottie.a)
 
 # Wallet Engine: matching Rust archive and generated UniFFI C++20 wrapper.
-set(WALLET_ENGINE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/include/wallet-engine)
+set(WALLET_ENGINE_INCLUDE_DIR ${NANOGRAM_PREBUILD_DIR}/include/wallet-engine)
 add_library(wallet_engine STATIC IMPORTED)
 set_target_properties(wallet_engine PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/prebuild/lib/${ANDROID_ABI}/libwallet_engine.a)
+        IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libwallet_engine.a)
 
 add_library(wallet_engine_cpp STATIC
         ${WALLET_ENGINE_INCLUDE_DIR}/wallet_engine.cpp
@@ -282,7 +298,7 @@ target_include_directories(${NATIVE_LIB} PUBLIC
         third_party/absl
         third_party/boringssl/include
         openssl/include
-        prebuild/include/${ANDROID_ABI}
+        ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
         third_party/ffmpeg
         third_party/libvpx
         third_party/dav1d/include

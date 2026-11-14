@@ -5,12 +5,12 @@ set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -g")
 #openh264 (prebuilt static library)
 add_library(openh264 STATIC IMPORTED)
 set_target_properties(openh264 PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libopenh264.a)
+        IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libopenh264.a)
 
 #wasm (prebuilt static library)
 add_library(wasm STATIC IMPORTED)
 set_target_properties(wasm PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_HOME_DIRECTORY}/prebuild/lib/${ANDROID_ABI}/libiwasm.a)
+        IMPORTED_LOCATION ${NANOGRAM_PREBUILD_DIR}/lib/${ANDROID_ABI}/libiwasm.a)
 
 #rnnoise
 add_library(rnnoise STATIC
@@ -1522,7 +1522,7 @@ target_include_directories(tgcalls PUBLIC
         third_party/libsrtp/crypto/include
         third_party/usrsctplib
         third_party
-        prebuild/include/${ANDROID_ABI}
+        ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
         third_party/ffmpeg
         third_party/libvpx
         third_party/dav1d/include
