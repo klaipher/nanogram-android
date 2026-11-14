@@ -5,6 +5,20 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-TELECOM-1: system call integration (experiment, off by default)
+- Debug settings > "Nanogram: system call integration (Telecom)" (`NanogramExperiments.selfManagedTelecom`, default OFF).
+  On API 34+, for 1:1 calls only, `NanogramTelecomCall` registers a transactional self-managed Telecom call with the
+  platform `TelecomManager.addCall` (no new dependency: core-telecom is a Kotlin/coroutines API, the platform call is
+  what it wraps on 34+). `VoIPService.dispatchStateChanged` drives it: ringing/requesting -> addCall, key exchange on an
+  incoming call -> answer, established -> setActive, ended/failed/busy -> disconnect with the matching cause. System
+  answer/disconnect (Bluetooth, car, watch) call acceptIncomingCall()/hangUp(). Hold is refused.
+- tgcalls keeps audio routing and the existing call notification; endpoint callbacks are ignored on purpose (one owner of
+  state). The old ConnectionService path stays off (`USE_CONNECTION_SERVICE`), and the experiment does nothing if it is
+  ever turned on. Group calls and API < 34 are unchanged.
+- Counter `telecomCalls` in the `nanogram_experiments` preferences for the beta.
+- Needs the device matrix before any default-on: Bluetooth headset, car head unit, watch, DnD with call exceptions, call
+  while another app plays media; count audio-route glitches and missed rings. Tests: `NanogramTelecomCallTest`.
+
 ### ANDROID-CAMERA-1: Camera2 capture (experiment, off by default)
 - Debug settings > "Nanogram: Camera2 for stories and chat camera" (`NanogramExperiments.camera2Capture`, default OFF)
   turns on the existing Camera2Session in `CameraView` (story recorder, chat camera, round video), which upstream had

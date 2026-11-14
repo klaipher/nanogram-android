@@ -29,3 +29,4 @@ Kept current with every change that alters behaviour or build compared with upst
 | QR, barcode and face detection | ML Kit (unbundled barcode scanning and face detection) instead of Mobile Vision `play-services-vision`; ZXing stays the QR fallback | Mobile Vision is retired; ML Kit is maintained |
 | Adaptive refresh rate | Experiment (Debug settings, off): 60 fps content votes, no max-rate pin on overlay windows, fling velocity hints, API 35+ | Lower display power on LTPO panels; needs measuring before default-on |
 | Camera2 capture | Experiment (Debug settings, off): `CameraView` uses Camera2Session with Camera1 fallback; video stabilization | Camera1 is deprecated; needs a device matrix before default-on |
+| System call integration | Experiment (Debug settings, off): 1:1 calls registered with Telecom (transactional self-managed, API 34+) | Bluetooth/car/watch call controls and call priority; needs a device matrix |
