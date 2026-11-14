@@ -48,6 +48,8 @@ import androidx.core.graphics.drawable.IconCompat;
 
 import com.android.billingclient.api.ProductDetails;
 
+import org.telegram.messenger.nanogram.NanogramFeatures;
+import org.telegram.messenger.nanogram.NanogramSearchOperators;
 import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLiteDatabase;
 import org.telegram.SQLite.SQLiteException;
@@ -96,6 +98,7 @@ import org.telegram.utils.code.highlight.CodeHighlighting;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.TimeZone;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -3846,7 +3849,68 @@ public class MediaDataController extends BaseController {
         return reqId != 0;
     }
 
-    public void searchMessagesInChat(String query, long dialogId, long mergeDialogId, int guid, int direction, long replyMessageId, boolean internal, TLRPC.User user, TLRPC.Chat chat, boolean jumpToMessage, ReactionsLayoutInBubble.VisibleReaction reaction) {
+    private int searchOperatorMinDate;
+    private int searchOperatorMaxDate;
+    private NanogramSearchOperators.Type searchOperatorType;
+
+    private void applySearchOperators(TLRPC.TL_messages_search req) {
+        req.min_date = searchOperatorMinDate;
+        req.max_date = searchOperatorMaxDate;
+        req.filter = searchOperatorFilter(searchOperatorType);
+    }
+
+    private static TLRPC.MessagesFilter searchOperatorFilter(NanogramSearchOperators.Type type) {
+        if (type == null) {
+            return new TLRPC.TL_inputMessagesFilterEmpty();
+        }
+        switch (type) {
+            case PHOTO: return new TLRPC.TL_inputMessagesFilterPhotos();
+            case VIDEO: return new TLRPC.TL_inputMessagesFilterVideo();
+            case FILE: return new TLRPC.TL_inputMessagesFilterDocument();
+            case LINK: return new TLRPC.TL_inputMessagesFilterUrl();
+            case VOICE: return new TLRPC.TL_inputMessagesFilterVoice();
+            case MUSIC: return new TLRPC.TL_inputMessagesFilterMusic();
+            case GIF: return new TLRPC.TL_inputMessagesFilterGif();
+            case ROUND: return new TLRPC.TL_inputMessagesFilterRoundVideo();
+            default: return new TLRPC.TL_inputMessagesFilterEmpty();
+        }
+    }
+
+    public void searchMessagesInChat(String query, long dialogId, long mergeDialogId, int guid, int direction, long replyMessageId, boolean internal, TLRPC.User userIn, TLRPC.Chat chatIn, boolean jumpToMessage, ReactionsLayoutInBubble.VisibleReaction reaction) {
+        TLRPC.User userOut = userIn;
+        TLRPC.Chat chatOut = chatIn;
+        if (!internal && query != null) {
+            searchOperatorMinDate = 0;
+            searchOperatorMaxDate = 0;
+            searchOperatorType = null;
+            if (NanogramFeatures.searchOperators() && reaction == null) {
+                final NanogramSearchOperators.Result operators = NanogramSearchOperators.parse(query, TimeZone.getDefault(), System.currentTimeMillis());
+                if (operators.hasOperators()) {
+                    TLRPC.User fromUser = null;
+                    TLRPC.Chat fromChat = null;
+                    if (operators.from != null) {
+                        final TLObject found = getMessagesController().getUserOrChat(operators.from);
+                        if (found instanceof TLRPC.User) {
+                            fromUser = (TLRPC.User) found;
+                        } else if (found instanceof TLRPC.Chat) {
+                            fromChat = (TLRPC.Chat) found;
+                        }
+                    }
+                    searchOperatorMinDate = operators.minDate;
+                    searchOperatorMaxDate = operators.maxDate;
+                    searchOperatorType = operators.type;
+                    if (fromUser != null || fromChat != null) {
+                        userOut = fromUser;
+                        chatOut = fromChat;
+                        query = operators.text;
+                    } else {
+                        query = operators.textWithFrom;
+                    }
+                }
+            }
+        }
+        final TLRPC.User user = userOut;
+        final TLRPC.Chat chat = chatOut;
         int max_id = 0;
         long queryWithDialog = dialogId;
         boolean firstQuery = !internal;
@@ -3952,7 +4016,7 @@ public class MediaDataController extends BaseController {
                     req.saved_reaction.add(reaction.toTLReaction());
                     req.flags |= 8;
                 }
-                req.filter = new TLRPC.TL_inputMessagesFilterEmpty();
+                applySearchOperators(req);
                 mergeReqId = getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
                     if (lastMergeDialogId == mergeDialogId) {
                         mergeReqId = 0;
@@ -4037,7 +4101,7 @@ public class MediaDataController extends BaseController {
             req.saved_reaction.add(reaction.toTLReaction());
             req.flags |= 8;
         }
-        req.filter = new TLRPC.TL_inputMessagesFilterEmpty();
+        applySearchOperators(req);
         lastSearchQuery = query;
         long queryWithDialogFinal = queryWithDialog;
         String finalQuery = query;

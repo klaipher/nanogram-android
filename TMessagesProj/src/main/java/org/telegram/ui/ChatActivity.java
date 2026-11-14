@@ -124,6 +124,7 @@ import androidx.dynamicanimation.animation.FloatValueHolder;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.ui.Components.blur3.capture.IBlur3Capture;
 
 import org.telegram.ui.Wallet.GramWallet;
@@ -45326,7 +45327,7 @@ public class ChatActivity extends BaseFragment implements
             } else if (isMail) {
                 AndroidUtilities.addToClipboard(str.substring("mailto:".length()));
             } else {
-                AndroidUtilities.addToClipboard(str);
+                AndroidUtilities.addToClipboard(NanogramFeatures.cleanLink(str));
             }
             createUndoView();
             if (undoView == null) {

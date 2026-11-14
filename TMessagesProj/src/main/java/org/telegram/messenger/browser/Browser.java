@@ -45,6 +45,8 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.tl.TL_account;
 import org.telegram.ui.ActionBar.ActionBarLayout;
+import org.telegram.messenger.nanogram.NanogramFeatures;
+import org.telegram.messenger.nanogram.NanogramLinkHygiene;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheetTabs;
@@ -154,6 +156,8 @@ public class Browser {
 
         }
     }
+
+    private static boolean skipTelegramLinkConfirm;
 
     public static void openUrl(Context context, String url) {
         if (url == null) {
@@ -368,6 +372,34 @@ public class Browser {
         }
         if (!keepWebAuthTokens) {
             uri = withoutWebAuthTokens(uri);
+        }
+        if (NanogramFeatures.stripTrackingParams()) {
+            final String cleaned = NanogramLinkHygiene.clean(uri.toString());
+            if (!cleaned.equals(uri.toString())) {
+                uri = Uri.parse(cleaned);
+            }
+        }
+        if (NanogramFeatures.confirmTelegramLinks() && !skipTelegramLinkConfirm && NanogramLinkHygiene.isTelegramLink(uri.toString())) {
+            final Activity activity = context instanceof Activity ? (Activity) context : LaunchActivity.instance;
+            if (activity != null) {
+                final Uri confirmUri = uri;
+                final boolean confirmAllowCustom = _allowCustom;
+                final boolean confirmTryTelegraph = tryTelegraph;
+                new AlertDialog.Builder(activity)
+                        .setTitle(LocaleController.getString(R.string.OpenUrlTitle))
+                        .setMessage(LocaleController.formatString(R.string.OpenUrlAlert2, confirmUri.toString()))
+                        .setPositiveButton(LocaleController.getString(R.string.Open), (dialog, which) -> {
+                            skipTelegramLinkConfirm = true;
+                            try {
+                                openUrl(context, confirmUri, confirmAllowCustom, confirmTryTelegraph, forceNotInternalForApps, inCaseLoading, browser, allowIntent, allowInAppBrowser, forceRequest, true);
+                            } finally {
+                                skipTelegramLinkConfirm = false;
+                            }
+                        })
+                        .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                        .show();
+                return;
+            }
         }
         final int currentAccount = UserConfig.selectedAccount;
         boolean[] forceBrowser = new boolean[]{false};

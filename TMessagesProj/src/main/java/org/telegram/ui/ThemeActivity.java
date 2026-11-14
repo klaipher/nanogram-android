@@ -632,6 +632,67 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
         return false;
     }
 
+    public static void showMicrophoneDialog(BaseFragment fragment, Runnable onChanged) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        final Context context = fragment.getParentActivity();
+        AtomicReference<Dialog> dialogRef = new AtomicReference<>();
+
+        LinearLayout linearLayout = new LinearLayout(context);
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+
+        final int[] connected = AudioInputPreference.connectedInputTypes();
+        final int[] types = AudioInputPreference.choices(connected);
+        final int selected = AudioInputPreference.resolve(SharedConfig.recordInputDevice, connected);
+        final int[] options = new int[types.length + 1];
+        options[0] = AudioInputPreference.AUTOMATIC;
+        System.arraycopy(types, 0, options, 1, types.length);
+        for (int option : options) {
+            RadioColorCell cell = new RadioColorCell(context);
+            cell.setPadding(dp(4), 0, dp(4), 0);
+            cell.setCheckColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_dialogRadioBackgroundChecked));
+            if (AudioInputPreference.isBluetoothType(option)) {
+                cell.setTextAndText2AndValue(getString(microphoneTitle(option)), getString(R.string.MicrophoneForVoiceMessagesScoHint), option == selected);
+            } else {
+                cell.setTextAndValue(getString(microphoneTitle(option)), option == selected);
+            }
+            ThemeBind.selectorBackground(cell, Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL), null, ThemeBind.of(Theme.key_listSelector));
+            linearLayout.addView(cell);
+            cell.setOnClickListener(v -> {
+                Runnable apply = () -> {
+                    SharedConfig.recordInputDevice = option;
+                    SharedConfig.saveConfig();
+                    dialogRef.get().dismiss();
+                    if (onChanged != null) {
+                        onChanged.run();
+                    }
+                };
+                if (AudioInputPreference.isBluetoothType(option)) {
+                    PermissionRequest.ensurePermission(R.raw.permission_request_microphone, R.string.PermissionNoBluetoothWithHint, Manifest.permission.BLUETOOTH_CONNECT, granted -> {
+                        if (granted) {
+                            apply.run();
+                        }
+                    });
+                } else {
+                    apply.run();
+                }
+            });
+        }
+
+        Dialog dialog = new AlertDialog.Builder(context)
+                .setTitle(getString(R.string.MicrophoneForRecordings))
+                .setView(linearLayout)
+                .setNegativeButton(getString("Cancel", R.string.Cancel), null)
+                .create();
+        dialogRef.set(dialog);
+        fragment.showDialog(dialog);
+    }
+
+    public static String microphoneValue() {
+        return microphoneRowValue();
+    }
+
     private static String microphoneRowValue() {
         final int stored = SharedConfig.recordInputDevice;
         final int resolved = AudioInputPreference.resolve(stored, AudioInputPreference.connectedInputTypes());
@@ -1381,64 +1442,15 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
                 dialogRef.set(dialog);
                 showDialog(dialog);
             } else if (position == bluetoothScoRow) {
-                if (getParentActivity() == null) {
-                    return;
-                }
-                AtomicReference<Dialog> dialogRef = new AtomicReference<>();
-
-                LinearLayout linearLayout = new LinearLayout(context);
-                linearLayout.setOrientation(LinearLayout.VERTICAL);
-
-                final int[] connected = AudioInputPreference.connectedInputTypes();
-                final int[] types = AudioInputPreference.choices(connected);
-                final int selected = AudioInputPreference.resolve(SharedConfig.recordInputDevice, connected);
-                final int[] options = new int[types.length + 1];
-                options[0] = AudioInputPreference.AUTOMATIC;
-                System.arraycopy(types, 0, options, 1, types.length);
-                for (int option : options) {
-                    RadioColorCell cell = new RadioColorCell(getParentActivity());
-                    cell.setPadding(dp(4), 0, dp(4), 0);
-                    cell.setCheckColor(Theme.getColor(Theme.key_radioBackground), Theme.getColor(Theme.key_dialogRadioBackgroundChecked));
-                    if (AudioInputPreference.isBluetoothType(option)) {
-                        cell.setTextAndText2AndValue(getString(microphoneTitle(option)), getString(R.string.MicrophoneForVoiceMessagesScoHint), option == selected);
-                    } else {
-                        cell.setTextAndValue(getString(microphoneTitle(option)), option == selected);
-                    }
-                    ThemeBind.selectorBackground(cell, Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL), null, ThemeBind.of(Theme.key_listSelector));
-                    linearLayout.addView(cell);
-                    cell.setOnClickListener(v -> {
-                        Runnable apply = () -> {
-                            SharedConfig.recordInputDevice = option;
-                            SharedConfig.saveConfig();
-                            updateRecordViaSco = true;
-                            dialogRef.get().dismiss();
-
-                            if (listView != null && listView.isAttachedToWindow()) {
-                                RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(bluetoothScoRow);
-                                if (holder != null) {
-                                    listAdapter.onBindViewHolder(holder, bluetoothScoRow);
-                                }
-                            }
-                        };
-                        if (AudioInputPreference.isBluetoothType(option)) {
-                            PermissionRequest.ensurePermission(R.raw.permission_request_microphone, R.string.PermissionNoBluetoothWithHint, Manifest.permission.BLUETOOTH_CONNECT, granted -> {
-                                if (granted) {
-                                    apply.run();
-                                }
-                            });
-                        } else {
-                            apply.run();
+                showMicrophoneDialog(this, () -> {
+                    updateRecordViaSco = true;
+                    if (listView != null && listView.isAttachedToWindow()) {
+                        RecyclerView.ViewHolder holder = listView.findViewHolderForAdapterPosition(bluetoothScoRow);
+                        if (holder != null) {
+                            listAdapter.onBindViewHolder(holder, bluetoothScoRow);
                         }
-                    });
-                }
-
-                Dialog dialog = new AlertDialog.Builder(getParentActivity())
-                        .setTitle(getString(R.string.MicrophoneForRecordings))
-                        .setView(linearLayout)
-                        .setNegativeButton(getString("Cancel", R.string.Cancel), null)
-                        .create();
-                dialogRef.set(dialog);
-                showDialog(dialog);
+                    }
+                });
             } else if (position == directShareRow) {
                 SharedConfig.toggleDirectShare();
                 if (view instanceof TextCheckCell) {

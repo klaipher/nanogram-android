@@ -56,6 +56,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BringAppForegroundService;
@@ -970,7 +971,7 @@ public class EmbedBottomSheet extends BottomSheet {
         View.OnClickListener copyClickListener = v -> {
             try {
                 android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                android.content.ClipData clip = android.content.ClipData.newPlainText("label", openUrl);
+                android.content.ClipData clip = android.content.ClipData.newPlainText("label", NanogramFeatures.cleanLink(openUrl));
                 clipboard.setPrimaryClip(clip);
             } catch (Exception e) {
                 FileLog.e(e);

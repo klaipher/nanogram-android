@@ -13,13 +13,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.Toast;
 
+import org.telegram.messenger.nanogram.NanogramFeatures;
+
 public class CustomTabsCopyReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
         String url = intent.getDataString();
         if (url != null) {
-            AndroidUtilities.addToClipboard(url);
+            AndroidUtilities.addToClipboard(NanogramFeatures.cleanLink(url));
             Toast.makeText(context, LocaleController.getString(R.string.LinkCopied), Toast.LENGTH_SHORT).show();
         }
     }

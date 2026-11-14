@@ -142,6 +142,7 @@ import androidx.dynamicanimation.animation.SpringForce;
 import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.ui.recyclerview.LinearSmoothScrollerEnd;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -1425,7 +1426,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (which == 0) {
                 onLinkClick(link, widget);
             } else if (which == 1) {
-                AndroidUtilities.addToClipboard(finalUrl1);
+                AndroidUtilities.addToClipboard(NanogramFeatures.cleanLink(finalUrl1));
                 String bulletinMessage;
                 if (finalTel) {
                     bulletinMessage = getString("PhoneCopied", R.string.PhoneCopied);
