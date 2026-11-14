@@ -5,6 +5,7 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- tgcalls pin 73cc1f8d -> 7afc0b25 (fork `nanogram-shared`): ports upstream defea4a, so a group-call incoming video description with an empty ssrc group no longer reads `ssrcs[0]` of an empty vector (possible crash). `shared/` moves to nanogram-deps a17304db. Same commit as iOS and Mac.
 - Cleanup: removed the unused ndk-build `jni/Application.mk` (Gradle builds through CMake only) and the tracked, generated `jni/prebuild/build_env.txt` (now git-ignored; `ng prebuild` deletes it after the run instead of `git checkout`); dropped the stale `.gitignore` entry `jni/ffmpeg/build_android`.
 
 ### Release optimization settings (AND-OPT-2, AND-OPT-3)
