@@ -59,7 +59,7 @@ def parse_badging(text: str) -> dict[str, str]:
         for key, val in re.findall(r"(\w+)='([^']*)'", m.group(1)):
             if key in ("name", "versionCode", "versionName"):
                 out["package" if key == "name" else key] = val
-    m = re.search(r"^sdkVersion:'(\d+)'", text, re.M)
+    m = re.search(r"^(?:min)?[sS]dkVersion:'(\d+)'", text, re.M)
     if m:
         out["minSdk"] = m.group(1)
     return out

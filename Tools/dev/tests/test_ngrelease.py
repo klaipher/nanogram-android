@@ -80,6 +80,10 @@ class Manifest(unittest.TestCase):
             f.write_bytes(b"abc")
             self.assertEqual(r.sha256_file(f), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
+    def test_badging_aapt2_37_min_sdk_line(self):
+        b = r.parse_badging(BADGING.replace("sdkVersion:'24'", "minSdkVersion:'24'"))
+        self.assertEqual(b["minSdk"], "24")
+
     def test_badging(self):
         b = r.parse_badging(BADGING)
         self.assertEqual(b, {"package": "org.klaipher.nanogram", "versionCode": "33000009", "versionName": "13.2.2", "minSdk": "24"})
