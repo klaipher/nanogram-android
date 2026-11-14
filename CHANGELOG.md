@@ -5,6 +5,23 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### SQLite: klaipher/sqlcipher-amalgamation nanogram (9948d5af, SQLCipher 4.20.0 / SQLite 3.54.1), shared with iOS and macOS (W2.I3)
+- Deleted `TMessagesProj/jni/sqlite/sqlite3.{c,h}` (SQLite 3.39.3, byte-identical to the pristine sqlite.org amalgamation,
+  see docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/sqlite` =
+  klaipher/sqlcipher-amalgamation branch `nanogram` at 9948d5af, the amalgamation iOS ships. Android moves from SQLite
+  3.39.3 to 3.54.1 (accepted behaviour jump; includes the 3.51.3 WAL-reset corruption fix).
+- `jni/CMakeLists.txt` `sqlite` target: compiles `third_party/sqlite/sqlite3.c` with the SQLCipher codec enabled against
+  the BoringSSL already linked (`SQLITE_HAS_CODEC=1`, `SQLCIPHER_CRYPTO_OPENSSL`, `SQLITE_EXTRA_INIT/SHUTDOWN`,
+  `SQLITE_THREADSAFE=1`, `SQLITE_TEMP_STORE=2`; BoringSSL include path; links `crypto`). No key is ever set
+  (`sqlite3_key` is never called), so cache4.db and the other databases stay plain SQLite and a 3.39 database opens
+  as before. Also `SQLITE_OMIT_LOAD_EXTENSION`, `HAVE_USLEEP=1` (busy waits in microseconds, not whole seconds) and
+  `NDEBUG=1`. Not set: `SQLITE_DQS=0`, `SQLITE_OMIT_DEPRECATED`, FTS5.
+- `SqliteWrapper.cpp` includes `<sqlcipher/sqlite3.h>` (the fork's header layout, include dir `third_party/sqlite/headers`);
+  `TMessagesProj/build.gradle` idea exclude follows the new path.
+- Build steps (main session): `Tools/dev/ng check`; emulator: open an existing cache4.db written by the 3.39 build (WAL
+  files included), chat list, search, message history, `PRAGMA temp_store = FILE` path (database clear), group-call noise
+  suppression unaffected.
+
 ### libprisma: klaipher/libprisma nanogram (c061944d), the single source for iOS, macOS and Android (W2.I3)
 - `TMessagesProj/jni/third_party/libprisma` moves from Telegram's 94640c63 to klaipher/libprisma branch `nanogram` at
   c061944d (`.gitmodules` url and branch). The fork carries Android's regex budget (`BudgetedPosition`, `weak_ptr` guard,

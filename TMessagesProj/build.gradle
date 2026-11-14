@@ -22,7 +22,7 @@ idea {
             file('jni/tgcalls'),
             file('jni/tlottie'),
             file('jni/voip/webrtc'),
-            file('jni/sqlite')
+            file('jni/third_party/sqlite')
         ]
     }
 }

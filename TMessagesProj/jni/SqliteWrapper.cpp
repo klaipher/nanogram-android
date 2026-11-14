@@ -1,6 +1,6 @@
 #include <cstring>
 #include <jni.h>
-#include "sqlite/sqlite3.h"
+#include <sqlcipher/sqlite3.h>
 #include "tgnet/NativeByteBuffer.h"
 #include "tgnet/BuffersStorage.h"
 

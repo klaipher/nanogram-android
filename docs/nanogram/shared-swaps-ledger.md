@@ -31,3 +31,20 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
   `PRISMA_JOIN_ALIASES=1` (default output = upstream/iOS), which `generate_prisma_grammars.sh` now sets.
 - Not proven by blob identity (the files were hand-reconciled in the fork, wave A): the emulator attack cases (regex
   budget, HTML-tag) are the arbiter.
+
+## SQLite (jni/sqlite/sqlite3.{c,h}, deleted) -> klaipher/sqlcipher-amalgamation `nanogram` (submodule jni/third_party/sqlite, 9948d5af)
+
+- Copy: `sqlite3.c` (git blob sha1 of the file content 4d8e9801ec20eef3a0a05c4991ccb45b0fcdbdbf) and `sqlite3.h` (afc995ee4c8230dc426d5c85b3048ebcef4b1a39).
+- Local changes: none. Both files are byte-identical to the pristine `sqlite-amalgamation-3390300.zip` (SQLite 3.39.3,
+  https://www.sqlite.org/2022/sqlite-amalgamation-3390300.zip; `shasum` of the committed files equals `shasum` of the zip's files).
+  The old build had no SQLITE_* options at all (the Android edits were only the unrelated legacy `NULL=0 ...` definitions
+  in CMake, which stay).
+- New source: SQLCipher 4.20.0 on SQLite 3.54.1, the iOS amalgamation byte for byte. Android compiles the codec in against
+  BoringSSL (`SQLCIPHER_CRYPTO_OPENSSL`, a BoringSSL that reports OPENSSL_VERSION_NUMBER 0x1010107f, so SQLCipher takes its
+  OpenSSL 1.1 `HMAC()` path, not `EVP_MAC_*`) and never calls `sqlite3_key`, so database files remain plain SQLite.
+- Flags Android sets: SQLITE_HAS_CODEC=1, SQLITE_EXTRA_INIT/SHUTDOWN (required), SQLITE_THREADSAFE=1, SQLITE_TEMP_STORE=2
+  (required 2 or 3; 2 keeps `PRAGMA temp_store = FILE` working, which MessagesStorage uses), SQLITE_OMIT_LOAD_EXTENSION,
+  HAVE_USLEEP=1 (the busy handler sleeps in microsecond steps instead of whole seconds), NDEBUG=1. Left off on purpose:
+  SQLITE_DQS=0 and SQLITE_OMIT_DEPRECATED (legacy behaviour the Java code relies on), SQLITE_ENABLE_FTS5 (nothing in
+  Android uses full-text tables), SQLITE_MAX_MMAP_SIZE=0, SQLITE_DEFAULT_MEMSTATUS=0, SQLITE_ENABLE_QPSG (behaviour
+  changes iOS accepted, not needed here).

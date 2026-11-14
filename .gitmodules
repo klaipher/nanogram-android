@@ -76,3 +76,7 @@
 	path = TMessagesProj/jni/third_party/xiph/rnnoise
 	url = https://github.com/klaipher/rnnoise.git
 	branch = nanogram
+[submodule "TMessagesProj/jni/third_party/sqlite"]
+	path = TMessagesProj/jni/third_party/sqlite
+	url = https://github.com/klaipher/sqlcipher-amalgamation.git
+	branch = nanogram
