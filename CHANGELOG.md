@@ -25,6 +25,10 @@ Newest first: version, build number, date, commit; what changed and how.
 ### Empty catches in Nanogram-owned code now log (ANDROID-DESIGN-8)
 - Localization.addResLocalization logs a failed asset load, ProxySettings logs an unparsable `port` in a proxy link,
   RoundVideoCodecRecorder logs a skipped `MediaCodec.stop()` (debug level, expected on a codec that never started).
+  WebProxyTransport's four close/post catches now log too. Deferred (ANDROID-DESIGN-8 remainder): NanogramCrashHandler
+  (logging inside the crash path can recurse), NanogramDiagnostics, twidget/* (WidgetSandboxSession, WidgetRemoteEngine,
+  WidgetEngineBackend), round-video recorders (RoundVideo*), EnumSetting: files owned by other streams or hot
+  close/cleanup paths, no behaviour gain.
   The `UnsupportedEncodingException` catch for UTF-8 is left as is (cannot happen). Upstream files (about 510 empty
   catches) untouched to keep merges small.
 ### Explicit main Looper for Handlers (ANDROID-DESIGN-10)
@@ -34,6 +38,8 @@ Newest first: version, build number, date, commit; what changed and how.
   (speaker, headset, A2DP), so narrowing it to one key would miss changes. unregisterContentObserver was already in the
   stop path. WebRTC camera sessions untouched (shared upstream fork).
 ### DNS lookups on the DNS executor (ANDROID-DESIGN-5, ConnectionsManager part)
+- The three DNS-config launches (lines moved from AsyncTask's pool) are wrapped in try/catch: on a rejected task the
+  error is logged and `currentTask` stays null so the next request retries. Three call sites changed (not four).
 - The Google and Mozilla DNS-config tasks in ConnectionsManager run on the existing `DNS_THREAD_POOL_EXECUTOR` (named
   threads) instead of the deprecated `AsyncTask.THREAD_POOL_EXECUTOR`. The task classes themselves still extend
   AsyncTask. Not done: ImageLoader, WebPlayerView, ui/web and JobIntentService tasks (upstream merge conflicts, no
@@ -41,25 +47,29 @@ Newest first: version, build number, date, commit; what changed and how.
 ### Startup: unused account slots not constructed at start, behind a flag (ANDROID-STARTUP-1)
 - `StartupSettings.lazyAccountSlots` (key `startup_lazy_account_slots`, default OFF). When on, postInitApplication
   skips slots 1..3 that have no logged-in user: no MessagesController/MessagesStorage (storage thread and empty
-  cache4.db), no ConnectionsManager (native network thread, auth-key handshake, 19 s ping), no ContactsController or
-  DownloadController. Slot 0 and activated slots start as before; Add Account still builds its slot on first
+  cache4.db), no ContactsController or DownloadController, and the network-state receiver (sticky, fires at
+  registration and on every network change) skips those slots too, so their ConnectionsManager (native network thread,
+  auth-key handshake, 19 s ping) and FileLoader are not built from there. Slot 0 and activated slots start as before; Add Account still builds its slot on first
   getInstance. Not done: deferring native_init inside the ConnectionsManager constructor and auditing the ~110
-  `a < MAX_ACCOUNT_COUNT` loops (any loop that calls getInstance(a) still builds the slot). Server-visible change
+  `a < MAX_ACCOUNT_COUNT` loops (any loop that calls getInstance(a) still builds the slot, e.g. NanogramSystemInfo
+  diagnostics). Server-visible change
   (no handshake for empty slots), hence the flag.
 ### Startup: Play Billing connection skipped when purchases are unavailable, behind a flag (ANDROID-STARTUP-3)
 - `StartupSettings.skipPlayBillingAtStartup` (SharedPreferences `mainconfig`, key `startup_skip_play_billing`, default
   OFF). When on and `BuildVars.IS_BILLING_UNAVAILABLE`, postInitApplication no longer calls
   `BillingController.startConnection()` (currency JSON parse plus Play Store service bind on every process start,
-  push wakes included). Default stays off because the SMS-fee purchase in LoginActivity still queries a ready
-  BillingClient; enable only after confirming that flow on a build.
+  push wakes included). When skipped, BillingController is put in invoice mode (`deferConnection()`), so Stars
+  top-up does not wait for store prices; `whenSetuped()` starts the connection lazily (and leaves invoice mode) for
+  the LoginActivity SMS-fee flow. Default off; confirm Stars top-up and the SMS-fee login with the flag on.
 ### Startup: per-account constants computed once (ANDROID-STARTUP-2)
 - ConnectionsManager keeps the app version string, install source, package id and the measured device performance
   class in static fields instead of recomputing them for each of the 4 account slots (the sysfs scan of
   cpuinfo_max_freq and the two PackageManager calls ran 4x per start and on every push wake). The measured class is
   cached separately from SharedConfig.getDevicePerformanceClass(), which applies the user override.
 - AndroidUtilities.getCertificateSHA256Fingerprint() caches its result and reads signers through
-  GET_SIGNING_CERTIFICATES on API 28+ (GET_SIGNATURES below). The hash is the same value, so the server-side
-  fingerprint does not change.
+  GET_SIGNING_CERTIFICATES on API 28+ (GET_SIGNATURES below), mirroring the legacy field: single-signer APKs use the
+  oldest certificate of the signing history, which is what `PackageInfo.signatures` returned, so the value sent to the
+  server is unchanged even with a v3 key-rotation lineage.
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not
