@@ -117,8 +117,10 @@ public final class NanogramDiagnostics {
         } catch (Throwable e) {
             FileLog.e(e);
         }
+        // Queued here so it is the first line of the new log; only the label (a binder call) comes from the executor.
+        FileLog.i("start pid " + Process.myPid() + ", " + NanogramSystemInfo.summaryLine());
         executor.execute(() -> {
-            FileLog.i("start " + appLabel(context) + " pid " + Process.myPid() + ", " + NanogramSystemInfo.summaryLine());
+            FileLog.i("build " + appLabel(context));
             logPreviousExits(context);
         });
     }
@@ -423,7 +425,7 @@ public final class NanogramDiagnostics {
     }
 
     public static void clearAll(Context context) {
-        FileLog.cleanupLogs();
+        FileLog.cleanupLogsSync();
         final File crashes = NanogramCrashHandler.directory(context);
         deleteFiles(crashes);
         deleteFiles(new File(context.getCacheDir(), "voip_logs"));

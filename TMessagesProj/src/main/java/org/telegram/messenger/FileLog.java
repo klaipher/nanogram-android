@@ -603,6 +603,9 @@ public class FileLog {
         if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
                 if (getInstance().streamWriter == null) {
+                    if (BuildVars.DEBUG_PRIVATE_VERSION) {
+                        System.exit(2);
+                    }
                     return;
                 }
                 try {
@@ -693,6 +696,24 @@ public class FileLog {
         ensureInitied();
         // currentFile is set on logQueue.
         getInstance().logQueue.postRunnable(FileLog::cleanupLogsInternal);
+    }
+
+    /** Like cleanupLogs, but returns once the files are deleted. For callers already on a background thread. */
+    public static void cleanupLogsSync() {
+        ensureInitied();
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        getInstance().logQueue.postRunnable(() -> {
+            try {
+                cleanupLogsInternal();
+            } finally {
+                done.countDown();
+            }
+        });
+        try {
+            done.await(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static void cleanupLogsInternal() {
