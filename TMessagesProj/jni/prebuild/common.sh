@@ -12,8 +12,17 @@ LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
 INCLUDE_DIR="${INCLUDE_DIR:-$SCRIPT_DIR/include}"
 PKGCONFIG_DIR="${PKGCONFIG_DIR:-$SCRIPT_DIR/pkgconfig}"
 
-NDK_VERSION="${NDK_VERSION:-27.2.12479018}"
-API="${API:-21}"
+# Default to the toolchain the app itself builds with (Tools/dev/toolchain.properties) so a hand-run script does
+# not silently produce archives for another NDK/API. NDK_VERSION and API from the environment still win (ng sets both).
+TOOLCHAIN_PROPERTIES="$JNI_DIR/../../Tools/dev/toolchain.properties"
+toolchain_property() {
+    [[ -f "$TOOLCHAIN_PROPERTIES" ]] || return 0
+    sed -n "s/^$1=//p" "$TOOLCHAIN_PROPERTIES" | head -n 1 | tr -d '[:space:]'
+}
+NDK_VERSION="${NDK_VERSION:-$(toolchain_property ndk)}"
+NDK_VERSION="${NDK_VERSION:-30.0.16248370}"
+API="${API:-$(toolchain_property prebuildApi)}"
+API="${API:-24}"
 ABIS="${ABIS:-arm64-v8a armeabi-v7a x86_64 x86}"
 
 host_os="$(uname -s)"
@@ -86,6 +95,12 @@ PREBUILD_OBJECT_FLAGS="-g0 -fno-ident"
 CFLAGS="${CFLAGS:+$CFLAGS }$REPRODUCIBLE_PATH_FLAGS $PREBUILD_OBJECT_FLAGS"
 CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$REPRODUCIBLE_PATH_FLAGS $PREBUILD_OBJECT_FLAGS"
 export CFLAGS CXXFLAGS
+
+# Compiler launcher (ccache) for the non-CMake builds. configure keeps seeing the bare NDK compiler, so config.h,
+# FFMPEG_CONFIGURATION and vpx_config stay byte-identical; only make/meson compile steps go through the launcher.
+# ng exports NANOGRAM_CCACHE together with CCACHE_DIR/CCACHE_NOHASHDIR/CCACHE_SLOPPINESS and no CCACHE_BASEDIR (a
+# basedir rewrites absolute paths and would change __FILE__ in the objects).
+CCACHE_LAUNCHER="${NANOGRAM_CCACHE:-}"
 
 # Pass these explicitly to CMake projects. Some projects/cache setups do not
 # reliably preserve environment CFLAGS/CXXFLAGS across configure steps.

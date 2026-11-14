@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Regenerate the C++20 bindings and build Wallet Engine for all Android ABIs.
 # Uses common.sh overrides: ABIS, API, JOBS, ANDROID_NDK_HOME, LIB_DIR, INCLUDE_DIR.
-# Install Rust via rustup; the source's rust-toolchain.toml selects the version.
+# Install Rust via rustup. With Tools/dev/ng the toolchain.properties pin (RUSTUP_TOOLCHAIN) wins over the source's
+# rust-toolchain.toml; run by hand, the source's rust-toolchain.toml selects the version.
 
 set -Eeuo pipefail
 

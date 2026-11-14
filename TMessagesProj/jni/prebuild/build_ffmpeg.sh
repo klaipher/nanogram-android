@@ -455,7 +455,8 @@ build_ffmpeg_for_abi() {
         return 1
     fi
 
-    if ! make -j"$JOBS" 2>&1 | tee "$build_dir/build.log"; then
+    # Command-line variables override config.mak, so only the compile step sees the launcher (see common.sh).
+    if ! make -j"$JOBS" ${CCACHE_LAUNCHER:+CC="$CCACHE_LAUNCHER $cc" CXX="$CCACHE_LAUNCHER $cxx"} 2>&1 | tee "$build_dir/build.log"; then
         error "FFmpeg build failed for $abi. Log: $build_dir/build.log"
         popd >/dev/null
         return 1

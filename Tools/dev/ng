@@ -115,6 +115,8 @@ def base_env() -> dict[str, str]:
     env.pop("ANDROID_SDK_ROOT", None)
     # ccache for every native compile (CMake picks it up through NANOGRAM_CCACHE, see jni/CMakeLists.txt).
     ccache = shutil.which("ccache")
+    if "NANOGRAM_CCACHE" in os.environ:
+        ccache = os.environ["NANOGRAM_CCACHE"] or None  # explicit empty value turns ccache off (reproducibility gate)
     if ccache:
         env["NANOGRAM_CCACHE"] = ccache
         env.setdefault("CCACHE_DIR", str(CACHE / "ccache"))
@@ -125,6 +127,10 @@ def base_env() -> dict[str, str]:
         env.setdefault("CCACHE_BASEDIR", str(ROOT))
         env.setdefault("CCACHE_NOHASHDIR", "1")
         env.setdefault("CCACHE_SLOPPINESS", "pch_defines,time_macros,include_file_mtime,include_file_ctime,file_stat_matches")
+    else:
+        env.pop("NANOGRAM_CCACHE", None)
+    # One lld ThinLTO cache for release links, outside the per-configuration .cxx trees (see jni/CMakeLists.txt).
+    env.setdefault("NANOGRAM_THINLTO_CACHE_DIR", str(CACHE / "thinlto"))
     return env
 
 
@@ -229,6 +235,14 @@ def sdkmanager() -> str:
     return found
 
 
+RUST_ANDROID_TARGETS = {
+    "arm64-v8a": "aarch64-linux-android",
+    "armeabi-v7a": "armv7-linux-androideabi",
+    "x86_64": "x86_64-linux-android",
+    "x86": "i686-linux-android",
+}
+
+
 def cmd_setup(_: argparse.Namespace) -> None:
     env = base_env()
     sdk_root().mkdir(parents=True, exist_ok=True)
@@ -241,6 +255,12 @@ def cmd_setup(_: argparse.Namespace) -> None:
     info("submodules (shallow, pinned commits)")
     subprocess.check_call(["git", "submodule", "sync", "-q", "--recursive"], cwd=ROOT)
     subprocess.check_call(["git", "submodule", "update", "--init", "--recursive", "--depth", "1", "--jobs", "8"], cwd=ROOT)
+    rust = TC.get("rust")
+    if rust and shutil.which("rustup", path=env["PATH"]):
+        info(f"Rust {rust} with the Android targets (tlottie and wallet-engine)")
+        subprocess.check_call(["rustup", "toolchain", "install", rust, "--profile", "minimal"], env=env)
+        targets = [RUST_ANDROID_TARGETS[a] for a in RUST_ANDROID_TARGETS]
+        subprocess.check_call(["rustup", "target", "add", "--toolchain", rust, *targets], env=env)
     if shutil.which("ccache"):
         subprocess.call(["ccache", "-M", TC.get("ccache.maxsize", "8G")], env=env, stdout=subprocess.DEVNULL)
     info("done; next: Tools/dev/ng prebuild && Tools/dev/ng build")
@@ -268,6 +288,41 @@ def prebuild_abis(arg: str | None) -> list[str]:
     return ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"] if abis == "all" else ["arm64-v8a"]
 
 
+def first_line(cmd: list[str], env: dict[str, str]) -> str:
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return "<missing>"
+    lines = (out.stdout or out.stderr).strip().splitlines()
+    return lines[0].strip() if lines else "<missing>"
+
+
+def build_tool_versions(abis: list[str], env: dict[str, str] | None = None) -> dict[str, str]:
+    """Versions of the host tools the prebuild scripts run. A Homebrew upgrade or `rustup update` changes archive
+    bytes (build_dav1d.sh warns about Meson), so they belong in the cache key."""
+    env = env or base_env()
+    def tool(name: str, override: str) -> str:
+        # Same order as prebuild/common.sh resolve_tool: env override, PATH, newest SDK cmake dir.
+        found = env.get(override) or shutil.which(name, path=env.get("PATH"))
+        if not found:
+            sdk_tools = sorted((sdk_root() / "cmake").glob(f"*/bin/{name}"), key=lambda p: [int(x) if x.isdigit() else 0 for x in p.parent.parent.name.split(".")])
+            found = str(sdk_tools[-1]) if sdk_tools else name
+        return found
+
+    versions = {
+        "cmake": first_line([tool("cmake", "CMAKE_BIN"), "--version"], env),
+        "ninja": first_line([tool("ninja", "NINJA_BIN"), "--version"], env),
+        "meson": first_line(["meson", "--version"], env),
+    }
+    if any(a in ("x86", "x86_64") for a in abis):
+        versions["nasm"] = first_line(["nasm", "-v"], env)
+    rust = TC.get("rust")
+    if rust:
+        versions["rustc"] = first_line(["rustup", "run", rust, "rustc", "-V"], env)
+        versions["cargo"] = first_line(["rustup", "run", rust, "cargo", "-V"], env)
+    return versions
+
+
 def prebuild_key(abis: list[str]) -> str:
     h = hashlib.sha256()
     for rel in PREBUILD_INPUTS:
@@ -284,7 +339,8 @@ def prebuild_key(abis: list[str]) -> str:
     for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
         if p.is_file():
             h.update(p.name.encode() + p.read_bytes())
-    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')}".encode())
+    h.update(f"ndk={TC['ndk']};abis={','.join(abis)};api={TC.get('prebuildApi', '23')};rust={TC.get('rust', '')}".encode())
+    h.update(json.dumps(build_tool_versions(abis), sort_keys=True).encode())
     return h.hexdigest()[:16]
 
 
@@ -312,10 +368,30 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
         "INCLUDE_DIR": str(tmp / "include"),
         "PKGCONFIG_DIR": str(tmp / "pkgconfig"),
     })
+    rust = TC.get("rust")
+    if rust:
+        # One Rust for tlottie and wallet-engine, the same as iOS and macOS; overrides rust-toolchain.toml and `stable`.
+        env["RUSTUP_TOOLCHAIN"] = rust
+        env["TLOTTIE_RUST_TOOLCHAIN"] = rust
+    # Outside the scratch dir deleted below: cargo fingerprints skip unchanged wallet crates on the next prebuild.
+    # Per worktree: cargo's lock covers only cargo, not the copy of the archive and headers that follows, so two
+    # worktrees must not share a target dir.
+    wt = hashlib.sha256(str(ROOT).encode()).hexdigest()[:8]
+    env["WALLET_ENGINE_BUILD_DIR"] = str(CACHE / "prebuild-work" / wt / "wallet-engine")
+    env["CARGO_PROFILE_DEV_DEBUG"] = "0"  # the bindgen `cargo run` uses the dev profile
     if env.get("NANOGRAM_CCACHE"):
         # CMake-based libraries (BoringSSL, td, tlottie, openh264, wamr) reuse earlier compiles.
         env["CMAKE_C_COMPILER_LAUNCHER"] = env["NANOGRAM_CCACHE"]
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = env["NANOGRAM_CCACHE"]
+        # CCACHE_BASEDIR would make ccache rewrite absolute source paths to relative ones before calling clang, which
+        # changes __FILE__ (FFmpeg av_assert/av_log) and defeats -fmacro-prefix-map. Without it ccache hashes absolute
+        # paths and the objects are byte-identical to a build without ccache; hits stay within one worktree path.
+        # The Gradle build keeps CCACHE_BASEDIR (jni sources are mapped through relative prefix maps there).
+        env.pop("CCACHE_BASEDIR", None)
+    if rust and shutil.which("rustup", path=env["PATH"]):
+        # No-ops when present; otherwise tlottie/wallet-engine would fail only after the long C phase.
+        subprocess.check_call(["rustup", "toolchain", "install", rust, "--profile", "minimal"], env=env)
+        subprocess.check_call(["rustup", "target", "add", "--toolchain", rust, *[RUST_ANDROID_TARGETS[a] for a in abis]], env=env)
     t0 = time.time()
     log = LOGS / f"prebuild-{dest.name}.log"
     info(f"building native prebuilts for {' '.join(abis)} (log {log})")
@@ -328,7 +404,7 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
         die(f"prebuild failed (exit {rc}); see {log}")
     # The scripts' scratch tree (about 1 GB) is not needed once the archives are in the cache.
     shutil.rmtree(PREBUILD_SRC / "build", ignore_errors=True)
-    (tmp / "COMPLETE").write_text(json.dumps({"abis": abis, "ndk": TC["ndk"], "seconds": round(time.time() - t0)}))
+    (tmp / "COMPLETE").write_text(json.dumps({"abis": abis, "ndk": TC["ndk"], "tools": build_tool_versions(abis, env), "seconds": round(time.time() - t0)}))
     shutil.rmtree(dest, ignore_errors=True)
     tmp.rename(dest)
     record("prebuild", time.time() - t0, {"key": dest.name, "abis": abis})
@@ -653,6 +729,12 @@ def cmd_prune(a: argparse.Namespace) -> None:
             info(f"remove .cxx/{bt.name}/{p.name} ({dir_size(p) / 1e9:.1f} GB)")
             if not a.dry_run:
                 shutil.rmtree(p, ignore_errors=True)
+    work = CACHE / "prebuild-work"
+    if work.exists():
+        info(f"prebuild-work (cargo target dir, rebuilt on demand) {dir_size(work) / 1e9:.1f} GB")
+        if a.max_gb and dir_size(CACHE) / 1e9 > a.max_gb and not a.dry_run:
+            info("cache over the cap: remove prebuild-work")
+            shutil.rmtree(work, ignore_errors=True)
     if a.max_gb:
         size = dir_size(CACHE) / 1e9
         info(f"cache {CACHE} is {size:.1f} GB (cap {a.max_gb} GB)")

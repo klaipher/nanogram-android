@@ -143,6 +143,10 @@ write_dav1d_cross_file() {
     cc="$NDK_TOOLCHAIN/bin/${clang_target}-clang"
     [[ -x "$cc" ]] || { error "dav1d compiler was not found: $cc"; return 1; }
 
+    # Meson accepts a compiler list; the launcher goes first (common.sh CCACHE_LAUNCHER).
+    c_binary="'$cc'"
+    [[ -n "$CCACHE_LAUNCHER" ]] && c_binary="'$CCACHE_LAUNCHER', '$cc'"
+
     shared_c_args=""
     for flag in $COMMON_CFLAGS; do
         shared_c_args+=", '$flag'"
@@ -150,7 +154,7 @@ write_dav1d_cross_file() {
 
     cat > "$file" <<CROSS
 [binaries]
-c = '$cc'
+c = [$c_binary]
 ar = '$NDK_TOOLCHAIN/bin/llvm-ar'
 strip = '$NDK_TOOLCHAIN/bin/llvm-strip'
 ranlib = '$NDK_TOOLCHAIN/bin/llvm-ranlib'
