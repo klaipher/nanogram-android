@@ -5,6 +5,27 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### twidget and widget-sandbox: klaipher forks on branch nanogram (a4f5391c, 1b21a48e), shared with iOS and macOS (W3.6)
+- `TMessagesProj/jni/twidget/twidget` moves from 4769d72 to klaipher/twidget `nanogram` at a4f5391c and
+  `TMessagesProj/jni/twidget/widget-sandbox` from c498cef to klaipher/widget-sandbox `nanogram` at 1b21a48e
+  (`.gitmodules` branch `nanogram` for both). Android's old pins are the bases of both branches, so nothing is lost.
+- twidget gains (behaviour change for Android widgets): the gumbo parse limits (linear time, bounded memory: 100,000 nodes,
+  depth 512), the iOS litehtml edits (caps, budgets, external-DOM builder, host profile hooks, SVG `<use>` budget, many
+  fidelity fixes), the macOS canvas-size and percent-height fixes, and `core/src/renderer.cpp` changes that go with them.
+  `twidget.cmake` is unchanged: its `litehtml/src/*.cpp` glob now also compiles `telegram_external.cpp` and
+  `telegram_master_css.cpp` (portable C++, unused by the Android renderer), and `core/src` lists the same ten files.
+  Open follow-ups in the fork records: `calc()` ceiling (4,096 expressions per process), `:lang()`/`:empty` rule changes.
+- widget-sandbox: only the iOS Swift package, docs and the nested quickjs change. The nested quickjs
+  (`packages/ios/Sources/CQuickJS/quickjs`) becomes klaipher/quickjs `nanogram` f6fc68b9 = TelegramMessenger b526a817
+  (contains Android's ca3594da) + the iOS host API commits (inert unless called) and `TELEGRAM_QJS_ENABLE_DUMPS` (dumps
+  off unless defined; the Android build does not use them). Run `git submodule sync --recursive` so the nested url follows.
+- `assets/WidgetSandbox/*` and `manifest.txt` need no regeneration: the desktop bundles in widget-sandbox are unchanged
+  and equal the committed assets (proof in docs/nanogram/shared-swaps-ledger.md); QuickJS bytecode version stays 29.
+- `check_shared` note: the manifest of nanogram-deps 7d5bd332 still says `pending` for twidget, widget-sandbox and quickjs
+  with the old Android pins as transitional; the main session sets their commits to the pushed shas (a4f5391c, 1b21a48e,
+  f6fc68b9) in nanogram-deps and moves `shared/` in all three apps.
+- Build steps (main session): `Tools/dev/ng check`; emulator: widget corpus, attack and render sets.
+
 ### wallet-engine: klaipher/wallet-engine nanogram (44ae85c7), the single source for iOS and Android (W2.I3)
 - `TMessagesProj/jni/wallet-engine` moves from klaipher master 5c65e47c to klaipher/wallet-engine branch `nanogram` at
   44ae85c7 (`.gitmodules` branch). The fork is the iOS pin (i582 e59e0d89) plus Android's features (key rotation preparation

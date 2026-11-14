@@ -65,9 +65,11 @@
 [submodule "TMessagesProj/jni/twidget/twidget"]
 	path = TMessagesProj/jni/twidget/twidget
 	url = https://github.com/klaipher/twidget.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/twidget/widget-sandbox"]
 	path = TMessagesProj/jni/twidget/widget-sandbox
 	url = https://github.com/klaipher/widget-sandbox.git
+	branch = nanogram
 [submodule "shared"]
 	path = shared
 	url = https://github.com/klaipher/nanogram-deps.git

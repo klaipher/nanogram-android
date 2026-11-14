@@ -65,3 +65,14 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
   Android bridge now passes at both places where it supplies a comment recipient key (`nativePrepareSend`, `nativeSend`).
 - Cargo.lock: `cargo metadata` (Rust 1.99.1) on a scratch copy of `gram-wallet` against the fork tree leaves `Cargo.lock`
   unchanged, so the committed lock file already satisfies the new engine (the `--locked` prebuild is the final arbiter).
+
+## twidget and widget-sandbox (submodules, Android line) -> klaipher/twidget `nanogram` and klaipher/widget-sandbox `nanogram`
+
+- Android's pins were the starting points of both fork branches (twidget 4769d72, widget-sandbox c498cef), so nothing in
+  the Android line is lost: `git merge-base --is-ancestor 4769d72 nanogram` and `... c498cef nanogram` hold in the forks.
+- widget-sandbox 1b21a48 differs from c498cef only in `packages/ios/**` (Swift), docs, records and `.gitmodules` (the
+  nested quickjs now klaipher/quickjs `nanogram` f6fc68b9, which contains Android's old nested pin ca3594da as an ancestor;
+  `git diff --stat c498cef nanogram -- packages/desktop packages/core packages/android` is empty).
+- Android's `assets/WidgetSandbox/*` bundles and `manifest.txt` are therefore still exactly the bundles of the pinned
+  widget-sandbox (`packages/desktop/WidgetJS/*` hashes equal the assets, which equal the manifest): no regeneration needed.
+  Both QuickJS trees use bytecode version 29, so the committed `.qbc` files stay valid.
