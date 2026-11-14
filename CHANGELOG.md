@@ -5,6 +5,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Empty catches in Nanogram-owned code now log (ANDROID-DESIGN-8)
+- Localization.addResLocalization logs a failed asset load, ProxySettings logs an unparsable `port` in a proxy link,
+  RoundVideoCodecRecorder logs a skipped `MediaCodec.stop()` (debug level, expected on a codec that never started).
+  The `UnsupportedEncodingException` catch for UTF-8 is left as is (cannot happen). Upstream files (about 510 empty
+  catches) untouched to keep merges small.
 ### Explicit main Looper for Handlers (ANDROID-DESIGN-10)
 - CastSync's volume ContentObserver, the two PixelCopy callbacks in BottomSheetTabsOverlay and LocationSharingService
   use `new Handler(Looper.getMainLooper())` instead of the deprecated implicit-looper constructor (same thread as

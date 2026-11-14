@@ -7,6 +7,7 @@ import android.util.SparseIntArray;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
+import org.telegram.messenger.FileLog;
 import org.telegram.tgnet.SerializedData;
 
 import java.io.BufferedInputStream;
@@ -80,7 +81,9 @@ public class Localization {
         public Builder addResLocalization(Context context, String localizationAssetPath) {
             try {
                 localizations = load(context, localizationAssetPath, localizations);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                FileLog.e(e, false);
+            }
             return this;
         }
 

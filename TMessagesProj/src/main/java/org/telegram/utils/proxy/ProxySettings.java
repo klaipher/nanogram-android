@@ -7,6 +7,7 @@ import android.util.Base64;
 
 import androidx.annotation.NonNull;
 
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.AndroidUtilities;
 
 import java.io.UnsupportedEncodingException;
@@ -289,7 +290,9 @@ public final class ProxySettings {
             if (!TextUtils.isEmpty(portValue)) {
                 try {
                     port = Integer.parseInt(portValue);
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException e) {
+                    FileLog.d("invalid proxy port: " + portValue);
+                }
             }
 
             String secret = uri.getQueryParameter("secret");
