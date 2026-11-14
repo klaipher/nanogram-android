@@ -75,6 +75,8 @@ public class NanogramUpdater {
     private volatile boolean downloading;
     private volatile boolean cancelled;
     private volatile float downloadingProgress;
+    private static final long INSTALL_TIMEOUT = 10 * 60 * 1000L;
+
     private volatile boolean installing;
     private volatile String error;
 
@@ -491,6 +493,7 @@ public class NanogramUpdater {
         notifyChanged();
         final InstallReceiver receiver = new InstallReceiver();
         ContextCompat.registerReceiver(context, receiver, new IntentFilter(INSTALL_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
+        AndroidUtilities.runOnUIThread(() -> receiver.finish(null, true), INSTALL_TIMEOUT);
         executor.execute(() -> {
             String failure = null;
             final PackageInstaller installer = context.getPackageManager().getPackageInstaller();
@@ -550,8 +553,10 @@ public class NanogramUpdater {
                         context.startActivity(confirm);
                     } catch (Exception e) {
                         FileLog.e(e);
-                        finish("cannot open installer", false);
+                        finish("cannot open installer", true);
                     }
+                } else {
+                    finish("cannot open installer", true);
                 }
                 return;
             }
