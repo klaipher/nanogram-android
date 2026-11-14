@@ -96,6 +96,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.telegram.messenger.NanogramDisplay;
 
 /**
  * A flexible view for providing a limited window into a large data set.
@@ -5405,6 +5406,8 @@ public class RecyclerView extends ViewGroup implements ScrollingView,
                 if (consumedX != 0 || consumedY != 0) {
                     dispatchOnScrolled(consumedX, consumedY);
                 }
+
+                NanogramDisplay.onFling(RecyclerView.this, scroller.getCurrVelocity());
 
                 if (!awakenScrollBars()) {
                     invalidate();

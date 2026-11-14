@@ -25,6 +25,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatThemeController;
+import org.telegram.messenger.NanogramExperiments;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
@@ -108,6 +109,9 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_FORGET_HINTS = 45;
     private static final int ID_COMPACT_MODE = 46;
     private static final int ID_NANOGRAM_DIAGNOSTICS = 90;
+    private static final int ID_EXP_ADAPTIVE_REFRESH = 120;
+    private static final int ID_EXP_TELECOM = 121;
+    private static final int ID_EXP_CAMERA2 = 122;
 
     @Override
     protected boolean useSimpleActionBar() {
@@ -210,10 +214,13 @@ public class DebugSettingsActivity extends UniversalFragment {
             items.add(UItem.asCheck(ID_WIDGET_STATIC_LAYERS, "Widget static layers").setChecked(SharedConfig.widgetStaticLayers));
         }
         items.add(UItem.asCheck(ID_COMPACT_MODE, getString(R.string.CompactMode)).setChecked(SharedConfig.compactMode));
+        items.add(UItem.asCheck(ID_EXP_ADAPTIVE_REFRESH, "Nanogram: adaptive refresh rate hints (Android 15+)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE)));
+        items.add(UItem.asCheck(ID_EXP_TELECOM, "Nanogram: system call integration (Telecom)").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.SELF_MANAGED_TELECOM)));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("Camera and media"));
         items.add(UItem.asCheck(ID_INAPP_CAMERA, getString(R.string.DebugMenuEnableCamera)).setChecked(SharedConfig.inappCamera));
+        items.add(UItem.asCheck(ID_EXP_CAMERA2, "Nanogram: Camera2 for stories and chat camera").setChecked(NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE)));
         items.add(UItem.asCheck(ID_CAMERA2, "Use Camera 2 API").setChecked(SharedConfig.isUsingCamera2(currentAccount)));
         items.add(UItem.asCheck(ID_DUAL_CAMERA, getString(R.string.DebugMenuDualOn)).setChecked(DualCameraView.dualAvailableStatic(getContext())));
         if (BuildVars.DEBUG_PRIVATE_VERSION && !InstantCameraView.allowBigSizeCameraDebug()) {
@@ -400,6 +407,15 @@ public class DebugSettingsActivity extends UniversalFragment {
                 break;
             case ID_CAMERA2:
                 SharedConfig.toggleUseCamera2(currentAccount);
+                break;
+            case ID_EXP_ADAPTIVE_REFRESH:
+                NanogramExperiments.toggle(NanogramExperiments.ADAPTIVE_REFRESH_RATE);
+                break;
+            case ID_EXP_TELECOM:
+                NanogramExperiments.toggle(NanogramExperiments.SELF_MANAGED_TELECOM);
+                break;
+            case ID_EXP_CAMERA2:
+                NanogramExperiments.toggle(NanogramExperiments.CAMERA2_CAPTURE);
                 break;
             case ID_CLEAR_MINIAPPS:
                 BotBiometry.clear();

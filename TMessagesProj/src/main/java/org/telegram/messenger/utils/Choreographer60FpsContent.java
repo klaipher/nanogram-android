@@ -10,6 +10,7 @@ import android.util.SparseArray;
 import androidx.annotation.Nullable;
 
 import org.telegram.messenger.BuildConfig;
+import org.telegram.messenger.NanogramDisplay;
 
 import me.vkryl.core.reference.ReferenceList;
 
@@ -296,9 +297,11 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
 
         // View / drawable invalidations.
         for (View view : mViewsToInvalidate) {
+            NanogramDisplay.voteContent(view);
             view.invalidate();
         }
         for (Drawable drawable : mDrawablesToInvalidate) {
+            NanogramDisplay.voteContent(drawable);
             drawable.invalidateSelf();
         }
         mViewsToInvalidate.clear();
@@ -307,6 +310,7 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
         // Legacy 30fps drawables.
         if (mCounter % 2 == 0) {
             for (Drawable drawable : mDrawablesToInvalidate30fps) {
+                NanogramDisplay.voteContent(drawable);
                 drawable.invalidateSelf();
             }
             mDrawablesToInvalidate30fps.clear();

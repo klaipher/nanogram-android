@@ -2935,7 +2935,7 @@ public class AndroidUtilities {
         final WindowManager wm = window.getWindowManager();
         if (wm == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
-        params.preferredRefreshRate = rate;
+        params.preferredRefreshRate = NanogramDisplay.overlayRefreshRate(NanogramDisplay.isAdaptiveRefreshEnabled(), rate);
         try {
             wm.updateViewLayout(window.getDecorView(), params);
         } catch (Exception e) {
@@ -2945,8 +2945,9 @@ public class AndroidUtilities {
 
     public static void setPreferredMaxRefreshRate(WindowManager wm, View windowView, WindowManager.LayoutParams params) {
         if (wm == null) return;
-        if (Math.abs(params.preferredRefreshRate - screenMaxRefreshRate) > 0.2) {
-            params.preferredRefreshRate = screenMaxRefreshRate;
+        final float target = NanogramDisplay.overlayRefreshRate(NanogramDisplay.isAdaptiveRefreshEnabled(), screenMaxRefreshRate);
+        if (Math.abs(params.preferredRefreshRate - target) > 0.2) {
+            params.preferredRefreshRate = target;
             if (windowView.isAttachedToWindow()) {
                 try {
                     wm.updateViewLayout(windowView, params);

@@ -5,6 +5,17 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-DISPLAY-1: adaptive refresh rate hints (experiment, off by default)
+- Debug settings > "Nanogram: adaptive refresh rate hints (Android 15+)" (`NanogramExperiments.adaptiveRefreshRate`,
+  default OFF). When on, on API 35+: views and drawables invalidated by the shared 60 fps clock vote
+  `setRequestedFrameRate(60)`; overlay windows (story viewer/recorder, reactions, PiP-style windows) no longer pin
+  `preferredRefreshRate` to the panel maximum (the system decides); the RecyclerView fork reports
+  `setFrameContentVelocity` every fling frame (API 34+). With the flag off nothing changes.
+- Removed the unused `RefreshRateController` (commented out in LaunchActivity since before the fork).
+- Not done: `Surface.setFrameRate` for the story video surface (needs a device to judge).
+- Measure: `adb shell dumpsys SurfaceFlinger | grep -i 'refresh\|render rate'` with a sticker pack open (idle) on an
+  LTPO phone, flag off vs on; test fling and story swipe on a 120 Hz panel. Tests: `NanogramDisplayTest`.
+
 ### ANDROID-ML-1: ML Kit replaces Mobile Vision
 - QR scan (camera scanner, QR overlay, story QR hint), document barcodes (MrzRecognizer driver licences) and face
   detection (photo viewer, paint, story paint) use ML Kit unbundled `play-services-mlkit-barcode-scanning` and
