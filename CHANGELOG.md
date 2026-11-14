@@ -5,6 +5,23 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Review fixes for the shared-source swaps
+- `TMessagesProj/build.gradle`: `java.exclude '**/org/webrtc/EglThread.java'`. The fork's `sdk/android/api` holds upstream
+  `EglThread.java` (73323d59), which the app never carried and which needs `EglBase.EglConnection`; the fork's Telegram `EglBase.java`
+  has no such type, so javac would fail. The compiled `org.webrtc` set is again exactly the old 173 files (all blob-identical).
+  The 173-files proof above never covered the 174th file; now it is excluded and recorded. Combined-build check: dex class list of `org.webrtc` equals fdd4407.
+- Recipient key: reversed the earlier bridge choice. `nativePrepareSend` and `nativeSend` take a `boolean trust_recipient_public_key`
+  that goes into `create_encrypted_comment`; `WalletEngine2` passes `TRUST_RECIPIENT_PUBLIC_KEY = false`, so Android verifies the
+  key like iOS (owner decision: check on by default, opt-in only for a confirmed rotation). The server supplies the key for every
+  recipient, so "always true" was the old no-check behaviour on every send, not a rotation path. No rotation-confirmation path exists in
+  the host yet; until one sets the flag, a recipient whose key rotated fails the check instead of being trusted. Explicit deviation from the previous Android behaviour; owner to confirm.
+- `jni/CMakeLists.txt`: the fallback to the committed `jni/prebuild` (no `nanogramPrebuildDir`, e.g. plain Gradle or Android Studio) now stops
+  with a clear error when the wallet bindings lack `trust_recipient_public_key`, instead of failing in the compiler or linking the old cisco `libopenh264.a`. Refresh `jni/prebuild` after the combined prebuild to re-enable that path.
+- `.gitmodules`: `shallow = true` on the rnnoise and sqlcipher-amalgamation entries (plan principle 8).
+- Open items, no code change: (1) libevent to stdlib task queue (b2ab0f4) deviates from plan W5.1 and changes the threading of every call thread; owner awareness needed, and the emulator call matrix must measure call start latency and CPU in a long call and a group call; the fork's unused libevent snapshot stays until then.
+  (2) `ReferenceCoreEmbedded.cpp` regeneration (W4.4, wasi-sdk plus the fork's `tools/build_wasm_core.sh`, sha256 against the iOS genrule) is a documented one-off with no tooling in `ng`; the v2wasm sources and json11 are unchanged from 545f5ae to 73cc1f8d, so the committed blob stays ABI compatible.
+  (3) Push gate: the `shared/` gitlink is still 7d5bd332 and must move to a nanogram-deps commit that sets the tgcalls commit to 73cc1f8d; `forks/android-A-manifest.patch` is obsolete (0e3f132 already carries the Android consumer paths).
+
 ### tgcalls pin moved to 73cc1f8d
 - `TMessagesProj/jni/tgcalls` 2a5daa0f -> 73cc1f8d (fork `nanogram-shared`, fast-forward of 9bfb76f8). Over 2a5daa0f the fork adds only the macOS SwiftPM `ios/` exclude in `Package.swift`, host-test path defaults and doc fixes; no source Android compiles changes (`tools/check_android_cmake.sh` file set is untouched). The three apps pin one commit.
 

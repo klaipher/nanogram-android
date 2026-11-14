@@ -94,8 +94,10 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
   carried (generated `registered_field_trials.h`, produced at build time; six protobuf outputs no compiled file includes);
   78 differ, each ledgered row by row in the fork (ledger-webrtc-fork.md section 5). The Android-only trees (legacy audio
   device, iSAC, `common_types.h`, 143 files) were added to the fork identical.
-- Java: 173 of 173 files blob-identical in the four fork source directories used by Gradle. One extra upstream class
-  (`EglThread`) appears.
+- Java: 173 of 173 old files blob-identical in the four fork source directories used by Gradle. The directories hold one
+  extra upstream class, `EglThread`, which needs `EglBase.EglConnection` (absent from the Telegram-modified `EglBase.java`),
+  so it cannot compile: `TMessagesProj/build.gradle` excludes it (`java.exclude '**/org/webrtc/EglThread.java'`). The compiled
+  set is therefore exactly the old 173 files. Check in the combined build that the dex class list of `org.webrtc` is unchanged (plan W5.5).
 - Dependencies: abseil (2065f4de, the pin Android already had), libsrtp v2.5.0 (a566a9cf) and crc32c (21fc8ef3) are the
   fork's nested submodules; pffft (11 files), rnnoise-vad (7) and jni_zero (30) are blob-identical to the fork's
   `third_party/` copies; libevent (Chromium snapshot, 40 files; 20 identical, 19 differ only by removed `HAVE_CONFIG_H` guards,
