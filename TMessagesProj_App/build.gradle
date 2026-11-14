@@ -151,7 +151,7 @@ android {
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
 
     defaultConfig {
-        minSdk 23
+        minSdk 24
         targetSdk 36
         versionName APP_VERSION_NAME
 

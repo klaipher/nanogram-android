@@ -44,16 +44,15 @@ dependencies {
     compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
     // compileSdk 37 removed FingerprintManager from the SDK; devices still provide it (passcode and wallet unlock on M-Q).
     compileOnly files('libs/compile-only/android-36-fingerprint-stubs.jar')
-    implementation 'androidx.palette:palette:1.0.0'
+    implementation 'androidx.palette:palette:1.1.0'
     implementation 'androidx.exifinterface:exifinterface:1.4.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.1.0'
     implementation "androidx.sharetarget:sharetarget:1.2.0"
     implementation 'androidx.interpolator:interpolator:1.0.0'
     implementation 'androidx.biometric:biometric:1.1.0'
-    implementation 'androidx.webkit:webkit:1.15.0'
+    implementation 'androidx.webkit:webkit:1.18.0'
 
-    // Newest releases that still support minSdk 23 (upstream's floor); the next ones need minSdk 24.
-    implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
+    implementation 'com.google.android.gms:play-services-cast-framework:23.0.0'
     implementation "androidx.mediarouter:mediarouter:1.8.1"
     implementation 'com.google.zxing:core:3.5.4'
     implementation 'com.neovisionaries:nv-websocket-client:2.14'
@@ -65,8 +64,8 @@ dependencies {
     compileOnly 'org.checkerframework:checker-qual:4.4.0'
     compileOnly 'org.checkerframework:checker-compat-qual:2.5.6'
 
-    implementation 'com.google.android.gms:play-services-maps:20.0.0'
-    implementation 'com.google.android.gms:play-services-auth:21.6.0'
+    implementation 'com.google.android.gms:play-services-maps:20.1.0'
+    implementation 'com.google.android.gms:play-services-auth:22.0.0'
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
     implementation 'com.google.android.gms:play-services-wearable:20.0.1'
     implementation 'com.google.android.gms:play-services-location:21.4.0'
@@ -86,9 +85,9 @@ dependencies {
     // Pinned: firebase-pnv alone would pull an older credentials release.
     implementation "androidx.credentials:credentials:1.6.0"
     implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
 
-    // 34.19.0 is the last BoM for minSdk 23: BoM 35.x requires minSdk 24 (33.16.0 was the last for Android 5).
-    api platform('com.google.firebase:firebase-bom:34.19.0')
+    api platform('com.google.firebase:firebase-bom:35.2.0')
     implementation 'com.google.firebase:firebase-messaging'
     implementation "com.google.firebase:firebase-pnv"
     implementation 'com.google.firebase:firebase-appindexing:20.0.0'
@@ -111,7 +110,7 @@ dependencies {
 
 //    implementation 'com.google.mlkit:translate:17.0.3'
 
-    implementation 'com.google.android.recaptcha:recaptcha:18.8.0'
+    implementation 'com.google.android.recaptcha:recaptcha:18.9.4'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
@@ -147,7 +146,7 @@ android {
     }
 
     defaultConfig {
-        minSdk 23
+        minSdk 24
         targetSdk 36
 
         // Own api_id/api_hash come from Tools/dev/ng (environment); plain Gradle builds keep upstream's public values.
@@ -160,7 +159,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-24', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                         "-DNANOGRAM_CCACHE=${providers.environmentVariable('NANOGRAM_CCACHE').getOrElse('')}",
                         "-DNANOGRAM_PREBUILD_DIR=${findProperty('nanogramPrebuildDir') ?: ''}"
             }

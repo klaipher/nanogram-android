@@ -53,5 +53,12 @@ Newest first: version, build number, date, commit; what changed and how.
   (launcher parallax), the iOS mono layers as the themed icon. Comet moves to the alternates (Vintage slot); intro and
   caller icon use the Sphere. The renderer now draws SVGs with AppKit (keeps transparency).
 
+### minSdk 24 and the held-back libraries
+- minSdk 23 -> 24 (owner decision), native API level 24 (CMake and prebuilts).
+- cast 23.0.0, maps 20.1.0, auth 22.0.0, webkit 1.18.0, palette 1.1.0, reCAPTCHA 18.9.4, Firebase BoM 35.2.0.
+- play-services-auth 22 removed GoogleSignIn: e-mail login uses Credential Manager "Sign in with Google"
+  (NanogramGoogleSignIn, googleid 1.2.1); same e-mail + ID token to the server.
+- Emulator: launches, MTProto handshakes complete.
+
 ### Measurements
 - Release arm64: 57.5 MB APK (R8 full mode, full LTO), 182 s; debug 98.7 MB. Details in docs/nanogram/build.md.
