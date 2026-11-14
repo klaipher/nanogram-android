@@ -803,7 +803,7 @@ public class TranscribeButton {
         }
         transcribeOperationsByDialogPosition.put((Integer) reqInfoHash(messageObject), messageObject);
         final String tag = NanogramOnDevice.speechTag(LocaleController.getInstance().getCurrentLocale().toLanguageTag());
-        NanogramOnDeviceTranscription.transcribe(context, file, tag, messageObject.getDuration(), text -> {
+        NanogramOnDeviceTranscription.transcribe(context, file, tag, (long) Math.ceil(messageObject.getDuration()), text -> {
             if (text == null) {
                 transcribePressed(messageObject, true, delegate, false);
                 return;

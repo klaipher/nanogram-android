@@ -131,6 +131,11 @@ public class NanogramFeaturesActivity extends UniversalFragment {
     }
 
     @Override
+    protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
+        return false;
+    }
+
+    @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
         switch (item.id) {
             case ID_SEARCH_OPERATORS:

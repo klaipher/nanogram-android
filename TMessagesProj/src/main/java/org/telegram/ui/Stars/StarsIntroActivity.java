@@ -2741,6 +2741,9 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
 
         @Override
         public void show() {
+            if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP)) {
+                return;
+            }
             long balance = StarsController.getInstance(currentAccount).getBalance().amount;
             BaseFragment lastFragment = LaunchActivity.getLastFragment();
             if (lastFragment instanceof ChatActivity) {
@@ -2759,14 +2762,6 @@ public class StarsIntroActivity extends GradientHeaderActivity implements Notifi
             super.dismissInternal();
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starOptionsLoaded);
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.starBalanceUpdated);
-        }
-
-        @Override
-        public void show() {
-            if (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.STARS_TOPUP)) {
-                return;
-            }
-            super.show();
         }
 
         public StarsOptionsSheet(

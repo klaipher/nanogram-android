@@ -198,8 +198,9 @@ set_target_properties(wallet_engine_jni PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(wallet_engine_jni PRIVATE wallet_engine_cpp)
 
 #sqlite (klaipher/sqlcipher-amalgamation, SQLCipher 4.20.0 on SQLite 3.54.1: one source for iOS, macOS and Android)
-# The codec is compiled in against the BoringSSL already linked, but no key is ever set (sqlite3_key is never called),
-# so database files stay plain SQLite. SQLITE_DQS=0 and SQLITE_OMIT_DEPRECATED stay off: Java code relies on legacy behaviour.
+# Built without the SQLCipher codec (no SQLITE_HAS_CODEC): Android never sets a key, and SQLCipher 4.20's OpenSSL provider
+# needs OpenSSL 3 (EVP_MAC) that BoringSSL lacks. The amalgamation is then plain SQLite 3.54.1. SQLITE_DQS=0 and
+# SQLITE_OMIT_DEPRECATED stay off: Java code relies on legacy behaviour.
 add_library(sqlite STATIC
         third_party/sqlite/sqlite3.c)
 target_compile_options(sqlite PUBLIC
@@ -207,20 +208,13 @@ target_compile_options(sqlite PUBLIC
 set_target_properties(sqlite PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(sqlite PRIVATE
-        SQLITE_HAS_CODEC=1
-        SQLITE_EXTRA_INIT=sqlcipher_extra_init
-        SQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown
-        SQLCIPHER_CRYPTO_OPENSSL
         SQLITE_THREADSAFE=1
         SQLITE_TEMP_STORE=2
         SQLITE_OMIT_LOAD_EXTENSION
         HAVE_USLEEP=1
         NDEBUG=1)
-target_include_directories(sqlite PRIVATE
-        third_party/boringssl/include)
 target_include_directories(sqlite PUBLIC
         third_party/sqlite/headers)
-target_link_libraries(sqlite PUBLIC crypto)
 target_compile_definitions(sqlite PUBLIC
         NULL=0 SOCKLEN_T=socklen_t LOCALE_NOT_USED ANDROID_NDK DISABLE_IMPORTGL AVOID_TABLES ANDROID_TILE_BASED_DECODE HAVE_STRCHRNUL=0 ANDROID_ARMV6_IDCT)
 
