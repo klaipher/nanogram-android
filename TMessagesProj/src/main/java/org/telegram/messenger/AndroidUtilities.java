@@ -5350,7 +5350,8 @@ public class AndroidUtilities {
             Signature[] signatures;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES);
-                signatures = packageInfo.signingInfo.getApkContentsSigners();
+                android.content.pm.SigningInfo signingInfo = packageInfo.signingInfo;
+                signatures = signingInfo.hasMultipleSigners() ? signingInfo.getApkContentsSigners() : signingInfo.getSigningCertificateHistory();
             } else {
                 PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES);
                 signatures = packageInfo.signatures;
