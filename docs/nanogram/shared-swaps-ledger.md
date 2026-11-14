@@ -48,3 +48,20 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
   SQLITE_DQS=0 and SQLITE_OMIT_DEPRECATED (legacy behaviour the Java code relies on), SQLITE_ENABLE_FTS5 (nothing in
   Android uses full-text tables), SQLITE_MAX_MMAP_SIZE=0, SQLITE_DEFAULT_MEMSTATUS=0, SQLITE_ENABLE_QPSG (behaviour
   changes iOS accepted, not needed here).
+
+## wallet-engine (jni/gram-wallet/wallet-engine.patch, deleted; submodule pin 5c65e47c) -> klaipher/wallet-engine `nanogram` (44ae85c7)
+
+- Copy: the reference patch `gram-wallet/wallet-engine.patch` (1018 lines, 12 files) and the submodule pinned at klaipher
+  master 5c65e47c. The patch applies cleanly to i582/wallet-engine 38147c2 (the parent of e59e0d8) and the patched tree
+  equals 5c65e47c except `WASM.md` (documentation only) (`git apply --check` then `diff -r` against `git archive 5c65e47c`).
+  It holds Android's changes: encrypted-comment key used without checking, key rotation preparation and preview, NFT
+  transfer preparation, TON Connect envelope encrypt/decrypt.
+- Carried: every file of those features in the fork is blob-identical to 5c65e47c (`git diff --stat 5c65e47c nanogram`
+  lists only records, the docs of the key check, `src/domain/encrypted_comment.rs`, `src/engine/encrypted_comment.rs`,
+  `src/wallet/{encrypted_comment,mod,recipient_public_key}.rs`, the lifecycle scenario test and `web/`). The fork's base
+  is i582 e59e0d89 (the iOS pin), which re-adds the recipient-key check.
+- Intended difference (owner decision 2026-11-14): the fork VERIFIES a supplied recipient key by default, like iOS.
+  Android's behaviour (use the supplied key as is) is the explicit opt-in `trust_recipient_public_key = true`, which the
+  Android bridge now passes at both places where it supplies a comment recipient key (`nativePrepareSend`, `nativeSend`).
+- Cargo.lock: `cargo metadata` (Rust 1.99.1) on a scratch copy of `gram-wallet` against the fork tree leaves `Cargo.lock`
+  unchanged, so the committed lock file already satisfies the new engine (the `--locked` prebuild is the final arbiter).

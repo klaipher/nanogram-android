@@ -1128,7 +1128,7 @@ Java_org_telegram_ui_Wallet_WalletEngine2_nativePrepareSend(
                 env->GetByteArrayRegion(comment_recipient_public_key, 0, 32, reinterpret_cast<jbyte *>(recipient_key.data()));
                 if (env->ExceptionCheck()) return nullptr;
                 SecretScope scope(client, phrase, we::SecretAccessReason::kEncryptComment);
-                encrypted_comment_body = client.wallet->create_encrypted_comment({destination, comment, recipient_key});
+                encrypted_comment_body = client.wallet->create_encrypted_comment({destination, comment, recipient_key, true});
                 body = we::SendMessageBody::kRawPayload{*encrypted_comment_body};
             } else {
                 body = we::SendMessageBody::kComment{comment};
@@ -1205,7 +1205,7 @@ Java_org_telegram_ui_Wallet_WalletEngine2_nativeSend(
             if (env->ExceptionCheck()) return nullptr;
             SecretScope scope(client, phrase, we::SecretAccessReason::kEncryptComment);
             body = we::SendMessageBody::kRawPayload{
-                client.wallet->create_encrypted_comment({destination, *comment, recipient_key})
+                client.wallet->create_encrypted_comment({destination, *comment, recipient_key, true})
             };
         }
         auto intent = transfer_intent(destination, amount, std::move(body));

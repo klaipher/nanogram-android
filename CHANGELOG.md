@@ -5,6 +5,22 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### wallet-engine: klaipher/wallet-engine nanogram (44ae85c7), the single source for iOS and Android (W2.I3)
+- `TMessagesProj/jni/wallet-engine` moves from klaipher master 5c65e47c to klaipher/wallet-engine branch `nanogram` at
+  44ae85c7 (`.gitmodules` branch). The fork is the iOS pin (i582 e59e0d89) plus Android's features (key rotation preparation
+  and preview, NFT transfer preparation, TON Connect envelope encrypt/decrypt), blob-identical to 5c65e47c for those files.
+- Deleted `jni/gram-wallet/wallet-engine.patch` (a reference copy of Android's delta; proof in
+  docs/nanogram/shared-swaps-ledger.md: it applies to i582 38147c2 and reproduces 5c65e47c, which the fork carries).
+- Recipient key (owner decision): the fork verifies a supplied comment recipient key by default (iOS behaviour). Android
+  supplies the key it got from the server for rotated recipients, so `WalletEngineBridge.cpp` passes
+  `trust_recipient_public_key = true` in `nativePrepareSend` and `nativeSend` (`create_encrypted_comment({..., recipient_key, true})`),
+  which keeps today's Android behaviour exactly.
+- `gram-wallet/Cargo.lock` is unchanged: `cargo metadata` against the fork tree (Rust 1.99.1, scratch copy) needs no lock edit.
+- Build steps (main session): `Tools/dev/ng prebuild` (regenerates the C++ bindings, which gain the new
+  `trust_recipient_public_key` record field, and builds with `--locked`; if the lock is rejected run `cargo update -w` in
+  `jni/gram-wallet` with Rust 1.99.1 and commit it) then `ng check`; emulator: wallet send with an encrypted comment to a
+  contact, preview/emulate, key rotation, NFT transfer, TON Connect.
+
 ### SQLite: klaipher/sqlcipher-amalgamation nanogram (9948d5af, SQLCipher 4.20.0 / SQLite 3.54.1), shared with iOS and macOS (W2.I3)
 - Deleted `TMessagesProj/jni/sqlite/sqlite3.{c,h}` (SQLite 3.39.3, byte-identical to the pristine sqlite.org amalgamation,
   see docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/sqlite` =
