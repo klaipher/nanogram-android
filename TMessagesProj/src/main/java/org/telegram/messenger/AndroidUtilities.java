@@ -151,6 +151,7 @@ import com.google.android.gms.auth.api.phone.SmsRetrieverClient;
 import com.google.android.gms.tasks.Task;
 
 import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.messenger.nanogram.NanogramSafeRunner;
 import org.telegram.messenger.browser.Browser;
 import org.telegram.utils.proxy.ProxySettings;
 import org.telegram.messenger.utils.CustomHtml;
@@ -1378,7 +1379,17 @@ public class AndroidUtilities {
         if (text == null)
             return false;
         SpannableStringBuilder newText = new SpannableStringBuilder(text);
-        boolean success = doSafe(() -> addLinks(newText, mask, internalOnly, removeOldReplacements));
+        boolean success;
+        if (NanogramSafeRunner.shouldRunInline(text.length())) {
+            try {
+                success = addLinks(newText, mask, internalOnly, removeOldReplacements);
+            } catch (Exception e) {
+                FileLog.e(e);
+                success = false;
+            }
+        } else {
+            success = doSafe(() -> addLinks(newText, mask, internalOnly, removeOldReplacements));
+        }
         if (success) {
             URLSpan[] oldSpans = text.getSpans(0, text.length(), URLSpan.class);
             for (int i = 0; i < oldSpans.length; ++i) {
@@ -1397,30 +1408,14 @@ public class AndroidUtilities {
     }
 
     public static boolean doSafe(Utilities.Callback0Return<Boolean> runnable, int timeout) {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Callable<Boolean> task = () -> {
+        return NanogramSafeRunner.run(() -> {
             try {
                 return runnable.run();
             } catch (Exception e) {
                 FileLog.e(e);
                 return false;
             }
-        };
-        boolean success = false;
-        Future<Boolean> future = null;
-        try {
-            future = executor.submit(task);
-            success = future.get(timeout, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException ex) {
-            if (future != null) {
-                future.cancel(true);
-            }
-        } catch (Exception ex) {
-            FileLog.e(ex);
-        } finally {
-            executor.shutdownNow();
-        }
-        return success;
+        }, timeout);
     }
 
     @Deprecated // use addLinksSafe

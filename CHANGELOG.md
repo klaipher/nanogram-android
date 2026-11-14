@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-DESIGN-1: no executor per link-parse call
+- `AndroidUtilities.doSafe` runs on one shared bounded daemon pool (`NanogramSafeRunner`: 2 core, 4 max threads, idle timeout) instead of a new single-thread executor per call. `addLinksSafe` parses text up to 1000 chars inline on the caller's thread (on the same working copy, so the original keeps its spans if nothing is found); longer text keeps the 200 ms timeout guard. Result semantics unchanged. Not done: the interruptible CharSequence wrapper (Linkify works on a Spannable, so a wrapper changes span handling).
+- Tests: `NanogramSafeRunnerTest` (JVM).
 ### ANDROID-NET-1: network state from the default NetworkCallback (experimental, off)
 - Flag `net_callback` (`NanogramSystemFlags`, default off): the default `NetworkCallback` feeds `NanogramNetworkState` (internet capability, metered, roaming, transport), `isNetworkOnline*` answers from that cache after the first callback (legacy NetworkInfo path before it), and the CONNECTIVITY_ACTION receiver is not registered. Account checks (`checkConnection`, `FileLoader.onNetworkChanged`) run only when online/transport/metered/roaming changes, and a stale `onLost` of a replaced network is ignored. VALIDATED is deliberately not required (captive portals, VPN), as before.
 - Not changed: `isConnectionSlow` and the Wi-Fi/roaming helpers still read `currentNetworkInfo` (refreshed once per network change instead of by every broadcast); they need the telephony subtype.
