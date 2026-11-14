@@ -244,12 +244,14 @@ public class NanogramUpdater {
             final JSONObject result = json;
             AndroidUtilities.runOnUIThread(() -> {
                 checking = false;
-                final int oldCode = versionCode;
                 if (result == null) {
                     lastCheckFailed = true;
                 } else {
                     try {
                         applyManifest(result);
+                        if (!downloading && !installing) {
+                            error = null;
+                        }
                         lastCheck = System.currentTimeMillis();
                         save();
                     } catch (Exception e) {
@@ -257,9 +259,7 @@ public class NanogramUpdater {
                         lastCheckFailed = true;
                     }
                 }
-                if (versionCode != oldCode || !lastCheckFailed) {
-                    notifyChanged();
-                }
+                notifyChanged();
                 if (whenDone != null) {
                     whenDone.run();
                 }

@@ -36,6 +36,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -153,6 +154,8 @@ import me.vkryl.android.animator.FactorAnimator;
 import java.util.HashSet;
 
 public class SettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate, MainTabsActivity.TabFragmentDelegate, FactorAnimator.Target {
+
+    private long lastUpdateProgressRefresh;
 
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
 
@@ -514,6 +517,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         } else if (id == NotificationCenter.updateInterfaces) {
             setInfo();
         } else if (id == NotificationCenter.newSuggestionsAvailable || id == NotificationCenter.appUpdateAvailable || id == NotificationCenter.appUpdateLoading) {
+            if (id == NotificationCenter.appUpdateLoading) {
+                final long now = SystemClock.elapsedRealtime();
+                if (now - lastUpdateProgressRefresh < 400) {
+                    return;
+                }
+                lastUpdateProgressRefresh = now;
+            }
             if (listView != null) {
                 listView.adapter.update(true);
             }
