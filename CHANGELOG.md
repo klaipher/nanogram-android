@@ -2,7 +2,7 @@
 
 Newest first: version, build number, date, commit; what changed and how.
 
-## Unreleased
+## 13.2.2 (202611141530) — 2026-11-14 — first Android release (source 672347f)
 
 ### Biometrics on the modern API
 - Removed the API 36 FingerprintManager stub jar, the compileOnly line and the R8 `-dontwarn`; deleted
