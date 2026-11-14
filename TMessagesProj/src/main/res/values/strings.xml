@@ -11712,8 +11712,8 @@
     <string name="NanogramFeaturesOnDevice">On this phone</string>
     <string name="NanogramOnDeviceTranscription">Transcribe voice messages on this phone</string>
     <string name="NanogramOnDeviceTranslation">Translate messages on this phone</string>
-    <string name="NanogramModelsWifiOnly">Download language models on Wi-Fi only</string>
-    <string name="NanogramOnDeviceTranscriptionInfo">Voice messages you have already downloaded are turned into text by your phone\'s own speech recognizer, so the audio is not sent to Telegram. Your phone may download a language pack the first time.</string>
+    <string name="NanogramModelsWifiOnly">Download translation models on Wi-Fi only</string>
+    <string name="NanogramOnDeviceTranscriptionInfo">Voice messages you have already downloaded are turned into text by your phone\'s own speech recognizer, so the audio is not sent to Telegram. Your phone may download a language pack the first time, roughly 50 to 100 MB depending on the language, on any network.</string>
     <string name="NanogramOnDeviceTranslationInfo">Message translation runs on this phone with Google ML Kit instead of Telegram\'s servers, and the text is not sent anywhere. Each language needs a model of about 30 MB, downloaded only after you turn this on. If a message cannot be translated here, Telegram\'s normal translation is used.</string>
     <string name="NanogramModelDownloading">Downloading the %1$s language model\u2026</string>
     <string name="NanogramModelReady">The %1$s language model is ready.</string>

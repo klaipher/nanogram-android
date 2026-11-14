@@ -108,32 +108,53 @@ public final class NanogramOnDeviceTranscription {
         return intent;
     }
 
-    // done runs on the UI thread: the text, or null when the recognizer could not do it (the caller falls back to the server).
+    // done runs on the UI thread, once: the text, or null when the recognizer could not do it (the caller falls back to the server).
     @RequiresApi(33)
-    public static void transcribe(Context context, File voice, String tag, Utilities.Callback<String> done) {
+    public static void transcribe(Context context, File voice, String tag, long durationSeconds, Utilities.Callback<String> done) {
         final AtomicBoolean finished = new AtomicBoolean();
-        final Utilities.Callback<String> finish = text -> {
-            if (finished.compareAndSet(false, true)) {
-                AndroidUtilities.runOnUIThread(() -> done.run(text));
-            }
-        };
         final ParcelFileDescriptor[] pipe;
         try {
             pipe = ParcelFileDescriptor.createPipe();
         } catch (IOException e) {
             FileLog.e("[ondevice] pipe failed", e);
-            finish.run(null);
+            AndroidUtilities.runOnUIThread(() -> done.run(null));
             return;
         }
-        final Thread decoder = new Thread(() -> {
-            try (ParcelFileDescriptor.AutoCloseOutputStream out = new ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])) {
-                decode(voice, out, (rate, channels) -> AndroidUtilities.runOnUIThread(() -> startRecognizer(context, tag, pipe[0], rate, channels, finish)));
-            } catch (Throwable t) {
-                FileLog.e("[ondevice] decode failed", t);
+        final SpeechRecognizer[] recognizer = new SpeechRecognizer[1];
+        final Runnable[] timeout = new Runnable[1];
+        // Closing our read end after any outcome lets the decoder thread get EPIPE and release the codec.
+        final Utilities.Callback<String> finish = text -> {
+            if (!finished.compareAndSet(false, true)) {
+                return;
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                if (timeout[0] != null) {
+                    AndroidUtilities.cancelRunOnUIThread(timeout[0]);
+                }
+                if (recognizer[0] != null) {
+                    try {
+                        recognizer[0].cancel();
+                        recognizer[0].destroy();
+                    } catch (Throwable ignore) {
+                    }
+                }
                 try {
                     pipe[0].close();
                 } catch (IOException ignore) {
                 }
+                done.run(text);
+            });
+        };
+        timeout[0] = () -> {
+            FileLog.e("[ondevice] transcription timed out");
+            finish.run(null);
+        };
+        AndroidUtilities.runOnUIThread(timeout[0], (Math.max(1, durationSeconds) + 30) * 1000L);
+        final Thread decoder = new Thread(() -> {
+            try (ParcelFileDescriptor.AutoCloseOutputStream out = new ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])) {
+                decode(voice, out, () -> AndroidUtilities.runOnUIThread(() -> startRecognizer(context, tag, pipe[0], recognizer, finish)));
+            } catch (Throwable t) {
+                FileLog.e("[ondevice] decode failed", t);
                 finish.run(null);
             }
         }, "ngOnDeviceDecode");
@@ -141,22 +162,42 @@ public final class NanogramOnDeviceTranscription {
     }
 
     @RequiresApi(33)
-    private static void startRecognizer(Context context, String tag, ParcelFileDescriptor source, int rate, int channels, Utilities.Callback<String> finish) {
+    private static void startRecognizer(Context context, String tag, ParcelFileDescriptor source, SpeechRecognizer[] holder, Utilities.Callback<String> finish) {
         try {
             final SpeechRecognizer recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
+            holder[0] = recognizer;
+            final StringBuilder text = new StringBuilder();
             recognizer.setRecognitionListener(new RecognitionListener() {
+                private void add(Bundle results) {
+                    final ArrayList<String> list = results == null ? null : results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (list != null && !list.isEmpty() && !list.get(0).isEmpty()) {
+                        if (text.length() > 0) {
+                            text.append(' ');
+                        }
+                        text.append(list.get(0));
+                    }
+                }
+
+                @Override
+                public void onSegmentResults(Bundle segmentResults) {
+                    add(segmentResults);
+                }
+
+                @Override
+                public void onEndOfSegmentedSession() {
+                    finish.run(text.toString());
+                }
+
                 @Override
                 public void onResults(Bundle results) {
-                    final ArrayList<String> list = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    recognizer.destroy();
-                    finish.run(list == null || list.isEmpty() ? "" : list.get(0));
+                    add(results);
+                    finish.run(text.toString());
                 }
 
                 @Override
                 public void onError(int error) {
-                    recognizer.destroy();
                     // No match is a real answer for silence; anything else goes back to the server.
-                    finish.run(error == SpeechRecognizer.ERROR_NO_MATCH ? "" : null);
+                    finish.run(error == SpeechRecognizer.ERROR_NO_MATCH ? text.toString() : null);
                 }
 
                 @Override
@@ -189,8 +230,10 @@ public final class NanogramOnDeviceTranscription {
             });
             final Intent intent = baseIntent(tag);
             intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, source);
-            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, channels);
-            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, rate);
+            // Without this the session ends at the first pause; with it, only when the audio is closed.
+            intent.putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE);
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1);
+            intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, NanogramOnDevice.Pcm16kConverter.TARGET_RATE);
             intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
             recognizer.startListening(intent);
         } catch (Throwable t) {
@@ -200,7 +243,7 @@ public final class NanogramOnDeviceTranscription {
     }
 
     private interface FormatReady {
-        void run(int rate, int channels);
+        void run();
     }
 
     // Voice messages are Ogg/Opus; the platform decoder turns them into 16-bit PCM.
@@ -227,7 +270,8 @@ public final class NanogramOnDeviceTranscription {
             codec.start();
 
             final MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            boolean inputDone = false, outputDone = false, announced = false;
+            boolean inputDone = false, outputDone = false;
+            NanogramOnDevice.Pcm16kConverter converter = null;
             while (!outputDone) {
                 if (!inputDone) {
                     final int inIndex = codec.dequeueInputBuffer(10_000);
@@ -245,17 +289,15 @@ public final class NanogramOnDeviceTranscription {
                 }
                 final int outIndex = codec.dequeueOutputBuffer(info, 10_000);
                 if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    announced = announce(codec.getOutputFormat(), ready, announced);
+                    converter = converterFor(codec.getOutputFormat(), converter, ready);
                 } else if (outIndex >= 0) {
-                    if (!announced) {
-                        announced = announce(codec.getOutputFormat(), ready, false);
-                    }
+                    converter = converterFor(codec.getOutputFormat(), converter, ready);
                     final ByteBuffer buffer = codec.getOutputBuffer(outIndex);
                     if (info.size > 0 && buffer != null) {
                         final byte[] chunk = new byte[info.size];
                         buffer.position(info.offset);
                         buffer.get(chunk);
-                        out.write(chunk);
+                        out.write(converter.convert(chunk, chunk.length));
                     }
                     codec.releaseOutputBuffer(outIndex, false);
                     outputDone = (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
@@ -273,13 +315,14 @@ public final class NanogramOnDeviceTranscription {
         }
     }
 
-    private static boolean announce(MediaFormat format, FormatReady ready, boolean already) {
-        if (already) {
-            return true;
+    // The recognizer is told 16 kHz mono (its documented default); the decoder's own format is converted here.
+    private static NanogramOnDevice.Pcm16kConverter converterFor(MediaFormat format, NanogramOnDevice.Pcm16kConverter existing, FormatReady ready) {
+        if (existing != null) {
+            return existing;
         }
         final int rate = format.containsKey(MediaFormat.KEY_SAMPLE_RATE) ? format.getInteger(MediaFormat.KEY_SAMPLE_RATE) : 48000;
         final int channels = format.containsKey(MediaFormat.KEY_CHANNEL_COUNT) ? format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) : 1;
-        ready.run(rate, channels);
-        return true;
+        ready.run();
+        return new NanogramOnDevice.Pcm16kConverter(rate, channels);
     }
 }

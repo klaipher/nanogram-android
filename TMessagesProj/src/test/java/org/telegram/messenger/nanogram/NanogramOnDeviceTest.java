@@ -58,6 +58,64 @@ public class NanogramOnDeviceTest {
         assertTrue(NanogramOnDevice.allTranslated(new String[]{"a", "b"}));
         assertFalse(NanogramOnDevice.allTranslated(new String[]{"a", null}));
         assertTrue(NanogramOnDevice.allTranslated(new String[0]));
-        assertArrayEquals(new String[]{"a"}, new String[]{"a"});
+    }
+
+    @Test
+    public void traditionalChineseTargetsGoToTheServer() {
+        assertNull(NanogramOnDevice.translateTargetCode("zh-hant"));
+        assertNull(NanogramOnDevice.translateTargetCode("zh-TW"));
+        assertNull(NanogramOnDevice.translateTargetCode("zh_hk"));
+        assertNull(NanogramOnDevice.translateTargetCode("zh-Hant-TW"));
+        assertEquals("zh", NanogramOnDevice.translateTargetCode("zh-hans"));
+        assertEquals("zh", NanogramOnDevice.translateTargetCode("zh"));
+        assertEquals("pt", NanogramOnDevice.translateTargetCode("pt-BR"));
+        assertEquals("zh", NanogramOnDevice.translateCode("zh-hant"));
+    }
+
+    @Test
+    public void undeterminedLanguageIsNothingToTranslate() {
+        assertTrue(NanogramOnDevice.noLanguage("und"));
+        assertTrue(NanogramOnDevice.noLanguage(null));
+        assertTrue(NanogramOnDevice.noLanguage(""));
+        assertFalse(NanogramOnDevice.noLanguage("de"));
+    }
+
+    @Test
+    public void linkOnlyLinesAreNotTranslated() {
+        final String[] lines = {"see this", "https://example.com/a?b=c", "  www.example.com ", "https://x.com and more"};
+        assertEquals(Arrays.asList(0, 3), NanogramOnDevice.translatableLines(lines));
+    }
+
+    @Test
+    public void converterDownmixesAndDecimatesTo16k() {
+        final NanogramOnDevice.Pcm16kConverter c = new NanogramOnDevice.Pcm16kConverter(48000, 2);
+        final byte[] in = new byte[48000 * 2 * 2 / 10];
+        for (int i = 0; i < in.length; i += 4) {
+            in[i] = (byte) 0xe8;
+            in[i + 1] = 0x03;
+            in[i + 2] = (byte) 0xd0;
+            in[i + 3] = 0x07;
+        }
+        final byte[] out = c.convert(in, in.length);
+        assertEquals(1600 * 2, out.length);
+        assertEquals(1500, (short) ((out[0] & 0xff) | (out[1] << 8)));
+    }
+
+    @Test
+    public void converterKeepsStateAcrossOddChunks() {
+        final NanogramOnDevice.Pcm16kConverter whole = new NanogramOnDevice.Pcm16kConverter(48000, 1);
+        final NanogramOnDevice.Pcm16kConverter split = new NanogramOnDevice.Pcm16kConverter(48000, 1);
+        final byte[] in = new byte[600];
+        for (int i = 0; i < in.length; ++i) {
+            in[i] = (byte) (i * 7);
+        }
+        final byte[] a = whole.convert(in, in.length);
+        final byte[] first = split.convert(in, 101);
+        final byte[] rest = split.convert(java.util.Arrays.copyOfRange(in, 101, in.length), in.length - 101);
+        final byte[] b = new byte[first.length + rest.length];
+        System.arraycopy(first, 0, b, 0, first.length);
+        System.arraycopy(rest, 0, b, first.length, rest.length);
+        assertArrayEquals(a, b);
+        assertEquals(100 * 2, a.length);
     }
 }

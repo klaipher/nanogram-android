@@ -96,7 +96,9 @@ public class NanogramFeaturesActivity extends UniversalFragment {
             items.add(UItem.asCheck(ID_ON_DEVICE_TRANSCRIPTION, getString(R.string.NanogramOnDeviceTranscription)).setChecked(NanogramFeatures.onDeviceTranscription()));
         }
         items.add(UItem.asCheck(ID_ON_DEVICE_TRANSLATION, getString(R.string.NanogramOnDeviceTranslation)).setChecked(NanogramFeatures.onDeviceTranslation()));
-        items.add(UItem.asCheck(ID_MODELS_WIFI_ONLY, getString(R.string.NanogramModelsWifiOnly)).setChecked(NanogramFeatures.modelsWifiOnly()));
+        if (NanogramFeatures.onDeviceTranslation()) {
+            items.add(UItem.asCheck(ID_MODELS_WIFI_ONLY, getString(R.string.NanogramModelsWifiOnly)).setChecked(NanogramFeatures.modelsWifiOnly()));
+        }
         items.add(UItem.asShadow(onDeviceInfo(transcription)));
 
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesPower)));

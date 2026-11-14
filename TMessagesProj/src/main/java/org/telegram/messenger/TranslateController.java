@@ -1113,7 +1113,33 @@ public class TranslateController extends BaseController {
                     }
                     NanogramOnDeviceTranslation.translate(sourceTexts, pendingTranslation1.language, results -> {
                         if (!NanogramOnDevice.allTranslated(results)) {
-                            // One failure sends the whole batch to the server, so no message is answered twice.
+                            // Only the messages this phone could not do go to the server; the rest are answered here.
+                            final ArrayList<Integer> doneIds = new ArrayList<>();
+                            final ArrayList<Integer> keep = new ArrayList<>();
+                            for (int i = 0; i < results.length; ++i) {
+                                if (results[i] == null) {
+                                    keep.add(i);
+                                } else {
+                                    final TLRPC.TL_textWithEntities translated = new TLRPC.TL_textWithEntities();
+                                    translated.text = results[i];
+                                    pendingTranslation1.callbacks.get(i).run(isTranscription, pendingTranslation1.messageIds.get(i), translated, pendingTranslation1.language);
+                                    doneIds.add(pendingTranslation1.messageIds.get(i));
+                                }
+                            }
+                            final ArrayList<Integer> ids = new ArrayList<>();
+                            final ArrayList<TLRPC.TL_textWithEntities> texts = new ArrayList<>();
+                            final ArrayList<Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String>> callbacks = new ArrayList<>();
+                            for (int index : keep) {
+                                ids.add(pendingTranslation1.messageIds.get(index));
+                                texts.add(pendingTranslation1.messageTexts.get(index));
+                                callbacks.add(pendingTranslation1.callbacks.get(index));
+                            }
+                            synchronized (TranslateController.this) {
+                                loadingTranslations.removeAll(doneIds);
+                                pendingTranslation1.messageIds = ids;
+                                pendingTranslation1.messageTexts = texts;
+                                pendingTranslation1.callbacks = callbacks;
+                            }
                             pendingTranslation1.serverOnly = true;
                             pendingTranslation1.runnable.run();
                             return;

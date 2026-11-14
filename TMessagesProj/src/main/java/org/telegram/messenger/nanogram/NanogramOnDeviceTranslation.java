@@ -9,11 +9,13 @@ import com.google.mlkit.nl.translate.Translator;
 import com.google.mlkit.nl.translate.TranslatorOptions;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.Utilities;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Message translation with ML Kit models on the phone; null results make the caller use Telegram's server translation. */
 public final class NanogramOnDeviceTranslation {
@@ -57,8 +59,16 @@ public final class NanogramOnDeviceTranslation {
         return builder.build();
     }
 
+    // The whole on-device batch gets this long (model download included) before the rest goes to the server.
+    private static final long BATCH_TIMEOUT_MS = 30_000;
+
     private static String mlCode(String telegramLang) {
         final String code = NanogramOnDevice.translateCode(telegramLang);
+        return code == null ? null : TranslateLanguage.fromLanguageTag(code);
+    }
+
+    private static String mlTargetCode(String telegramLang) {
+        final String code = NanogramOnDevice.translateTargetCode(telegramLang);
         return code == null ? null : TranslateLanguage.fromLanguageTag(code);
     }
 
@@ -87,26 +97,44 @@ public final class NanogramOnDeviceTranslation {
             });
     }
 
-    // done runs on the UI thread with one entry per text; a null entry means that text could not be translated here.
+    // done runs on the UI thread once, with one entry per text; a null entry means that text could not be translated here.
     public static void translate(ArrayList<String> texts, String toTelegramLang, Utilities.Callback<String[]> done) {
         final String[] results = new String[texts.size()];
-        final String target = mlCode(toTelegramLang);
+        final String target = mlTargetCode(toTelegramLang);
         if (target == null || texts.isEmpty()) {
             AndroidUtilities.runOnUIThread(() -> done.run(results));
             return;
         }
-        translateFrom(texts, 0, target, results, done);
+        final AtomicBoolean answered = new AtomicBoolean();
+        final Runnable timeout = () -> {
+            if (answered.compareAndSet(false, true)) {
+                FileLog.e("[ondevice] translation timed out");
+                done.run(results.clone());
+            }
+        };
+        AndroidUtilities.runOnUIThread(timeout, BATCH_TIMEOUT_MS);
+        translateFrom(texts, 0, target, results, answered, () -> {
+            if (answered.compareAndSet(false, true)) {
+                AndroidUtilities.cancelRunOnUIThread(timeout);
+                done.run(results);
+            }
+        });
     }
 
-    private static void translateFrom(ArrayList<String> texts, int index, String target, String[] results, Utilities.Callback<String[]> done) {
-        if (index >= texts.size()) {
-            AndroidUtilities.runOnUIThread(() -> done.run(results));
+    private static void translateFrom(ArrayList<String> texts, int index, String target, String[] results, AtomicBoolean answered, Runnable finished) {
+        if (index >= texts.size() || answered.get()) {
+            AndroidUtilities.runOnUIThread(finished);
             return;
         }
-        final Runnable next = () -> translateFrom(texts, index + 1, target, results, done);
+        final Runnable next = () -> translateFrom(texts, index + 1, target, results, answered, finished);
         final String text = texts.get(index);
         LanguageDetector.detectLanguage(text, detected -> {
-            final String source = "und".equals(detected) ? null : mlCode(detected);
+            if (NanogramOnDevice.noLanguage(detected)) {
+                results[index] = text;
+                next.run();
+                return;
+            }
+            final String source = mlCode(detected);
             if (source == null) {
                 next.run();
                 return;
@@ -120,10 +148,56 @@ public final class NanogramOnDeviceTranslation {
                 results[index] = translated;
                 next.run();
             });
-        }, e -> next.run());
+        }, e -> {
+            results[index] = text;
+            next.run();
+        });
+    }
+
+    // With Wi-Fi only on and no Wi-Fi, a missing model cannot be fetched: fail now instead of waiting for Wi-Fi.
+    private static void checkModelsReachable(String source, String target, Utilities.Callback<Boolean> done) {
+        if (!NanogramFeatures.modelsWifiOnly() || ApplicationLoader.isConnectedToWiFi()) {
+            done.run(true);
+            return;
+        }
+        final ArrayList<String> codes = new ArrayList<>();
+        codes.add(source);
+        codes.add(target);
+        if (!TranslateLanguage.ENGLISH.equals(source) && !TranslateLanguage.ENGLISH.equals(target)) {
+            codes.add(TranslateLanguage.ENGLISH);
+        }
+        checkDownloaded(codes, 0, done);
+    }
+
+    private static void checkDownloaded(ArrayList<String> codes, int at, Utilities.Callback<Boolean> done) {
+        if (at >= codes.size()) {
+            done.run(true);
+            return;
+        }
+        RemoteModelManager.getInstance()
+            .isModelDownloaded(new TranslateRemoteModel.Builder(codes.get(at)).build())
+            .addOnSuccessListener(downloaded -> {
+                if (downloaded) {
+                    checkDownloaded(codes, at + 1, done);
+                } else {
+                    done.run(false);
+                }
+            })
+            .addOnFailureListener(e -> done.run(false));
     }
 
     private static void translateText(String text, String source, String target, Utilities.Callback<String> done) {
+        checkModelsReachable(source, target, reachable -> {
+            if (!reachable) {
+                report(source, STATE_FAILED);
+                done.run(null);
+                return;
+            }
+            downloadAndTranslate(text, source, target, done);
+        });
+    }
+
+    private static void downloadAndTranslate(String text, String source, String target, Utilities.Callback<String> done) {
         final Translator translator = Translation.getClient(new TranslatorOptions.Builder().setSourceLanguage(source).setTargetLanguage(target).build());
         report(source, STATE_DOWNLOADING);
         translator.downloadModelIfNeeded(conditions())

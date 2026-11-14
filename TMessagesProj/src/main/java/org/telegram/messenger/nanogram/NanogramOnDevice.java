@@ -41,6 +41,22 @@ public final class NanogramOnDevice {
         }
     }
 
+    // The ML Kit "zh" model is Simplified only, so a Traditional Chinese target goes to the server.
+    public static String translateTargetCode(String telegramLang) {
+        if (telegramLang != null) {
+            final String lang = telegramLang.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+            if (lang.startsWith("zh-hant") || lang.equals("zh-tw") || lang.equals("zh-hk") || lang.equals("zh-mo")) {
+                return null;
+            }
+        }
+        return translateCode(telegramLang);
+    }
+
+    // Language-id answers "und" (or fails) for emoji, links and numbers: there is nothing to translate, not a failure.
+    public static boolean noLanguage(String detected) {
+        return detected == null || detected.isEmpty() || "und".equals(detected);
+    }
+
     // Language tag for the speech recognizer: "pt_br" -> "pt-BR", "zh-hans" -> "zh".
     public static String speechTag(String telegramLang) {
         final String base = translateCode(telegramLang);
@@ -62,11 +78,79 @@ public final class NanogramOnDevice {
     public static ArrayList<Integer> translatableLines(String[] lines) {
         final ArrayList<Integer> indexes = new ArrayList<>();
         for (int i = 0; i < lines.length; ++i) {
-            if (!lines[i].trim().isEmpty()) {
+            if (!lines[i].trim().isEmpty() && !isLinkOnly(lines[i])) {
                 indexes.add(i);
             }
         }
         return indexes;
+    }
+
+    // The translator would rewrite a bare URL.
+    public static boolean isLinkOnly(String line) {
+        final String t = line.trim().toLowerCase(Locale.ROOT);
+        if (t.isEmpty() || t.indexOf(' ') >= 0 || t.indexOf('\t') >= 0) {
+            return false;
+        }
+        return t.startsWith("http://") || t.startsWith("https://") || t.startsWith("www.") || t.startsWith("tg://");
+    }
+
+    // Mono 16 kHz 16-bit little-endian PCM from any rate and channel count; keeps its state between chunks.
+    public static final class Pcm16kConverter {
+        public static final int TARGET_RATE = 16000;
+        private final int channels;
+        private final double step;
+        private double acc;
+        private double filled;
+        private int partialBytes;
+        private final byte[] partial = new byte[2];
+        private final int[] frame;
+        private int frameFill;
+
+        public Pcm16kConverter(int rate, int channels) {
+            this.channels = Math.max(1, channels);
+            this.step = (double) rate / TARGET_RATE;
+            this.frame = new int[this.channels];
+        }
+
+        public byte[] convert(byte[] in, int length) {
+            final java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(length / 2 / Math.max(1, (int) step) + 4);
+            for (int i = 0; i < length; ++i) {
+                partial[partialBytes++] = in[i];
+                if (partialBytes < 2) {
+                    continue;
+                }
+                partialBytes = 0;
+                frame[frameFill++] = (short) ((partial[0] & 0xff) | (partial[1] << 8));
+                if (frameFill < channels) {
+                    continue;
+                }
+                frameFill = 0;
+                long sum = 0;
+                for (int c = 0; c < channels; ++c) {
+                    sum += frame[c];
+                }
+                feed((double) sum / channels, out);
+            }
+            return out.toByteArray();
+        }
+
+        private void feed(double sample, java.io.ByteArrayOutputStream out) {
+            double remaining = 1.0;
+            while (remaining > 1e-9) {
+                final double take = Math.min(remaining, step - filled);
+                acc += sample * take;
+                filled += take;
+                remaining -= take;
+                if (filled >= step - 1e-9) {
+                    final long v = Math.round(acc / step);
+                    final int clamped = (int) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, v));
+                    out.write(clamped & 0xff);
+                    out.write((clamped >> 8) & 0xff);
+                    acc = 0;
+                    filled = 0;
+                }
+            }
+        }
     }
 
     public static String joinLines(String[] lines, String[] translated) {
