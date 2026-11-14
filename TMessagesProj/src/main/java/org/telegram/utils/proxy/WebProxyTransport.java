@@ -349,7 +349,8 @@ public final class WebProxyTransport implements ForegroundDetector.Listener {
         }
         try {
             serverSocket.close();
-        } catch (Exception ignore) {
+        } catch (Exception quiet) {
+            FileLog.e(quiet, false);
         }
         ForegroundDetector detector = ForegroundDetector.getInstance();
         if (detector != null) {
@@ -362,7 +363,8 @@ public final class WebProxyTransport implements ForegroundDetector.Listener {
             if (replyProxy != null) {
                 try {
                     replyProxy.postMessage("{\"t\":\"close\"}");
-                } catch (Exception ignore) {
+                } catch (Exception quiet) {
+                    FileLog.e(quiet, false);
                 }
             }
             destroyWebView();
@@ -652,7 +654,8 @@ public final class WebProxyTransport implements ForegroundDetector.Listener {
             if ("close".equals(type) || "failed".equals(object.optString("state"))) {
                 failCarrier();
             }
-        } catch (Exception ignore) {
+        } catch (Exception quiet) {
+            FileLog.e(quiet, false);
         }
     }
 
@@ -972,7 +975,8 @@ public final class WebProxyTransport implements ForegroundDetector.Listener {
     private static void closeSocket(Socket socket) {
         try {
             socket.close();
-        } catch (Exception ignore) {
+        } catch (Exception quiet) {
+            FileLog.e(quiet, false);
         }
     }
 
