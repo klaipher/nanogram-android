@@ -5,6 +5,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- ANDROID-IMG-2: the in-memory image cache scales with the device instead of a fixed 30 MB cap: performance class HIGH
+  with memoryClass >= 256 and >= 6 GB RAM gets 48 MB, other AVERAGE/HIGH devices with memoryClass >= 192 and >= 4 GB get
+  32 MB (both capped at memoryClass/5); low class, `isLowRamDevice()`, small RAM and memoryClass < 192 keep upstream's
+  size. Deliberately below the review's 64/40 MB until the low-memory kill rate is measured (`NanogramImageCacheSize`,
+  JVM test `NanogramImageCacheSizeTest`). onTrimMemory handling unchanged.
 - ANDROID-IMG-1 (flag, default OFF): decoded chat/thumb bitmaps get `prepareToDraw()` on the decode thread so the first
   draw does not upload the texture on RenderThread. Only for bitmaps up to 4 MB, with a waiting receiver (no
   prefetches), never hardware bitmaps. Switch: Debug menu > "Upload decoded images to the GPU early"
