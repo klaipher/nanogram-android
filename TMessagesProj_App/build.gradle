@@ -58,6 +58,10 @@ android {
             storePassword nanogramStore ? findProperty('nanogramStorePassword') : RELEASE_STORE_PASSWORD
             keyAlias nanogramStore ? findProperty('nanogramKeyAlias') : RELEASE_KEY_ALIAS
             keyPassword nanogramStore ? findProperty('nanogramKeyPassword') : RELEASE_KEY_PASSWORD
+            // v1 for Android 6, v2 for speed, v3 so the key can be rotated later.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 

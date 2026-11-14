@@ -462,7 +462,11 @@ def cmd_prune(a: argparse.Namespace) -> None:
     pre = CACHE / "prebuild"
     if pre.exists():
         current = {prebuild_key(prebuild_abis("arm64")), prebuild_key(prebuild_abis("all"))}
-        others = sorted((p for p in pre.iterdir() if p.name not in current), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in pre.glob("*.tmp"):
+            info(f"remove failed prebuild {p.name}")
+            if not a.dry_run:
+                shutil.rmtree(p, ignore_errors=True)
+        others = sorted((p for p in pre.iterdir() if p.name not in current and not p.name.endswith(".tmp")), key=lambda p: p.stat().st_mtime, reverse=True)
         for p in others[2:]:
             info(f"remove prebuild {p.name} ({dir_size(p) / 1e9:.1f} GB)")
             if not a.dry_run:
