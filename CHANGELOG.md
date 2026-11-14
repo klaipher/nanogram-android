@@ -5,6 +5,14 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Startup: unused account slots not constructed at start, behind a flag (ANDROID-STARTUP-1)
+- `StartupSettings.lazyAccountSlots` (key `startup_lazy_account_slots`, default OFF). When on, postInitApplication
+  skips slots 1..3 that have no logged-in user: no MessagesController/MessagesStorage (storage thread and empty
+  cache4.db), no ConnectionsManager (native network thread, auth-key handshake, 19 s ping), no ContactsController or
+  DownloadController. Slot 0 and activated slots start as before; Add Account still builds its slot on first
+  getInstance. Not done: deferring native_init inside the ConnectionsManager constructor and auditing the ~110
+  `a < MAX_ACCOUNT_COUNT` loops (any loop that calls getInstance(a) still builds the slot). Server-visible change
+  (no handshake for empty slots), hence the flag.
 ### Startup: Play Billing connection skipped when purchases are unavailable, behind a flag (ANDROID-STARTUP-3)
 - `StartupSettings.skipPlayBillingAtStartup` (SharedPreferences `mainconfig`, key `startup_skip_play_billing`, default
   OFF). When on and `BuildVars.IS_BILLING_UNAVAILABLE`, postInitApplication no longer calls
