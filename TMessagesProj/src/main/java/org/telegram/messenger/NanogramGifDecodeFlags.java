@@ -27,11 +27,12 @@ public class NanogramGifDecodeFlags {
         } catch (Throwable ignore) {}
     }
 
-    /** Same policy as the native side (gifvideo.cpp): H.264 deblocking is skipped for tiles up to 320 px. */
-    public static boolean skipLoopFilter(boolean flagOn, int width, int height) {
-        if (!flagOn || width <= 0 || height <= 0) {
-            return false;
-        }
-        return Math.max(width, height) <= SMALL_TILE_MAX_SIDE;
+    /**
+     * Max clip side (px) up to which native code skips H.264 deblocking; 0 when the flag is off. The native side
+     * (gifvideo.cpp) applies it to H.264 clips by codec size, in every AnimatedFileNative decoder (chat tiles,
+     * full-screen GIFs, previews). Round videos are recorded at 384 px by default and are not covered.
+     */
+    public static int nativeMaxSide(boolean flagOn) {
+        return flagOn ? SMALL_TILE_MAX_SIDE : 0;
     }
 }

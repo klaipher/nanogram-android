@@ -1,31 +1,19 @@
 package org.telegram.messenger;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
 public class NanogramGifDecodeFlagsTest {
 
     @Test
-    public void flagOffNeverSkips() {
-        assertFalse(NanogramGifDecodeFlags.skipLoopFilter(false, 240, 240));
+    public void flagOffPassesZeroToNative() {
+        assertEquals(0, NanogramGifDecodeFlags.nativeMaxSide(false));
     }
 
     @Test
-    public void smallTilesSkipWhenOn() {
-        assertTrue(NanogramGifDecodeFlags.skipLoopFilter(true, 320, 240));
-        assertTrue(NanogramGifDecodeFlags.skipLoopFilter(true, 240, 320));
-    }
-
-    @Test
-    public void largeClipsKeepLoopFilter() {
-        assertFalse(NanogramGifDecodeFlags.skipLoopFilter(true, 321, 240));
-        assertFalse(NanogramGifDecodeFlags.skipLoopFilter(true, 1280, 720));
-    }
-
-    @Test
-    public void unknownSizeKeepsLoopFilter() {
-        assertFalse(NanogramGifDecodeFlags.skipLoopFilter(true, 0, 0));
+    public void flagOnPassesThreshold() {
+        assertEquals(320, NanogramGifDecodeFlags.nativeMaxSide(true));
+        assertEquals(NanogramGifDecodeFlags.SMALL_TILE_MAX_SIDE, NanogramGifDecodeFlags.nativeMaxSide(true));
     }
 }

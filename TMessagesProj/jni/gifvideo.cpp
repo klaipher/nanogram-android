@@ -156,7 +156,8 @@ static enum AVPixelFormat get_format(AVCodecContext *ctx,
     return pix_fmts[0];
 }
 
-static std::atomic<bool> g_skipLoopFilterSmallTiles{false};
+static // Max side (px) up to which H.264 deblocking is skipped; 0 = off. Value comes from NanogramGifDecodeFlags (Java).
+static std::atomic<int> g_skipLoopFilterMaxSide{0};
 
 int open_codec_context(int *stream_idx, AVCodecContext **dec_ctx, AVFormatContext *fmt_ctx, enum AVMediaType type) {
     int ret, stream_index;
@@ -191,10 +192,10 @@ int open_codec_context(int *stream_idx, AVCodecContext **dec_ctx, AVFormatContex
 
         // refcounted_frames was removed in FFmpeg 5 (dead option); frames are always refcounted now.
         // Threads stay at 1 on purpose: many tiles decode at once, so per-tile threading only adds contention.
-        if (type == AVMEDIA_TYPE_VIDEO && g_skipLoopFilterSmallTiles.load(std::memory_order_relaxed)
-            && st->codecpar->codec_id == AV_CODEC_ID_H264) {
+        int skipMaxSide = g_skipLoopFilterMaxSide.load(std::memory_order_relaxed);
+        if (type == AVMEDIA_TYPE_VIDEO && skipMaxSide > 0 && st->codecpar->codec_id == AV_CODEC_ID_H264) {
             int maxSide = st->codecpar->width > st->codecpar->height ? st->codecpar->width : st->codecpar->height;
-            if (maxSide > 0 && maxSide <= 320) {
+            if (maxSide > 0 && maxSide <= skipMaxSide) {
                 (*dec_ctx)->skip_loop_filter = AVDISCARD_ALL;
             }
         }
@@ -385,8 +386,8 @@ int getVideoRotation(const AVStream *stream) {
 }
 
 
-extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileNative_nSetSmallTileSkipLoopFilter(JNIEnv *env, jclass clazz, jboolean on) {
-    g_skipLoopFilterSmallTiles.store(on == JNI_TRUE, std::memory_order_relaxed);
+extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileNative_nSetSmallTileSkipLoopFilter(JNIEnv *env, jclass clazz, jint maxSide) {
+    g_skipLoopFilterMaxSide.store(maxSide > 0 ? maxSide : 0, std::memory_order_relaxed);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_org_telegram_ui_Components_AnimatedFileNative_nGetVideoInfo(JNIEnv *env, jclass clazz, jstring src, jintArray data, jlong fileOffset) {

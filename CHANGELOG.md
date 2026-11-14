@@ -15,10 +15,10 @@ Newest first: version, build number, date, commit; what changed and how.
   plans change once sqlite_stat1 exists. `cache_size`/`mmap_size` stay the ANDROID-DB-1 settings. Deferred: opening with
   `SQLITE_OPEN_NOMUTEX` (getDatabase() has ~25 callers; needs a thread audit; `jni/sqlite` is owned by the shared-codebase
   migration). JVM test: `NanogramDbTuningTest`.
-- SHARED-FFMPEG-ANDROID-GIF-1 (flag, default OFF): H.264 clips up to 320 px (GIFs, round videos) decode with the loop
-  filter skipped (`skip_loop_filter = AVDISCARD_ALL`, same policy as iOS); larger clips are untouched. The dead
+- SHARED-FFMPEG-ANDROID-GIF-1 (flag, default OFF): H.264 clips up to 320 px (small GIFs and old 240 px round videos; current 384 px round videos are NOT covered) decode with the loop
+  filter skipped (`skip_loop_filter = AVDISCARD_ALL`, same policy as iOS); larger clips are untouched. The policy goes by clip size, not tile size, so it also applies to full-screen GIFs, previews and seek decoders. The 320 threshold lives only in Java (`NanogramGifDecodeFlags.nativeMaxSide`) and is passed to native (`nSetSmallTileSkipLoopFilter(int)`), so the JVM test covers the real value; the native H.264 codec check is not JVM-testable and needs a device check that the toggle reaches the decoder. The dead
   `refcounted_frames` option is dropped and `thread_count` is explicitly 1 (many tiles decode at once). Switch: Debug menu >
-  "Lighter decoding for small GIFs and round videos". MediaCodec route deferred. JVM test: `NanogramGifDecodeFlagsTest`.
+  "Lighter decoding for GIFs up to 320 px". MediaCodec route deferred. JVM test: `NanogramGifDecodeFlagsTest`.
 - ANDROID-SEARCH-1: local dialog search (`MessagesStorage.localSearch`) tracks already-collected users, chats and secret
   chats in hash sets instead of `ArrayList.contains` (up to 600x600/2 boxed compares), and transliterates every user and
   chat name through a 4096-entry LRU (`NanogramTranslitCache`; transliteration is a pure function of the string, so no

@@ -23,7 +23,7 @@ public class AnimatedFileNative {
 
     public static AnimatedFileNative createDecoderFrom(String src, int[] params, int account, long streamFileSize, AnimatedFileDrawableStream readCallback, boolean preview) {
         try {
-            nSetSmallTileSkipLoopFilter(org.telegram.messenger.NanogramGifDecodeFlags.isEnabled());
+            nSetSmallTileSkipLoopFilter(org.telegram.messenger.NanogramGifDecodeFlags.nativeMaxSide(org.telegram.messenger.NanogramGifDecodeFlags.isEnabled()));
         } catch (Throwable ignore) {}
         long ptr = createDecoder(src, params, account, streamFileSize, readCallback, preview);
         if (ptr == 0) {
@@ -196,7 +196,7 @@ public class AnimatedFileNative {
 
 
 
-    private static native void nSetSmallTileSkipLoopFilter(boolean on);
+    private static native void nSetSmallTileSkipLoopFilter(int maxSide);
 
     private static native long nCreateDecoder(String src, int[] params, int account, long streamFileSize, Object readCallback, boolean preview);
 

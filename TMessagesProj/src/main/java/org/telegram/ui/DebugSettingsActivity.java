@@ -191,7 +191,7 @@ public class DebugSettingsActivity extends UniversalFragment {
         }
         items.add(UItem.asCheck(ID_NANOGRAM_GPU_PREUPLOAD, "Upload decoded images to the GPU early").setChecked(NanogramImageFlags.isGpuPreuploadEnabled()));
         items.add(UItem.asCheck(ID_NANOGRAM_DB_TUNING, "Database tuning: cache, mmap, statements (restart)").setChecked(NanogramDbTuning.isEnabled()));
-        items.add(UItem.asCheck(ID_NANOGRAM_GIF_LOOP_FILTER, "Lighter decoding for small GIFs and round videos").setChecked(NanogramGifDecodeFlags.isEnabled()));
+        items.add(UItem.asCheck(ID_NANOGRAM_GIF_LOOP_FILTER, "Lighter decoding for GIFs up to 320 px").setChecked(NanogramGifDecodeFlags.isEnabled()));
         items.add(UItem.asCheck(ID_EXPERIMENTAL, "Experimental settings").setChecked(SharedSettings.experimentalSettingsAllowed.get()));
         if (BuildVars.DEBUG_VERSION) {
             items.add(UItem.asCheck(ID_NANOGRAM_UPDATER, "GitHub update check in debug build").setChecked(NanogramUpdater.getInstance().isDebugToggleOn()));
