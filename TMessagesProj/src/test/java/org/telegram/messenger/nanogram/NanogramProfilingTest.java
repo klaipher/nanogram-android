@@ -1,6 +1,7 @@
 package org.telegram.messenger.nanogram;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -25,5 +26,17 @@ public class NanogramProfilingTest {
     public void dropsWhenTotalTooBig() {
         final long half = NanogramProfiling.MAX_TOTAL_BYTES / 2 + 1;
         assertEquals(Arrays.asList(1, 2), NanogramProfiling.indexesToDelete(new long[]{half, half, 1}));
+    }
+
+    @Test
+    public void manualResultIsNotStoredTwice() {
+        assertFalse(NanogramProfiling.shouldStoreTriggerResult("manual"));
+        assertTrue(NanogramProfiling.shouldStoreTriggerResult("trigger"));
+        assertTrue(NanogramProfiling.shouldStoreTriggerResult(null));
+    }
+
+    @Test
+    public void missingTriggerConstantIsNotSupportedOnJvm() {
+        assertFalse(NanogramProfiling.coldStartTriggerSupported());
     }
 }

@@ -11712,6 +11712,7 @@
     <string name="NanogramDiagnosticsRecording">Recording…</string>
     <string name="NanogramDiagnosticsTraceSaved">Trace saved. It is included when you share diagnostics.</string>
     <string name="NanogramDiagnosticsTraceTriggers">Record traces on ANR and cold start</string>
+    <string name="NanogramDiagnosticsTraceTriggersAnr">Record traces on ANR</string>
     <string name="NanogramDiagnosticsTracesInfo">Traces stay on this device until you share diagnostics. They can show names of threads and functions. Clear logs also deletes them.</string>
     <string name="NanogramDiagnosticsRestartHint">Restart Nanogram to apply this to the network logs.</string>
     <string name="NanogramDiagnosticsCleared">Logs cleared</string>

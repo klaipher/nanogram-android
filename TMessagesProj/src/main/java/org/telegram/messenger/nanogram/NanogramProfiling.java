@@ -172,27 +172,57 @@ public final class NanogramProfiling {
         }
     }
 
+    static final String TAG_MANUAL = "manual";
+
+    /** The global result consumer also sees the manual request, which its own callback already stores. */
+    static boolean shouldStoreTriggerResult(String tag) {
+        return !TAG_MANUAL.equals(tag);
+    }
+
+    /** TRIGGER_TYPE_COLD_START only exists from API 37; ANR is API 36. */
+    public static boolean coldStartTriggerSupported() {
+        return triggerType("TRIGGER_TYPE_COLD_START") != null;
+    }
+
+    private static Integer triggerType(String field) {
+        try {
+            return Class.forName("android.os.ProfilingTrigger").getField(field).getInt(null);
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
     // ProfilingTrigger and the trigger registration methods are API 36: looked up by name so a signature change fails soft.
+    // Each trigger is built on its own: a constant missing on this release skips only that trigger.
     private static void registerTriggers(Context context) {
         try {
             final Object manager = context.getSystemService(Context.PROFILING_SERVICE);
             if (manager == null) {
                 return;
             }
-            final Class<?> triggerClass = Class.forName("android.os.ProfilingTrigger");
             final Class<?> builderClass = Class.forName("android.os.ProfilingTrigger$Builder");
             final List<Object> triggers = new ArrayList<>();
             for (String field : new String[]{"TRIGGER_TYPE_ANR", "TRIGGER_TYPE_COLD_START"}) {
-                final int type = triggerClass.getField(field).getInt(null);
-                final Object builder = builderClass.getConstructor(int.class).newInstance(type);
-                triggers.add(builderClass.getMethod("build").invoke(builder));
+                try {
+                    final Integer type = triggerType(field);
+                    if (type == null) {
+                        continue;
+                    }
+                    final Object builder = builderClass.getConstructor(int.class).newInstance(type);
+                    triggers.add(builderClass.getMethod("build").invoke(builder));
+                } catch (Throwable e) {
+                    FileLog.e(e);
+                }
+            }
+            if (triggers.isEmpty()) {
+                return;
             }
             final Method add = manager.getClass().getMethod("addProfilingTriggers", List.class);
             add.invoke(manager, triggers);
             final Executor executor = Runnable::run;
             final Consumer<ProfilingResult> consumer = result -> {
                 try {
-                    if (result.getErrorCode() == ProfilingResult.ERROR_NONE && result.getResultFilePath() != null) {
+                    if (result.getErrorCode() == ProfilingResult.ERROR_NONE && result.getResultFilePath() != null && shouldStoreTriggerResult(result.getTag())) {
                         store(context, result.getResultFilePath(), "trigger");
                     }
                 } catch (Throwable e) {

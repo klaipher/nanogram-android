@@ -145,7 +145,7 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
             items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsTraces)));
             items.add(UItem.asButton(ID_TRACE, getString(R.string.NanogramDiagnosticsRecordTrace), recordingTrace ? getString(R.string.NanogramDiagnosticsRecording) : ""));
             if (NanogramProfiling.triggersSupported()) {
-                items.add(UItem.asCheck(ID_TRACE_TRIGGERS, getString(R.string.NanogramDiagnosticsTraceTriggers)).setChecked(NanogramProfiling.isTriggersEnabled(ApplicationLoader.applicationContext)));
+                items.add(UItem.asCheck(ID_TRACE_TRIGGERS, getString(NanogramProfiling.coldStartTriggerSupported() ? R.string.NanogramDiagnosticsTraceTriggers : R.string.NanogramDiagnosticsTraceTriggersAnr)).setChecked(NanogramProfiling.isTriggersEnabled(ApplicationLoader.applicationContext)));
             }
             items.add(UItem.asShadow(getString(R.string.NanogramDiagnosticsTracesInfo)));
         }
