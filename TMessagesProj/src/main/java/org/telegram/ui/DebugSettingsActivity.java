@@ -129,6 +129,17 @@ public class DebugSettingsActivity extends UniversalFragment {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        // The numbers under the switches come from this reading; redraw once it is in (the redraw does not read again).
+        NanogramHealth.refreshAsync(() -> AndroidUtilities.runOnUIThread(() -> {
+            if (listView != null && listView.adapter != null && fragmentView != null) {
+                listView.adapter.update(true);
+            }
+        }));
+    }
+
+    @Override
     protected RecyclerListView getListViewForSimpleGlass() {
         return listView;
     }
@@ -255,7 +266,6 @@ public class DebugSettingsActivity extends UniversalFragment {
         if (LaunchActivity.instance != null) {
             LaunchActivity.instance.attachNanogramFrameStats();
         }
-        NanogramHealth.refreshAsync();
         items.add(UItem.asHeader("Performance experiments"));
         items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nSwitches start off, except the ones marked automatic (they follow this phone). Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
         final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();

@@ -41,6 +41,8 @@ public final class NanogramHealthMath {
     public static final String WIFI_TX_PACKETS = "net.wifi.tx_packets";
     public static final String PROCESS_FOREGROUND_MS = "process.foreground_ms";
     public static final String PROCESS_STARTS = "process.starts";
+    public static final String BATTERY_REALTIME_MS = "battery.realtime_ms";
+    public static final double ON_BATTERY_SHARE = 0.9;
 
     public static final String RAIL_PREFIX = "rail:";
     public static final String CONSUMER_PREFIX = "consumer:";
@@ -52,8 +54,15 @@ public final class NanogramHealthMath {
         public final Map<String, Long> energyUws;
         public final boolean energySupported;
         public final Battery battery;
+        /** Elapsed realtime of the power-monitor reading, which can lag {@link #elapsedMillis} after the stats sync. */
+        public final long energyElapsedMillis;
 
         public Sample(long elapsedMillis, Map<String, Long> counters, Map<String, Long> energyUws, boolean energySupported, Battery battery) {
+            this(elapsedMillis, counters, energyUws, energySupported, battery, elapsedMillis);
+        }
+
+        public Sample(long elapsedMillis, Map<String, Long> counters, Map<String, Long> energyUws, boolean energySupported, Battery battery, long energyElapsedMillis) {
+            this.energyElapsedMillis = energyElapsedMillis;
             this.elapsedMillis = elapsedMillis;
             this.counters = counters;
             this.energyUws = energyUws;
@@ -193,6 +202,37 @@ public final class NanogramHealthMath {
         return sb.toString();
     }
 
+    /** Milliseconds the HealthStats counters covered: they only run on battery. -1 when this phone did not report it. */
+    public static long batteryMillis(Sample base, Sample now) {
+        Long before = base.counters.get(BATTERY_REALTIME_MS);
+        Long after = now.counters.get(BATTERY_REALTIME_MS);
+        return before == null || after == null ? -1 : after - before;
+    }
+
+    /** False when the span crossed charging time or the counters reset: they then cover less than the wall time. */
+    public static boolean countersComparable(Sample base, Sample now) {
+        long battery = batteryMillis(base, now);
+        if (battery == -1 && !(base.counters.containsKey(BATTERY_REALTIME_MS) && now.counters.containsKey(BATTERY_REALTIME_MS))) {
+            return true;
+        }
+        long wall = now.elapsedMillis - base.elapsedMillis;
+        return battery >= 0 && (wall < MIN_RATE_MILLIS || battery >= wall * ON_BATTERY_SHARE);
+    }
+
+    /** CPU lines for a span, rates per minute on battery (what the counters cover); a warning instead of rates when not comparable. */
+    public static String cpuText(Sample base, Sample now) {
+        Map<String, Long> d = counterDelta(now.counters, base.counters);
+        long wall = now.elapsedMillis - base.elapsedMillis;
+        if (!countersComparable(base, now)) {
+            long user = get(d, CPU_USER);
+            long system = get(d, CPU_SYSTEM);
+            return "CPU time " + (user + system) + " ms (user " + user + ", system " + system + ") over " + formatMinutes(wall)
+                    + ": phone was charging or the counters reset in this span: CPU numbers not comparable";
+        }
+        long battery = batteryMillis(base, now);
+        return cpuLine(d, battery > 0 ? battery : wall);
+    }
+
     public static String energyLine(boolean supported, Map<String, Long> energyDelta, long elapsedMillis) {
         if (!supported) {
             return "Energy: not available (this phone has no power monitors, or Android is older than 15)";
@@ -223,12 +263,12 @@ public final class NanogramHealthMath {
         if (base == null || now == null) {
             return "CPU and energy: not measured yet";
         }
-        long elapsed = now.elapsedMillis - base.elapsedMillis;
-        Map<String, Long> d = counterDelta(now.counters, base.counters);
+        long energyElapsed = now.energyElapsedMillis - base.energyElapsedMillis;
+        String energy = energyLine(now.energySupported, delta(now.energyUws, base.energyUws), energyElapsed);
         if (now.counters.isEmpty()) {
-            return "CPU: not available on this phone\n" + energyLine(now.energySupported, delta(now.energyUws, base.energyUws), elapsed);
+            return "CPU: not available on this phone\n" + energy;
         }
-        return cpuLine(d, elapsed) + "\n" + energyLine(now.energySupported, delta(now.energyUws, base.energyUws), elapsed);
+        return cpuText(base, now) + "\n" + energy;
     }
 
     /** Full text for health-energy.txt: since start, since each switch change, per-monitor energy, battery and heat. */
@@ -250,12 +290,12 @@ public final class NanogramHealthMath {
             sb.append("  no baseline\n");
             return;
         }
-        long elapsed = now.elapsedMillis - base.elapsedMillis;
+        long elapsed = now.energyElapsedMillis - base.energyElapsedMillis;
         Map<String, Long> d = counterDelta(now.counters, base.counters);
         if (now.counters.isEmpty()) {
             sb.append("  health stats: not available on this phone\n");
         } else {
-            sb.append("  ").append(cpuLine(d, elapsed)).append('\n');
+            sb.append("  ").append(cpuText(base, now)).append('\n');
             sb.append("  process time: top ").append(get(d, STATE_TOP)).append(" ms, foreground service ").append(get(d, STATE_FG_SERVICE))
                     .append(" ms, top sleeping ").append(get(d, STATE_TOP_SLEEPING)).append(" ms, foreground ").append(get(d, STATE_FOREGROUND))
                     .append(" ms, background ").append(get(d, STATE_BACKGROUND)).append(" ms, cached ").append(get(d, STATE_CACHED)).append(" ms\n");
@@ -301,7 +341,7 @@ public final class NanogramHealthMath {
             sb.append(" (change since app start ").append(now.energyCounterNwh - start.energyCounterNwh).append(" nWh)");
         }
         sb.append('\n');
-        sb.append("  thermal status ").append(thermalName(now.thermalStatus)).append(", headroom 10 s ahead ").append(Float.isNaN(now.thermalHeadroom) || now.thermalHeadroom < 0 ? "not available" : one(now.thermalHeadroom) + " (1.0 = throttling starts)").append('\n');
+        sb.append("  thermal status ").append(thermalName(now.thermalStatus)).append(", headroom 10 s ahead ").append(Float.isNaN(now.thermalHeadroom) || now.thermalHeadroom < 0 ? "not available" : one(now.thermalHeadroom) + " (1.0 = severe throttling)").append('\n');
         return sb.toString();
     }
 

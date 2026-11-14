@@ -74,6 +74,7 @@ public final class NanogramPerfExperiments {
 
     public static void resetToAuto(Experiment experiment) {
         NanogramPerfStats.reset(experiment.statKeys);
+        NanogramHealth.onSwitchChanged(experiment.id);
         switch (experiment) {
             case ADAPTIVE_REFRESH:
                 NanogramExperiments.clearOverride(NanogramExperiments.ADAPTIVE_REFRESH_RATE);

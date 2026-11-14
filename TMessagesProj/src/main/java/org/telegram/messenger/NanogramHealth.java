@@ -74,12 +74,18 @@ public final class NanogramHealth {
         });
     }
 
-    public static void refreshAsync() {
+    /** Takes a fresh reading and then runs onDone (on the health thread) so a screen can redraw with it. */
+    public static void refreshAsync(Runnable onDone) {
         final Context context = ApplicationLoader.applicationContext;
         if (context == null) {
             return;
         }
-        executor.execute(() -> latest = take(context));
+        executor.execute(() -> {
+            latest = take(context);
+            if (onDone != null) {
+                onDone.run();
+            }
+        });
     }
 
     /** Fresh reading for the zip; call from a background thread. Falls back to the last one on timeout. */
@@ -126,20 +132,22 @@ public final class NanogramHealth {
         }
         TreeMap<String, Long> energy = new TreeMap<>();
         boolean energySupported = false;
+        long[] energyElapsed = {elapsed};
         if (Build.VERSION.SDK_INT >= NanogramHealthMath.POWER_MONITOR_API) {
             try {
-                energySupported = readEnergy(context, energy);
+                energySupported = readEnergy(context, energy, energyElapsed);
             } catch (Throwable e) {
                 FileLog.e(e);
             }
         }
-        return new NanogramHealthMath.Sample(elapsed, counters, energy, energySupported, readBattery(context));
+        return new NanogramHealthMath.Sample(elapsed, counters, energy, energySupported, readBattery(context), energyElapsed[0]);
     }
 
     private static void readCounters(HealthStats stats, Map<String, Long> out) {
         if (stats == null) {
             return;
         }
+        measurement(stats, UidHealthStats.MEASUREMENT_REALTIME_BATTERY_MS, NanogramHealthMath.BATTERY_REALTIME_MS, out);
         measurement(stats, UidHealthStats.MEASUREMENT_USER_CPU_TIME_MS, NanogramHealthMath.CPU_USER, out);
         measurement(stats, UidHealthStats.MEASUREMENT_SYSTEM_CPU_TIME_MS, NanogramHealthMath.CPU_SYSTEM, out);
         timer(stats, UidHealthStats.TIMER_PROCESS_STATE_TOP_MS, null, NanogramHealthMath.STATE_TOP, out);
@@ -208,7 +216,7 @@ public final class NanogramHealth {
     }
 
     @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
-    private static boolean readEnergy(Context context, Map<String, Long> out) throws InterruptedException {
+    private static boolean readEnergy(Context context, Map<String, Long> out, long[] elapsedOut) throws InterruptedException {
         SystemHealthManager manager = (SystemHealthManager) context.getSystemService(Context.SYSTEM_HEALTH_SERVICE);
         if (manager == null) {
             return false;
@@ -246,12 +254,17 @@ public final class NanogramHealth {
         if (!done.await(ENERGY_TIMEOUT_MS, TimeUnit.MILLISECONDS) || readings[0] == null) {
             return true;
         }
+        long stamp = 0;
         for (PowerMonitor monitor : monitors) {
             long uws = readings[0].getConsumedEnergy(monitor);
             if (uws != PowerMonitorReadings.ENERGY_UNAVAILABLE) {
                 String prefix = monitor.getType() == PowerMonitor.POWER_MONITOR_TYPE_MEASUREMENT ? NanogramHealthMath.RAIL_PREFIX : NanogramHealthMath.CONSUMER_PREFIX;
                 out.put(prefix + monitor.getName(), uws);
+                stamp = Math.max(stamp, readings[0].getTimestampMillis(monitor));
             }
+        }
+        if (stamp > 0) {
+            elapsedOut[0] = stamp;
         }
         return true;
     }

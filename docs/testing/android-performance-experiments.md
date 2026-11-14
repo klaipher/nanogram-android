@@ -127,6 +127,7 @@ This switch has no measured numbers.
 ## Battery, CPU, energy and heat (every run)
 
 For each experiment and state (A, B) do one 10-minute session that repeats that test's script:
+- **Keep the phone unplugged for the whole run.** Android only counts Nanogram's CPU while the phone is on battery; if it was charging, the line says `CPU numbers not comparable` and that run does not count.
 - The app measures the numbers itself (see below). Do not do anything else on the phone during the 10 minutes, keep the screen on and the brightness the same in A and B.
 - Only if the numbers below say "not available" (older phone or no power monitors): write down the **battery % before and after** (whole percent: Settings > Battery). Whole percent is rough, so it only counts as a fallback.
 - After the 10 minutes: is the phone **cool / warm / hot** at the top back?
@@ -147,7 +148,7 @@ Under every switch in the Debug Menu (and in the zip) you see two extra lines, c
   `Energy: not available`; that is normal, then use the CPU line and the battery fallback.
 - The zip file `health-energy.txt` has the full detail: the same numbers since app start and since each switch change, every power monitor on its own,
   wakelocks, background jobs and syncs, network bytes and packets (mobile and Wi-Fi), time in front and in the background, and the battery level,
-  temperature, current and the phone's heat state (`thermal status`, and `headroom`, where 1.0 means throttling starts). It holds only counts, durations and
+  temperature, current and the phone's heat state (`thermal status`, and `headroom`, where 1.0 means severe throttling; milder throttling can start below 1.0). It holds only counts, durations and
   the battery state; no names of other apps and no account data.
 
 Open the Debug Menu screen at the end of the run (the numbers are read when it opens) and take the zip right after.

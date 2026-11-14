@@ -109,6 +109,48 @@ public class NanogramHealthMathTest {
     }
 
     @Test
+    public void ratesUseTimeOnBatteryNotWallTime() {
+        String key = NanogramHealthMath.BATTERY_REALTIME_MS;
+        NanogramHealthMath.Sample base = sample(0, map(NanogramHealthMath.CPU_USER, 0, key, 1000), map(), false);
+        NanogramHealthMath.Sample now = sample(600_000, map(NanogramHealthMath.CPU_USER, 6000, key, 571_000), map(), false);
+        String text = NanogramHealthMath.experimentText(base, now);
+        assertTrue(text, text.contains("over 9.5 min: 631.6 ms/min"));
+    }
+
+    @Test
+    public void chargingSpanIsNotComparable() {
+        String key = NanogramHealthMath.BATTERY_REALTIME_MS;
+        NanogramHealthMath.Sample base = sample(0, map(NanogramHealthMath.CPU_USER, 0, key, 1000), map(), false);
+        NanogramHealthMath.Sample now = sample(600_000, map(NanogramHealthMath.CPU_USER, 500, key, 61_000), map(), false);
+        String text = NanogramHealthMath.experimentText(base, now);
+        assertTrue(text, text.contains("CPU numbers not comparable"));
+        assertFalse(text, text.contains("ms/min"));
+    }
+
+    @Test
+    public void resetCountersAreNotComparable() {
+        String key = NanogramHealthMath.BATTERY_REALTIME_MS;
+        NanogramHealthMath.Sample base = sample(0, map(NanogramHealthMath.CPU_USER, 900, key, 500_000), map(), false);
+        NanogramHealthMath.Sample now = sample(600_000, map(NanogramHealthMath.CPU_USER, 100, key, 20_000), map(), false);
+        assertFalse(NanogramHealthMath.countersComparable(base, now));
+    }
+
+    @Test
+    public void missingBatteryTimeFallsBackToWallTime() {
+        NanogramHealthMath.Sample base = sample(0, map(NanogramHealthMath.CPU_USER, 0), map(), false);
+        NanogramHealthMath.Sample now = sample(120_000, map(NanogramHealthMath.CPU_USER, 1200), map(), false);
+        assertTrue(NanogramHealthMath.countersComparable(base, now));
+        assertTrue(NanogramHealthMath.experimentText(base, now).contains("600.0 ms/min"));
+    }
+
+    @Test
+    public void energyUsesItsOwnReadingTime() {
+        NanogramHealthMath.Sample base = new NanogramHealthMath.Sample(0, map(), map("rail:S1", 0), true, null, 0);
+        NanogramHealthMath.Sample now = new NanogramHealthMath.Sample(60_000, map(), map("rail:S1", 3_000_000), true, null, 60_000 + 60_000);
+        assertTrue(NanogramHealthMath.experimentText(base, now).contains("avg 25.0 mW"));
+    }
+
+    @Test
     public void experimentWithoutBaselineIsNotMeasured() {
         assertTrue(NanogramHealthMath.experimentText(null, null).contains("not measured"));
     }
