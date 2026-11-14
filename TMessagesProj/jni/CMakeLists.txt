@@ -273,6 +273,8 @@ add_library(twidget SHARED twidget/twidget-onload.cpp twidget/twidget-seccomp.cp
 twidget_target_sources(twidget)
 twidget_client_sources(${NATIVE_LIB})
 target_link_options(twidget PRIVATE "-Wl,-z,max-page-size=16384")
+# Android packed relocations (APS2, loader support since API 23; minSdk 24): smaller .rela.dyn in the mapped library.
+target_link_options(twidget PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Wl,--pack-dyn-relocs=android>")
 target_link_options(twidget PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/twidget/exports.map")
 
 # Compile JNI directly into the shared library so archive extraction cannot drop its exports.
@@ -330,6 +332,7 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
+target_link_options(${NATIVE_LIB} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Wl,--pack-dyn-relocs=android>")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
 
 # Interface options of linked targets (rnnoise -O3, tgcalls_tp -Os) are appended after the target's own, so the last -O
