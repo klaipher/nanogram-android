@@ -5,6 +5,18 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- **Fix: round videos became ordinary videos and would not play in the app (broken in 13.2.2 build 202611142111)**:
+  - Root cause: commit 981373a bumped isoparser 1.0.6 -> 1.1.22. With 1.1.22 the unchanged audio code in `Track` wrote an
+    empty `esds` box (12 bytes, no ES descriptor, no AudioSpecificConfig; `ESDescriptor.serialize()` returns a buffer at
+    its limit, and 1.1.22 takes the audio object type from a new field). Every file written by MP4Builder (round recorders
+    V1 and V2, compressed videos with sound) had an audio track with no codec config, so ExoPlayer failed ("could not play
+    this video"); the round_message loss is most likely the server rejecting the unparsable file as a video note and
+    storing it as a plain video (inferred, not reproduced: the client still sends round_message).
+  - Fix: isoparser back to 1.0.6 (the 202611141530 behaviour); `HevcDecoderConfigurationRecord` uses `NalUnitTypes` again.
+    `Track` builds the esds in a static `createAacSampleEntry` (plus `rewind()`), covered by `TrackAudioEsdsTest`
+    (byte-exact 1.0.6 output). isoparser stays on the held-back list.
+  - Rounds and videos sent from build 202611142111 stay broken on the server.
+
 ## 13.2.2 (202611142111) — 2026-11-14 — second Android release (source 1639f1c; 218 commits since 202611141530 / 708358a)
 
 - **Shared pins**: twidget 4913fd0e (a SwiftPM-only folder for the Mac; no Android change) and nanogram-deps 484b22e9, so all three apps pin the same commits.
@@ -697,6 +709,7 @@ docs/nanogram/performance.md.
 ### isoparser 1.0.6 -> 1.1.22
 - The last release of com.googlecode.mp4parser (2017); 1.1 renamed NalUnitTypes to H265NalUnitTypes (same constants)
   and no longer brings aspectj. HevcDecoderConfigurationRecord uses the new name; two unused imports removed.
+- REVERTED after release: 1.1.22 writes an empty esds for AAC audio (rounds/videos unplayable, see Unreleased).
 
 ## 13.2.2 (202611141530) — 2026-11-14 — first Android release (source 672347f)
 

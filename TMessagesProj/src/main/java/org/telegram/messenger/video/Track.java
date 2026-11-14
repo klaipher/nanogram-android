@@ -265,56 +265,64 @@ public class Track {
             handler = "soun";
             headerBox = new SoundMediaHeaderBox();
             sampleDescriptionBox = new SampleDescriptionBox();
-            AudioSampleEntry audioSampleEntry = new AudioSampleEntry("mp4a");
-            audioSampleEntry.setChannelCount(format.getInteger(MediaFormat.KEY_CHANNEL_COUNT));
-            audioSampleEntry.setSampleRate(format.getInteger(MediaFormat.KEY_SAMPLE_RATE));
-            audioSampleEntry.setDataReferenceIndex(1);
-            audioSampleEntry.setSampleSize(16);
-
-            ESDescriptorBox esds = new ESDescriptorBox();
-            ESDescriptor descriptor = new ESDescriptor();
-            descriptor.setEsId(0);
-
-            SLConfigDescriptor slConfigDescriptor = new SLConfigDescriptor();
-            slConfigDescriptor.setPredefined(2);
-            descriptor.setSlConfigDescriptor(slConfigDescriptor);
-
-            String mime;
-            if (format.containsKey("mime")) {
-                mime = format.getString("mime");
-            } else {
-                mime = "audio/mp4-latm";
-            }
-
-            DecoderConfigDescriptor decoderConfigDescriptor = new DecoderConfigDescriptor();
-            if ("audio/mpeg".equals(mime)) {
-                decoderConfigDescriptor.setObjectTypeIndication(0x69);
-            } else {
-                decoderConfigDescriptor.setObjectTypeIndication(0x40);
-            }
-            decoderConfigDescriptor.setStreamType(5);
-            decoderConfigDescriptor.setBufferSizeDB(1536);
-            if (format.containsKey("max-bitrate")) {
-                decoderConfigDescriptor.setMaxBitRate(format.getInteger("max-bitrate"));
-            } else {
-                decoderConfigDescriptor.setMaxBitRate(96000);
-            }
-            decoderConfigDescriptor.setAvgBitRate(timeScale);
-
-            AudioSpecificConfig audioSpecificConfig = new AudioSpecificConfig();
-            audioSpecificConfig.setAudioObjectType(2);
-            audioSpecificConfig.setSamplingFrequencyIndex(samplingFrequencyIndexMap.get((int) audioSampleEntry.getSampleRate()));
-            audioSpecificConfig.setChannelConfiguration(audioSampleEntry.getChannelCount());
-            decoderConfigDescriptor.setAudioSpecificInfo(audioSpecificConfig);
-
-            descriptor.setDecoderConfigDescriptor(decoderConfigDescriptor);
-
-            ByteBuffer data = descriptor.serialize();
-            //esds.setEsDescriptor(descriptor);
-            esds.setData(data);
-            audioSampleEntry.addBox(esds);
+            String audioMime = format.containsKey("mime") ? format.getString("mime") : null;
+            int audioMaxBitrate = format.containsKey("max-bitrate") ? format.getInteger("max-bitrate") : 96000;
+            AudioSampleEntry audioSampleEntry = createAacSampleEntry(
+                    format.getInteger(MediaFormat.KEY_SAMPLE_RATE),
+                    format.getInteger(MediaFormat.KEY_CHANNEL_COUNT),
+                    audioMime, audioMaxBitrate);
             sampleDescriptionBox.addBox(audioSampleEntry);
         }
+    }
+
+    /**
+     * Builds the mp4a sample entry with its esds box. Kept static and free of Android types so a JVM test can
+     * check the bytes: isoparser 1.1.22 wrote an empty esds from this exact code (no codec config), which made
+     * rounds and compressed videos unplayable.
+     */
+    static AudioSampleEntry createAacSampleEntry(int sampleRate, int channels, String mime, int maxBitrate) {
+        AudioSampleEntry audioSampleEntry = new AudioSampleEntry("mp4a");
+        audioSampleEntry.setChannelCount(channels);
+        audioSampleEntry.setSampleRate(sampleRate);
+        audioSampleEntry.setDataReferenceIndex(1);
+        audioSampleEntry.setSampleSize(16);
+
+        ESDescriptorBox esds = new ESDescriptorBox();
+        ESDescriptor descriptor = new ESDescriptor();
+        descriptor.setEsId(0);
+
+        SLConfigDescriptor slConfigDescriptor = new SLConfigDescriptor();
+        slConfigDescriptor.setPredefined(2);
+        descriptor.setSlConfigDescriptor(slConfigDescriptor);
+
+        if (mime == null) {
+            mime = "audio/mp4-latm";
+        }
+
+        DecoderConfigDescriptor decoderConfigDescriptor = new DecoderConfigDescriptor();
+        if ("audio/mpeg".equals(mime)) {
+            decoderConfigDescriptor.setObjectTypeIndication(0x69);
+        } else {
+            decoderConfigDescriptor.setObjectTypeIndication(0x40);
+        }
+        decoderConfigDescriptor.setStreamType(5);
+        decoderConfigDescriptor.setBufferSizeDB(1536);
+        decoderConfigDescriptor.setMaxBitRate(maxBitrate);
+        decoderConfigDescriptor.setAvgBitRate(sampleRate);
+
+        AudioSpecificConfig audioSpecificConfig = new AudioSpecificConfig();
+        audioSpecificConfig.setAudioObjectType(2);
+        audioSpecificConfig.setSamplingFrequencyIndex(samplingFrequencyIndexMap.get((int) audioSampleEntry.getSampleRate()));
+        audioSpecificConfig.setChannelConfiguration(audioSampleEntry.getChannelCount());
+        decoderConfigDescriptor.setAudioSpecificInfo(audioSpecificConfig);
+
+        descriptor.setDecoderConfigDescriptor(decoderConfigDescriptor);
+
+        ByteBuffer data = descriptor.serialize();
+        data.rewind();
+        esds.setData(data);
+        audioSampleEntry.addBox(esds);
+        return audioSampleEntry;
     }
 
     public long getTrackId() {
