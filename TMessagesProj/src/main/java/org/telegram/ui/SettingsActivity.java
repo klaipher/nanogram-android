@@ -851,10 +851,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
         items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
+        items.add(SettingCell.Factory.of(28, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.msg_log, getString(R.string.NanogramSendReport)));
         items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
         items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
         items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
-        items.add(SettingCell.Factory.of(28, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.msg_log, getString(R.string.NanogramSendDiagnostics)));
         if (ApplicationLoader.applicationLoaderInstance.isCustomUpdate()) {
             items.add(SettingCell.Factory.of(29, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, 0, getString(R.string.NgUpdateCheck), null, getNanogramUpdateStatus()));
         }
@@ -992,7 +992,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
 
             case 28:
-                presentSettingFragment(new NanogramDiagnosticsActivity());
+                NanogramSendReport.start(this);
                 break;
             case 20:
                 ProfileActivity.sendLogs(getParentActivity(), false);

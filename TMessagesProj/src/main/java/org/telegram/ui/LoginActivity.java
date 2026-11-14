@@ -801,7 +801,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         diagnosticsButtonView = new ImageView(context);
         diagnosticsButtonView.setImageResource(R.drawable.msg_log);
         diagnosticsButtonView.setScaleType(ImageView.ScaleType.CENTER);
-        diagnosticsButtonView.setContentDescription(getString(R.string.NanogramSendDiagnostics));
+        diagnosticsButtonView.setContentDescription(getString(R.string.NanogramSendReport));
         diagnosticsButtonView.setOnClickListener(v -> presentFragment(new NanogramDiagnosticsActivity()));
         sizeNotifierFrameLayout.addView(diagnosticsButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
 

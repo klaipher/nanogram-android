@@ -112,6 +112,7 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_FORGET_HINTS = 45;
     private static final int ID_COMPACT_MODE = 46;
     private static final int ID_NANOGRAM_DIAGNOSTICS = 90;
+    private static final int ID_NANOGRAM_SEND_REPORT = 91;
     private static final int ID_PERF_EXPERIMENT_BASE = 130;
 
     @Override
@@ -156,6 +157,8 @@ public class DebugSettingsActivity extends UniversalFragment {
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        items.add(UItem.asButton(ID_NANOGRAM_SEND_REPORT, R.drawable.msg_send, getString(R.string.NanogramSendReport)).accent());
+        items.add(UItem.asShadow(getString(R.string.NanogramSendReportInfo)));
         items.add(UItem.asHeader("Contacts and chats"));
         items.add(UItem.asButton(ID_IMPORT_CONTACTS, getString(R.string.DebugMenuImportContacts)));
         items.add(UItem.asButton(ID_RELOAD_CONTACTS, getString(R.string.DebugMenuReloadContacts)));
@@ -185,7 +188,7 @@ public class DebugSettingsActivity extends UniversalFragment {
         fillPerformanceExperiments(items);
 
         items.add(UItem.asHeader("App"));
-        items.add(UItem.asButton(ID_NANOGRAM_DIAGNOSTICS, getString(R.string.NanogramDiagnosticsTitle)));
+        items.add(UItem.asButton(ID_NANOGRAM_DIAGNOSTICS, getString(R.string.NanogramDiagnosticsDeveloper)));
         if (!BuildVars.DEBUG_VERSION) {
             items.add(UItem.asCheck(ID_LOGS, getString(R.string.DebugMenuEnableLogs)).setChecked(BuildVars.LOGS_ENABLED));
         }
@@ -267,7 +270,7 @@ public class DebugSettingsActivity extends UniversalFragment {
             LaunchActivity.instance.attachNanogramFrameStats();
         }
         items.add(UItem.asHeader("Performance experiments"));
-        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nSwitches start off, except the ones marked automatic (they follow this phone). Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
+        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nSwitches start off, except the ones marked automatic (they follow this phone). Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Send report at the top of this menu."));
         final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();
         for (NanogramPerfExperiments.Experiment experiment : NanogramPerfExperiments.Experiment.values()) {
             if (!experiment.isSupported(Build.VERSION.SDK_INT)) {
@@ -314,6 +317,9 @@ public class DebugSettingsActivity extends UniversalFragment {
                 }
                 break;
             }
+            case ID_NANOGRAM_SEND_REPORT:
+                NanogramSendReport.start(this);
+                break;
             case ID_NANOGRAM_DIAGNOSTICS:
                 presentFragment(new NanogramDiagnosticsActivity());
                 break;

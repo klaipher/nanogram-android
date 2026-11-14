@@ -265,9 +265,8 @@ public final class NanogramDiagnostics {
             }
         }
         final String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-        final File zip = new File(dir, "Nanogram-diagnostics-" + buildNumber(context) + "-" + stamp + ".zip");
-        try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(zip))) {
-            addText(out, "README.txt", readme(context));
+        final File zip = new File(dir, "Nanogram-report-" + buildNumber(context) + "-" + stamp + ".zip");
+        try (NamedZipOutputStream out = new NamedZipOutputStream(new FileOutputStream(zip))) {
             addSafely(out, "device-info.txt", () -> NanogramSystemInfo.build(context));
             addSafely(out, "performance-experiments.txt", NanogramPerfExperiments::currentReport);
             addSafely(out, "health-energy.txt", () -> NanogramHealth.fullReport(context));
@@ -276,11 +275,53 @@ public final class NanogramDiagnostics {
             addTraces(context, out);
             addProfiles(context, out);
             addLogs(context, out);
+            addText(out, "README.txt", readme(context, out.names));
         } catch (IOException | RuntimeException e) {
             zip.delete();
             throw e;
         }
         return zip;
+    }
+
+    // Remembers entry names so the README can list the parts that ended up empty.
+    private static final class NamedZipOutputStream extends ZipOutputStream {
+        final List<String> names = new ArrayList<>();
+
+        NamedZipOutputStream(java.io.OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void putNextEntry(ZipEntry entry) throws IOException {
+            super.putNextEntry(entry);
+            names.add(entry.getName());
+        }
+    }
+
+    private static final String[][] FOLDER_PARTS = {
+            {"crashes/", "no Java crash was recorded"},
+            {"traces/", "no ANR trace or native crash tombstone was available"},
+            {"profiles/", "no system trace was recorded (needs Android 15 or newer, and a trigger or a manual recording)"},
+            {"logs/", "no log files in the last days"},
+            {"voip/", "no call logs in the last days"},
+    };
+
+    /** Lines for each folder part with no entry; a part is listed as missing, never silently dropped. */
+    static String missingParts(List<String> names) {
+        final StringBuilder sb = new StringBuilder();
+        for (String[] part : FOLDER_PARTS) {
+            boolean found = false;
+            for (String name : names) {
+                if (name.startsWith(part[0])) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                sb.append("  ").append(part[0]).append(" missing: ").append(part[1]).append('\n');
+            }
+        }
+        return sb.length() == 0 ? "  none\n" : sb.toString();
     }
 
     private interface TextSource {
@@ -297,11 +338,11 @@ public final class NanogramDiagnostics {
         addText(out, name, text);
     }
 
-    private static String readme(Context context) {
+    private static String readme(Context context, List<String> names) {
         final boolean verbose = NanogramLog.verboseRecently();
-        return "Nanogram diagnostics " + appLabel(context) + "\ncreated " + formatTime(System.currentTimeMillis()) + "\n"
+        return "Nanogram report " + appLabel(context) + "\ncreated " + formatTime(System.currentTimeMillis()) + "\n"
                 + NanogramSystemInfo.summaryLine() + "\n\n"
-                + "Files\n"
+                + "One report with everything; each part below is a file or folder in this zip.\n\nFiles\n"
                 + "  device-info.txt    device, Android version, power and network state, permissions, notification channel states, memory\n"
                 + "  performance-experiments.txt  switch states and durations of the performance experiments since each switch last changed (no content)\n"
                 + "  health-energy.txt  CPU time, wakelocks, network and energy numbers of Nanogram since app start and since each switch change; phone energy only on phones with power monitors (Android 15+); battery and heat (counts and durations only)\n"
@@ -311,6 +352,7 @@ public final class NanogramDiagnostics {
                 + "  profiles/          system traces recorded on request or by ANR/cold-start triggers (Android 15+); they can show thread and function names\n"
                 + "  logs/              Nanogram log files from the last " + (verbose ? VERBOSE_DAYS : QUIET_DAYS) + " days (" + (verbose ? "verbose" : "errors, warnings and key events") + ")\n"
                 + "  voip/              call logs from the last " + QUIET_DAYS + " days\n\n"
+                + "Parts that are missing or empty in this report\n" + missingParts(names) + "\n"
                 + (verbose
                 ? "WARNING: verbose logs were on, so logs/ can contain message text, phone numbers, chat ids and tokens written by the app. Send this zip only to the developer, not to a shared chat.\n"
                 + "Not collected by the diagnostics themselves: contacts, databases, media, heap dumps.\n"

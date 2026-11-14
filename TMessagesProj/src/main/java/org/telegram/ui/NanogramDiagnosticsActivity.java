@@ -41,12 +41,11 @@ import java.util.List;
 
 /**
  * Nanogram diagnostics: what happened lately, the verbose-log switch, and sending a diagnostics zip
- * through the share sheet or a Nanogram chat picked by the user.
+ * through the single Send report flow.
  */
 public class NanogramDiagnosticsActivity extends UniversalFragment {
 
     private static final int ID_SHARE = 1;
-    private static final int ID_CHAT = 2;
     private static final int ID_VERBOSE = 3;
     private static final int ID_CLEAR = 4;
     private static final int ID_INFO = 5;
@@ -137,9 +136,8 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
         }
 
         items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsSend)));
-        items.add(UItem.asButton(ID_SHARE, R.drawable.msg_share, getString(R.string.NanogramDiagnosticsShare)).accent());
-        items.add(UItem.asButton(ID_CHAT, R.drawable.msg_send, getString(R.string.NanogramDiagnosticsSendToChat)).accent());
-        items.add(UItem.asShadow(getString(NanogramLog.verboseRecently() ? R.string.NanogramDiagnosticsShareInfoVerbose : R.string.NanogramDiagnosticsShareInfo)));
+        items.add(UItem.asButton(ID_SHARE, R.drawable.msg_send, getString(R.string.NanogramSendReport)).accent());
+        items.add(UItem.asShadow(getString(NanogramLog.verboseRecently() ? R.string.NanogramSendReportInfoVerbose : R.string.NanogramSendReportInfo)));
 
         if (NanogramProfiling.isSupported()) {
             items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsTraces)));
@@ -161,10 +159,7 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
     protected void onClick(UItem item, View view, int position, float x, float y) {
         switch (item.id) {
             case ID_SHARE:
-                createZip(this::shareZip);
-                break;
-            case ID_CHAT:
-                createZip(this::pickChat);
+                NanogramSendReport.start(this);
                 break;
             case ID_VERBOSE: {
                 NanogramLog.setVerbose(!NanogramLog.isVerbose());
@@ -246,86 +241,5 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
     @Override
     protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
         return false;
-    }
-
-    private interface ZipReady {
-        void onZip(File zip);
-    }
-
-    private void createZip(ZipReady ready) {
-        final Activity activity = getParentActivity();
-        if (activity == null) {
-            return;
-        }
-        final AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_SPINNER);
-        progress.setCanCancel(false);
-        progress.show();
-        NanogramDiagnostics.collectAsync(ApplicationLoader.applicationContext, (zip, error) -> {
-            try {
-                progress.dismiss();
-            } catch (Exception ignore) {
-            }
-            if (zip == null || getParentActivity() == null || isFinishing()) {
-                if (error != null && getParentActivity() != null) {
-                    Toast.makeText(getParentActivity(), getString(R.string.NanogramDiagnosticsFailed), Toast.LENGTH_SHORT).show();
-                }
-                return;
-            }
-            ready.onZip(zip);
-        });
-    }
-
-    private void shareZip(File zip) {
-        final Activity activity = getParentActivity();
-        try {
-            final Uri uri = FileProvider.getUriForFile(activity, ApplicationLoader.getApplicationId() + ".provider", zip);
-            final Intent send = new Intent(Intent.ACTION_SEND);
-            send.setType("application/zip");
-            send.putExtra(Intent.EXTRA_STREAM, uri);
-            send.putExtra(Intent.EXTRA_SUBJECT, formatString(R.string.NanogramDiagnosticsSubject, NanogramDiagnostics.appLabel(activity)));
-            send.setClipData(ClipData.newRawUri(null, uri));
-            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            activity.startActivity(Intent.createChooser(send, getString(R.string.NanogramDiagnosticsShare)));
-        } catch (Exception e) {
-            FileLog.e(e);
-            Toast.makeText(activity, getString(R.string.NanogramDiagnosticsFailed), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void pickChat(File zip) {
-        final Bundle args = new Bundle();
-        args.putBoolean("onlySelect", true);
-        args.putBoolean("canSelectTopics", true);
-        args.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_FORWARD);
-        args.putBoolean("allowSwitchAccount", true);
-        args.putString("selectAlertString", getString(R.string.NanogramDiagnosticsSendToText));
-        args.putString("selectAlertStringGroup", getString(R.string.NanogramDiagnosticsSendToText));
-        final DialogsActivity picker = new DialogsActivity(args);
-        picker.setDelegate((fragment, dids, message, param, notify, scheduleDate, scheduleRepeatPeriod, topicsFragment) -> {
-            final int account = fragment != null ? fragment.getCurrentAccount() : currentAccount;
-            final AccountInstance accountInstance = AccountInstance.getInstance(account);
-            final String caption = formatString(R.string.NanogramDiagnosticsSubject, NanogramDiagnostics.appLabel(ApplicationLoader.applicationContext));
-            for (MessagesStorage.TopicKey key : dids) {
-                final ArrayList<String> paths = new ArrayList<>();
-                paths.add(zip.getAbsolutePath());
-                MessageObject replyTo = null;
-                if (key.topicId != 0) {
-                    final TLRPC.TL_forumTopic topic = accountInstance.getMessagesController().getTopicsController().findTopic(-key.dialogId, key.topicId);
-                    if (topic != null && topic.topicStartMessage != null) {
-                        replyTo = new MessageObject(account, topic.topicStartMessage, false, false);
-                        replyTo.isTopicMainMessage = true;
-                    }
-                }
-                SendMessagesHelper.prepareSendingDocuments(accountInstance, paths, paths, null, caption, "application/zip", key.dialogId, replyTo, replyTo, null, null, null, true, 0, null, null, 0, false, 0);
-            }
-            if (fragment != null) {
-                fragment.finishFragment();
-            }
-            if (getParentActivity() != null) {
-                Toast.makeText(getParentActivity(), getString(R.string.NanogramDiagnosticsSent), Toast.LENGTH_SHORT).show();
-            }
-            return true;
-        });
-        presentFragment(picker);
     }
 }

@@ -1903,7 +1903,7 @@ public class AndroidUtilities {
             if (pathString.matches(Pattern.quote(new File(ApplicationLoader.applicationContext.getCacheDir(), "voip_logs").getAbsolutePath()) + "/\\d+\\.log")) {
                 return false;
             }
-            if (pathString.matches(Pattern.quote(new File(ApplicationLoader.applicationContext.getCacheDir(), "nanogram_diagnostics").getAbsolutePath()) + "/Nanogram-diagnostics-[0-9]+-[0-9-]+\\.zip")) {
+            if (pathString.matches(Pattern.quote(new File(ApplicationLoader.applicationContext.getCacheDir(), "nanogram_diagnostics").getAbsolutePath()) + "/Nanogram-(?:report|diagnostics)-[0-9]+-[0-9-]+\\.zip")) {
                 return false;
             }
             int tries = 0;

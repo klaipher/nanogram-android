@@ -6,11 +6,15 @@ what Android provides.
 
 ## For testers
 
-Settings > Help > **Send diagnostics** (also Settings > press the version line twice > Debug menu > Nanogram diagnostics).
+Settings > Help > **Send report** (right under Ask a Question; also the first item of the Debug menu). One button, one
+zip with everything. A dialog states what is included, then:
 
-- **Share diagnostics** builds the zip and opens the system share sheet: a Nanogram chat, email, Telegram, Drive...
+- **Share…** builds the zip and opens the system share sheet: a Nanogram chat, email, Telegram, Drive...
 - **Send to a Nanogram chat** builds the zip and opens Nanogram's own chat picker; the file goes to the chosen chat
   (or topic). No bot or username is built in.
+- The old Settings entry "Send diagnostics" is gone. The Debug menu keeps "Diagnostics (developer)" with the verbose
+  switch, system traces, clear logs and the same Send report button.
+- The README in the zip lists every part and names the folders that are missing or empty, with the reason.
 - **Verbose logs**: only when asked. Much more detail, more storage and battery. Network logs switch after a restart.
 - **Clear logs** removes logs, crash records, call logs and old zips.
 - The "Recent problems" list shows "Nanogram closed unexpectedly at <time>: <reason>" for the newest crash, ANR or
@@ -18,7 +22,7 @@ Settings > Help > **Send diagnostics** (also Settings > press the version line t
 
 ## What the zip contains
 
-`Nanogram-diagnostics-<versionCode>-<yyyyMMdd-HHmmss>.zip`
+`Nanogram-report-<versionCode>-<yyyyMMdd-HHmmss>.zip`
 
 | Entry | Content | Android version |
 |---|---|---|
@@ -53,9 +57,9 @@ always-on log:
   carry transcripts, phone numbers, push tokens and ids, so while verbose logs are on, and for 3 days after, the README and
   the screen warn to send the zip only to the developer. Those 3 days also lift the 5 MB / 30 file caps (age cap only).
 - Quiet log: key events (`FileLog.i`) have their own burst budget; a process restart reopens the newest small file of the day.
-- Sending to a chat: `AndroidUtilities.isInternalUri` allows `cache/nanogram_diagnostics/Nanogram-diagnostics-*.zip`, like
+- Sending to a chat: `AndroidUtilities.isInternalUri` allows `cache/nanogram_diagnostics/Nanogram-(report|diagnostics)-*.zip`, like
   upstream's `voip_logs` exception. A new export removes only zips older than an hour.
-- Verbose logs: Settings > Send diagnostics > Verbose logs (same preference as upstream's `logsEnabled`, so the debug
+- Verbose logs: Debug menu > Diagnostics (developer) > Verbose logs (same preference as upstream's `logsEnabled`, so the debug
   menu switch is the same switch). Heap dumps (`FileLog.dumpMemory`) happen only in verbose mode.
 
 ## Reading it

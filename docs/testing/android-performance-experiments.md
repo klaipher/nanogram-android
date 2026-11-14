@@ -163,12 +163,14 @@ For each experiment, and for A and B separately, send the project owner (a messa
 - **Warm / hot** after the 10 minutes: cool, warm or hot.
 - **CPU and energy lines** of that experiment from the Debug Menu or the zip, for A and B. If the phone has no energy line, send the **battery drop** over the 10 minutes (e.g. 4%) instead.
 - The extra checks for calls and camera (works / wrong / not tested).
-- The **diagnostics zip**, made right after finishing that run, **before** you flip the switch or restart: Settings > Help >
-  **Send diagnostics** (or Debug Menu > Nanogram diagnostics) > **Share diagnostics**. It contains a file
+- The **report zip**, made right after finishing that run, **before** you flip the switch or restart: Settings > Help >
+  **Send report** (or the first item of the Debug Menu) > **Share…** or **Send to a Nanogram chat**. It is one zip with
+  everything (logs, crash and exit info, system traces, health and energy numbers, device info) and a README that lists
+  every part and anything missing. It contains a file
   `performance-experiments.txt` with the state of every switch and the numbers since that switch last changed: count, average and
   longest time per frame, per GIF frame, per camera start, per call setup, plus the CPU and energy lines. A second file, `health-energy.txt`, has the detailed CPU,
   wakelock, network, energy and heat numbers. Only durations, counts and the phone model are in these files. The zip also holds
-  the normal diagnostic logs (device state, error log), so send it only if you are fine with that.
+  the normal logs (device state, error log), so send it only if you are fine with that.
 
 The same numbers show in grey under the switches in the Debug Menu (close and reopen the screen to refresh). Numbers reset every time the app restarts or you flip that experiment's switch, so take the zip before either.
 
