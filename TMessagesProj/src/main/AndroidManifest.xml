@@ -108,6 +108,7 @@
         tools:replace="android:supportsRtl"
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true"
+        android:localeConfig="@xml/locales_config"
     >
         <!-- usesCleartextTraffic for browser supporting opening http:// links -->
 

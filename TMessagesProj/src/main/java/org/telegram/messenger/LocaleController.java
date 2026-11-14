@@ -39,6 +39,7 @@ import androidx.annotation.StringRes;
 import org.telegram.utils.localization.Localization;
 import org.telegram.localization.LocalizationUtils;
 import org.telegram.messenger.time.FastDateFormat;
+import org.telegram.messenger.nanogram.NanogramLocaleMap;
 import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Stars.StarsController;
@@ -2097,6 +2098,17 @@ public class LocaleController {
                     if (currentPluralRules == null) {
                         currentPluralRules = allRules.get("en");
                     }
+                }
+            }
+        }
+        if (languageOverride == null && Build.VERSION.SDK_INT >= 33 && newConfig.locale != null) {
+            for (String key : NanogramLocaleMap.candidateKeys(newConfig.locale)) {
+                final LocaleInfo info = getLanguageFromDict(key);
+                if (info != null) {
+                    if (info != currentLocaleInfo) {
+                        applyLanguage(info, false, false, UserConfig.selectedAccount);
+                    }
+                    break;
                 }
             }
         }

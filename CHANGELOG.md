@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-LOCALE-1: system App languages entry (Android 13+)
+- `res/xml/locales_config.xml` (the bundled UI languages: en, ar, de, es, it, ko, nl, pt-BR, ru, uk) and `android:localeConfig`, so Settings > System > Languages > App languages lists Nanogram. When the system locale changes on API 33+ and the user has not picked an in-app language, `LocaleController.onDeviceConfigurationChange` maps it to a language pack (`NanogramLocaleMap`: language_script_region, language_script, language_region, language) and applies it without saving an override; server language packs and the in-app choice are untouched. Downloaded packs are not listed in the system screen.
+- Tests: `NanogramLocaleMapTest` (JVM).
 ### ANDROID-PROFILING-1: ProfilingManager system traces in diagnostics
 - Nanogram diagnostics (API 35+): "Record a system trace" calls `ProfilingManager.requestProfiling(PROFILING_TYPE_SYSTEM_TRACE)`; the result is copied to `cache/ng_profiles` (6 files, 64 MB, newest kept). On API 36 a switch "Record traces on ANR and cold start" (off by default, persisted) registers ANR and COLD_START triggers and stores their results the same way (the API 36 calls go through reflection so a signature change fails soft). Traces go into the diagnostics zip as `profiles/` (whole files, never truncated) only when shared by the user; Clear logs deletes them. Nothing is uploaded automatically.
 - Tests: `NanogramProfilingTest` (retention rule, JVM).
