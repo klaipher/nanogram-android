@@ -41,7 +41,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** Battery Saver on drops FLAG_* effects; `cmd thermalservice override-status 3` during a 10 min compression.
 - **Effort:** small
-- **Status:** implemented (nanogram/mod-system f84d087); percent trigger skip-while-charging behind flag `power_skip_charging`, default off
+- **Status:** implemented (nanogram/mod-system f84d087); percent trigger skip-while-charging behind flag `power_skip_charging`, default off. Setting "Follow system Battery Saver and heat" under the Power Saver slider, default on, takes precedence over the system signals
 
 ### ANDROID-IMG-1: All non-thumbnail disk-cache decodes run on one thread
 - **Severity:** medium
@@ -121,7 +121,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** artificial ANR on Android 16 produces a trace that opens in Perfetto.
 - **Effort:** small
-- **Status:** implemented (ad5a0c7), opt-in, local only
+- **Status:** implemented (ad5a0c7), opt-in, local only; cold-start trigger exists only on API 37, ANR trigger on API 36
 
 ### ANDROID-NOTIF-1: Transfer notifications use stat_sys_upload and a plain bar
 - **Severity:** low
@@ -141,7 +141,16 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** `aapt dump permissions` before and after; contact sync, biometrics, gallery on API 28 and 35.
 - **Effort:** small
-- **Status:** implemented (d7289b6), global cleartext kept by owner decision
+- **Status:** implemented (d7289b6), global cleartext kept by owner decision; `requestLegacyExternalStorage` kept (Android 10 honours it at any target SDK, minSdk 24); `USE_FINGERPRINT` still merged in from androidx.biometric 1.1.0
+
+### ANDROID-PREFS-1: Synchronous SharedPreferences commit() on the UI thread
+- **Severity:** low
+- **Evidence:** about 250 `commit()` calls across ChatActivity, DialogsActivity, MessagesController, NotificationsController, Theme and helpers; each blocks the caller until the file is written.
+- **Change:** `apply()` where nothing reads the result and no other process reads the file.
+- **Risk:** low; cross-process readers (`:widgets`, receivers) and ordering with a following read must be checked per site.
+- **Measurement:** StrictMode (ANDROID-DESIGN-4) disk-write violations on the main thread.
+- **Effort:** small per site
+- **Status:** partly implemented (785eaa6): 34 sites (ChatActivity, DialogsActivity, three MessagesController paths). About 220 sites remain, each needing a cross-process and ordering check
 
 ### ANDROID-DESIGN-1: New ExecutorService per Linkify call; timed-out regex keeps running
 - **Severity:** medium
@@ -151,7 +160,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** cold open of a 200-message chat with links: thread creations, time in `future.get`.
 - **Effort:** small
-- **Status:** implemented (d18e568); interruptible CharSequence wrapper not done
+- **Status:** implemented (d18e568); interruptible CharSequence wrapper not done. Pool has no queue (stuck Linkify threads get a one-off thread for new calls); the inline path (1000 chars or less) has no timeout
 
 ### ANDROID-DESIGN-2: Fragment creation blocks the UI thread on the storage queue
 - **Severity:** medium
@@ -171,4 +180,4 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low (debug only).
 - **Measurement:** violation count by stack after cold start and chat open, ratcheted down.
 - **Effort:** small
-- **Status:** implemented (55600ed), debug builds or flag `strictmode`
+- **Status:** implemented (55600ed), debug builds or flag `strictmode` (flag only read in debuggable builds)
