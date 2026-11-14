@@ -3177,10 +3177,19 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     public void updateSelected(HashMap<Object, Object> newSelectedPhotos, ArrayList<Object> newPhotosOrder, boolean updateLayout) {
+        Object previousFirstKey = selectedPhotosOrder.isEmpty() ? null : selectedPhotosOrder.get(0);
+        boolean firstPhotoChanged = !newPhotosOrder.isEmpty() && !newPhotosOrder.get(0).equals(previousFirstKey) && !captionForAllMedia();
+        if (firstPhotoChanged) {
+            applyCaption(parentAlert.getCommentView().getText());
+            newSelectedPhotos.replace(previousFirstKey, selectedPhotos.get(previousFirstKey));
+        }
         selectedPhotos.clear();
         selectedPhotos.putAll(newSelectedPhotos);
         selectedPhotosOrder.clear();
         selectedPhotosOrder.addAll(newPhotosOrder);
+        if (firstPhotoChanged) {
+            photoViewerProvider.onApplyCaption(null);
+        }
         if (updateLayout) {
             updatePhotosCounter(false);
             updateCheckedPhotoIndices();
@@ -3592,23 +3601,24 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
 
     @Override
     public void applyCaption(CharSequence text) {
+        boolean hasCaptionForAllMedia = PhotoViewer.getInstance().hasCaptionForAllMedia;
+        CharSequence[] caption = new CharSequence[] { text };
+        ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(UserConfig.selectedAccount).getEntities(caption, false);
         for (int a = 0; a < selectedPhotosOrder.size(); a++) {
-            if (a == 0) {
+            if (a == 0 || hasCaptionForAllMedia) {
                 final Object key = selectedPhotosOrder.get(a);
                 Object o = selectedPhotos.get(key);
                 if (o instanceof MediaController.PhotoEntry) {
                     MediaController.PhotoEntry photoEntry1 = (MediaController.PhotoEntry) o;
                     photoEntry1 = photoEntry1.clone();
-                    CharSequence[] caption = new CharSequence[] { text };
-                    photoEntry1.entities = MediaDataController.getInstance(UserConfig.selectedAccount).getEntities(caption, false);
-                    photoEntry1.caption = caption[0];
+                    photoEntry1.entities = a == 0 ? entities : null;
+                    photoEntry1.caption = a == 0 ? caption[0] : null;
                     o = photoEntry1;
                 } else if (o instanceof MediaController.SearchImage) {
                     MediaController.SearchImage photoEntry1 = (MediaController.SearchImage) o;
                     photoEntry1 = photoEntry1.clone();
-                    CharSequence[] caption = new CharSequence[] { text };
-                    photoEntry1.entities = MediaDataController.getInstance(UserConfig.selectedAccount).getEntities(caption, false);
-                    photoEntry1.caption = caption[0];
+                    photoEntry1.entities = a == 0 ? entities : null;
+                    photoEntry1.caption = a == 0 ? caption[0] : null;
                     o = photoEntry1;
                 }
                 selectedPhotos.put(key, o);

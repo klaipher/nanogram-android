@@ -200,13 +200,9 @@ public class PermissionRequest {
     }
 
     public static boolean hasPermission(String permission) {
-        Activity _activity = LaunchActivity.instance;
-        if (_activity == null) _activity = AndroidUtilities.findActivity(ApplicationLoader.applicationContext);
-        if (_activity == null) return false;
-        final Activity activity = _activity;
-
+        // a grant belongs to the process; services and receivers have no activity to ask
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+            return ApplicationLoader.applicationContext.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
         } else {
             return true;
         }

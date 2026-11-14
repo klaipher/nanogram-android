@@ -324,6 +324,8 @@ public class TL_bots {
     public static class TL_botInfoEmpty_layer48 extends TL_botInfo {
         public static final int constructor = 0xbb2e37ce;
 
+        public void readParams(InputSerializedData stream, boolean exception) {
+        }
 
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);

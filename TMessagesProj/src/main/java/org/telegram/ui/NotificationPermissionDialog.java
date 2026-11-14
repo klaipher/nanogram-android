@@ -107,6 +107,7 @@ public class NotificationPermissionDialog extends BottomSheet implements Notific
             if (this.whenGranted != null) {
                 this.whenGranted.run(true);
                 this.whenGranted = null;
+                askLater();
             }
             dismiss();
         });

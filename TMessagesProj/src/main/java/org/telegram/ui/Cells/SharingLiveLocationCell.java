@@ -428,8 +428,8 @@ public class SharingLiveLocationCell extends FrameLayout implements Theme.Colora
             stopTime = currentInfo.stopTime;
             period = currentInfo.period;
         } else {
-            stopTime = liveLocation.object.date + liveLocation.object.media.period;
             period = liveLocation.object.media.period;
+            stopTime = period == 0x7FFFFFFF ? Integer.MAX_VALUE : liveLocation.object.date + period;
         }
         boolean forever = period == 0x7FFFFFFF;
         int currentTime = ConnectionsManager.getInstance(currentAccount).getCurrentTime();

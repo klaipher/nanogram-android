@@ -420,6 +420,9 @@ public class TLRPC {
     public static class TL_draftMessageEmpty_layer81 extends TL_draftMessageEmpty {
         public static final int constructor = 0xba4baec5;
 
+        public void readParams(InputSerializedData stream, boolean exception) {
+        }
+
         public void serializeToStream(OutputSerializedData stream) {
             stream.writeInt32(constructor);
         }

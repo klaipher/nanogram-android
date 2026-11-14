@@ -1828,14 +1828,28 @@ public class SecretChatHelper extends BaseController {
         } else {
             newTaskId = taskId;
         }
+        boolean sentFlush = false;
+        if (revoke && taskId == 0) {
+            TLRPC.EncryptedChat encryptedChat = getMessagesController().getEncryptedChat(chat_id);
+            if (encryptedChat instanceof TLRPC.TL_encryptedChat) {
+                sendClearHistoryMessage(encryptedChat, null);
+                sentFlush = true;
+                getMessagesStorage().deleteDialog(DialogObject.makeEncryptedDialogId(chat_id), 0);
+            }
+        }
         TLRPC.TL_messages_discardEncryption req = new TLRPC.TL_messages_discardEncryption();
         req.chat_id = chat_id;
         req.delete_history = revoke;
-        getConnectionsManager().sendRequest(req, (response, error) -> {
+        Runnable sendDiscard = () -> getConnectionsManager().sendRequest(req, (response, error) -> {
             if (newTaskId != 0) {
                 getMessagesStorage().removePendingTask(newTaskId);
             }
         });
+        if (sentFlush) {
+            Utilities.stageQueue.postRunnable(sendDiscard);
+        } else {
+            sendDiscard.run();
+        }
     }
 
     public void acceptSecretChat(TLRPC.EncryptedChat encryptedChat) {

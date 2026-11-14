@@ -1063,12 +1063,25 @@ public class MessagesController extends BaseController implements NotificationCe
     public void markAllTopicsAsRead(long did) {
         getMessagesStorage().loadTopics(did, topics -> {
             AndroidUtilities.runOnUIThread(() -> {
+                boolean marked = false;
+                boolean mentions = false;
                 if (topics != null) {
                     for (int i = 0; i < topics.size(); i++) {
                         TLRPC.TL_forumTopic topic = topics.get(i);
+                        if (topic.unread_count == 0 && topic.unread_mentions_count == 0) {
+                            continue;
+                        }
+                        marked = true;
+                        mentions |= topic.unread_mentions_count > 0;
                         getMessagesController().markDialogAsRead(did, topic.top_message, 0, topic.topMessage != null ? topic.topMessage.date : 0, false, isMonoForum(did) ? DialogObject.getPeerDialogId(topic.from_id) : topic.id, 0, true, 0);
                         getMessagesStorage().updateRepliesMaxReadId(-did, isMonoForum(did) ? DialogObject.getPeerDialogId(topic.from_id) : topic.id, topic.top_message, 0, true);
                     }
+                }
+                if (mentions) {
+                    markMentionsAsRead(did, 0);
+                }
+                if (!marked) {
+                    return;
                 }
                 getMessagesStorage().getStorageQueue().postRunnable(() -> {
                     getMessagesStorage().resetAllUnreadCounters(false);
@@ -7534,6 +7547,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
             }
+            // array is null here, the loop above was the only lookup available
+            return null;
         }
         return array.get(uid);
     }
@@ -7551,6 +7566,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
             }
+            // array is null here, the loop above was the only lookup available
+            return false;
         }
         final TLRPC.ChannelParticipant participant = array.get(uid);
         return participant instanceof TLRPC.TL_channelParticipantAdmin || participant instanceof TLRPC.TL_channelParticipantCreator;
@@ -7571,6 +7588,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
             }
+            // array is null here, the loop above was the only lookup available
+            return false;
         }
         final TLRPC.ChannelParticipant participant = array.get(uid);
         return participant instanceof TLRPC.TL_channelParticipantCreator;
@@ -7581,6 +7600,11 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void loadChannelAdmins(long chatId, boolean cache) {
+        // server rejects channelParticipantsAdmins with COMMUNITY_FILTER_INVALID for non-admins of a community
+        final TLRPC.Chat adminsChat = getChat(chatId);
+        if (ChatObject.isCommunity(adminsChat) && !ChatObject.hasAdminRights(adminsChat)) {
+            return;
+        }
         int loadTime = loadingChannelAdmins.get(chatId);
         if ((SystemClock.elapsedRealtime() / 1000) - loadTime < 60) {
             return;
@@ -8284,7 +8308,9 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void didAddedNewTask(int minDate, long dialogId, SparseArray<ArrayList<Integer>> mids) {
         Utilities.stageQueue.postRunnable(() -> {
-            if (currentDeletingTaskMids == null && currentDeletingTaskMediaMids == null && !gettingNewDeleteTask || currentDeletingTaskTime != 0 && minDate < currentDeletingTaskTime) {
+            final boolean idle = currentDeletingTaskMids == null && currentDeletingTaskMediaMids == null;
+            final boolean earlier = currentDeletingTaskTime != 0 && minDate < currentDeletingTaskTime;
+            if (!gettingNewDeleteTask && (idle || earlier)) {
                 getNewDeleteTask(null, null);
             }
         });
@@ -8294,8 +8320,8 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void getNewDeleteTask(LongSparseArray<ArrayList<Integer>> oldTask, LongSparseArray<ArrayList<Integer>> oldTaskMedia) {
+        gettingNewDeleteTask = true;
         Utilities.stageQueue.postRunnable(() -> {
-            gettingNewDeleteTask = true;
             getMessagesStorage().getNewTask(oldTask, oldTaskMedia);
         });
     }
@@ -11763,7 +11789,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             if (!res.dialogs.isEmpty()) {
                                 TLRPC.Dialog dialog = res.dialogs.get(0);
 
-                                if (dialog.top_message != 0) {
+                                if (dialog.top_message != 0 && (chat == null || !ChatObject.isNotInChat(chat))) {
                                     TLRPC.TL_messages_dialogs dialogs = new TLRPC.TL_messages_dialogs();
                                     dialogs.chats = res.chats;
                                     dialogs.users = res.users;
@@ -16391,9 +16417,6 @@ public class MessagesController extends BaseController implements NotificationCe
             } else if (updateState == 1) {
                 long updatesStartWaitTime = updatesStartWaitTimeChannels.get(channelId);
                 if (updatesStartWaitTime != 0 && (anyProceed || Math.abs(System.currentTimeMillis() - updatesStartWaitTime) <= 1500)) {
-                    if (BuildVars.LOGS_ENABLED) {
-                        FileLog.d("HOLE IN CHANNEL " + channelId + " UPDATES QUEUE - will wait more time");
-                    }
                     if (anyProceed) {
                         updatesStartWaitTimeChannels.put(channelId, System.currentTimeMillis());
                     }
@@ -23210,7 +23233,12 @@ public class MessagesController extends BaseController implements NotificationCe
             loadMessagesInternal(dialogId, 0, true, count, finalMessageId, 0, true, 0, classGuid, 2, 0, 0, 0, -1, 0, 0, 0, false, 0, true, false, false, null, 0L);
         }
 
-        return () -> getConnectionsManager().cancelRequestsForGuid(classGuid);
+        return () -> {
+            // cancelling the request alone left the delegate registered forever
+            getNotificationCenter().removeObserver(delegate, NotificationCenter.messagesDidLoadWithoutProcess);
+            getNotificationCenter().removeObserver(delegate, NotificationCenter.loadingMessagesFailed);
+            getConnectionsManager().cancelRequestsForGuid(classGuid);
+        };
     }
 
     public int getChatPendingRequestsOnClosed(long chatId) {

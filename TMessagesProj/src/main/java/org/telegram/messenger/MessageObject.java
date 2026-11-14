@@ -52,6 +52,7 @@ import androidx.core.graphics.ColorUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.browser.Browser;
+import org.telegram.messenger.nanogram.NanogramLiveLocation;
 import org.telegram.messenger.ringtone.RingtoneDataStore;
 import org.telegram.messenger.utils.tlutils.AmountUtils;
 import org.telegram.messenger.utils.tlutils.TLKeyboardHelper;
@@ -1396,6 +1397,11 @@ public class MessageObject {
             positions.clear();
             positionsArray.clear();
             captionMessage = null;
+            isDocuments = false;
+            hasSibling = false;
+            hasCaption = false;
+            captionAbove = false;
+            cachedWidthForCaption = -1;
 
             maxSizeWidth = 800;
             int firstSpanAdditionalSize = 200;
@@ -11563,7 +11569,11 @@ public class MessageObject {
     }
 
     public boolean isExpiredLiveLocation(int date) {
-        return messageOwner.date + getMedia(messageOwner).period <= date;
+        return isExpiredLiveLocation(messageOwner, date);
+    }
+
+    public static boolean isExpiredLiveLocation(TLRPC.Message message, int date) {
+        return NanogramLiveLocation.isExpired(message.date, getMedia(message).period, date);
     }
 
     public boolean isGame() {

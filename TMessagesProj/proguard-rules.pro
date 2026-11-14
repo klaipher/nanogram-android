@@ -42,6 +42,13 @@
 -keep class org.telegram.tgnet.RequestTimeDelegate { *; }
 -keep class org.telegram.tgnet.RequestDelegate { *; }
 -keep class org.telegram.ui.Stories.recorder.FfmpegAudioWaveformLoader { *; }
+# ThemeDescription finds the fields it recolours by name with getDeclaredField
+-keepclassmembernames,allowoptimization class org.telegram.ui.** {
+    android.view.View+ *;
+    android.graphics.Paint+ *;
+    android.graphics.drawable.Drawable+ *;
+    int *;
+}
 -keep class androidx.mediarouter.app.MediaRouteButton { *; }
 -keepclassmembers class ** {
     @android.webkit.JavascriptInterface <methods>;

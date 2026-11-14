@@ -285,7 +285,7 @@ public class MediaDataController extends BaseController {
     private ConcurrentHashMap<String, TLRPC.TL_messages_stickerSet> stickerSetsByName = new ConcurrentHashMap<>(100, 1.0f, 1);
     private TLRPC.TL_messages_stickerSet stickerSetDefaultStatuses = null;
     private TLRPC.TL_messages_stickerSet stickerSetDefaultChannelStatuses = null;
-    private HashMap<String, TLRPC.TL_messages_stickerSet> diceStickerSetsByEmoji = new HashMap<>();
+    private ConcurrentHashMap<String, TLRPC.TL_messages_stickerSet> diceStickerSetsByEmoji = new ConcurrentHashMap<>();
     private LongSparseArray<String> diceEmojiStickerSetsById = new LongSparseArray<>();
     private HashSet<String> loadingDiceStickerSets = new HashSet<>();
     private LongSparseArray<Runnable> removingStickerSetsUndos = new LongSparseArray<>();
@@ -2903,9 +2903,10 @@ public class MediaDataController extends BaseController {
                     data.reuse();
                     state.dispose();
                 } else {
-                    SQLitePreparedStatement state = getMessagesStorage().getDatabase().executeFast("UPDATE stickers_dice SET date = ?");
+                    SQLitePreparedStatement state = getMessagesStorage().getDatabase().executeFast("UPDATE stickers_dice SET date = ? WHERE emoji = ?");
                     state.requery();
                     state.bindInteger(1, date);
+                    state.bindString(2, emoji);
                     state.step();
                     state.dispose();
                 }

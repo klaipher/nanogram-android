@@ -4279,6 +4279,12 @@ public class AndroidUtilities {
         if (f == null || f != null && !f.exists()) {
             f = FileLoader.getInstance(UserConfig.selectedAccount).getPathToMessage(message.messageOwner);
         }
+        if (f == null || !f.exists()) {
+            File cachedMedia = org.telegram.messenger.nanogram.NanogramLocalMedia.cachedFile(message);
+            if (cachedMedia != null) {
+                f = cachedMedia;
+            }
+        }
         if (f != null && f.exists()) {
             if (parentFragment != null && f.getName().toLowerCase().endsWith("attheme")) {
                 Theme.ThemeInfo themeInfo = Theme.applyThemeFile(f, message.getDocumentName(), null, true);
@@ -4411,6 +4417,12 @@ public class AndroidUtilities {
         }
         if (f == null || !f.exists()) {
             f = FileLoader.getInstance(message.currentAccount).getPathToMessage(message.messageOwner);
+        }
+        if (f == null || !f.exists()) {
+            File cachedMedia = org.telegram.messenger.nanogram.NanogramLocalMedia.cachedFile(message);
+            if (cachedMedia != null) {
+                f = cachedMedia;
+            }
         }
         String mimeType = message.type == MessageObject.TYPE_FILE || message.type == MessageObject.TYPE_TEXT ? message.getMimeType() : null;
         return openForView(f, message.getFileName(), mimeType, activity, resourcesProvider, restrict);

@@ -33,6 +33,7 @@ import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.SQLite.SQLiteDatabase;
 import org.telegram.SQLite.SQLiteException;
 import org.telegram.SQLite.SQLitePreparedStatement;
+import org.telegram.messenger.nanogram.NanogramRecountThrottle;
 import org.telegram.messenger.support.LongSparseIntArray;
 import org.telegram.messenger.utils.EphemeralMessagesHelper;
 import org.telegram.tgnet.NativeByteBuffer;
@@ -106,6 +107,9 @@ public class MessagesStorage extends BaseController {
     private int archiveUnreadCount;
     private volatile int pendingMainUnreadCount;
     private volatile int pendingArchiveUnreadCount;
+    private boolean pendingUnreadCountersResync;
+    private long lastUnreadCountersResync;
+    private long lastUnreadCountersResyncCost;
     private boolean databaseCreated;
 
     private final CountDownLatch openSync = new CountDownLatch(1);
@@ -2929,7 +2933,7 @@ public class MessagesStorage extends BaseController {
                 /*if (BuildVars.DEBUG_VERSION) {
                     FileLog.d("unread chat " + did + " counters = " + unread + " and " + mentions);
                 }*/
-                dialogsByFolders.put(did, folderId);
+                dialogsByFolders.put(did, folderId < 0 || folderId > 1 ? 0 : folderId);
                 if (DialogObject.isEncryptedDialog(did)) {
                     int encryptedChatId = DialogObject.getEncryptedChatId(did);
                     if (!encryptedToLoad.contains(encryptedChatId)) {
@@ -6265,6 +6269,9 @@ public class MessagesStorage extends BaseController {
                 }
                 long did = array.keyAt(a);
                 if (read) {
+                    if ((b == 0 ? dialogsWithUnread : dialogsWithMentions).indexOfKey(did) < 0) {
+                        continue;
+                    }
                     if (b == 0) {
                         dialogsWithUnread.remove(did);
                         /*if (BuildVars.DEBUG_VERSION) {
@@ -10154,7 +10161,7 @@ public class MessagesStorage extends BaseController {
                 runnable.run();
             };
         } else {*/
-        int finalMessagesCount = scheduled ? res.messages.size() : messagesCount;
+        int finalMessagesCount = scheduled || processMessages ? res.messages.size() : messagesCount;
         return () -> getMessagesController().processLoadedMessages(res, finalMessagesCount, dialogId, mergeDialogId, countQueryFinal, maxIdOverrideFinal, offset_date, true, classGuid, minUnreadIdFinal, lastMessageIdFinal, countUnreadFinal, maxUnreadDateFinal, load_type, isEndFinal, mode, threadMessageId, loadIndex, queryFromServerFinal, mentionsUnreadFinal, processMessages, isTopic, loaderLogger);
         //}
     }
@@ -14948,14 +14955,15 @@ public class MessagesStorage extends BaseController {
                     state.step();
                     state.dispose();
                     state = null;
-                    database.commitTransaction();
                     data.reuse();
                 }
+                database.commitTransaction();
 
                 deleteFromDownloadQueue(idsToDelete, true);
                 AndroidUtilities.runOnUIThread(() -> getFileLoader().cancelLoadFiles(namesToDelete));
                 getFileLoader().deleteFiles(filesToDelete, 0);
 
+                boolean unreadCountersChanged = false;
                 for (int a = 0; a < dialogsToUpdate.size(); a++) {
                     long did = dialogsToUpdate.keyAt(a);
                     Integer[] counts = dialogsToUpdate.valueAt(a);
@@ -14970,11 +14978,15 @@ public class MessagesStorage extends BaseController {
                     cursor.dispose();
                     cursor = null;
 
+                    int new_unread_count = Math.max(0, old_unread_count - counts[0]);
+                    int new_mentions_count = Math.max(0, old_mentions_count - counts[1]);
+                    unreadCountersChanged |= new_unread_count != old_unread_count || new_mentions_count != old_mentions_count;
+
                     dialogsIds.add(did);
                     state = database.executeFast("UPDATE dialogs SET unread_count = ?, unread_count_i = ? WHERE did = ?");
                     state.requery();
-                    state.bindInteger(1, Math.max(0, old_unread_count - counts[0]));
-                    state.bindInteger(2, Math.max(0, old_mentions_count - counts[1]));
+                    state.bindInteger(1, new_unread_count);
+                    state.bindInteger(2, new_mentions_count);
                     state.bindLong(3, did);
                     state.step();
                     state.dispose();
@@ -15002,6 +15014,7 @@ public class MessagesStorage extends BaseController {
                         int newUnreadCount = Math.max(0, old_unread_count - counts[0]);
                         int newUnreadMentionsCount = Math.max(0, old_mentions_count - counts[1]);
                         int newTotalCount = Math.max(0, old_total_count - counts[2]);
+                        unreadCountersChanged |= newUnreadCount != old_unread_count || newUnreadMentionsCount != old_mentions_count;
                         if (BuildVars.DEBUG_PRIVATE_VERSION && newUnreadMentionsCount > 0) {
                             FileLog.d("(markMessagesAsDeletedInternal) new unread mentions " + newUnreadMentionsCount + " for dialog_id=" + topicKey.dialogId + " topic_id=" + topicKey.topicId);
                         }
@@ -15254,8 +15267,18 @@ public class MessagesStorage extends BaseController {
                 }
                 getMediaDataController().clearBotKeyboard(null, messages);
 
-                if (dialogsToUpdate.size() != 0) {
-                    resetAllUnreadCounters(false);
+                if ((unreadCountersChanged || topicsToDelete != null) && !pendingUnreadCountersResync) {
+                    pendingUnreadCountersResync = true;
+                    final long delay = NanogramRecountThrottle.delayMs(SystemClock.elapsedRealtime(), lastUnreadCountersResync, lastUnreadCountersResyncCost);
+                    if (!storageQueue.postRunnable(() -> {
+                        pendingUnreadCountersResync = false;
+                        final long started = SystemClock.elapsedRealtime();
+                        resetAllUnreadCounters(false);
+                        lastUnreadCountersResync = SystemClock.elapsedRealtime();
+                        lastUnreadCountersResyncCost = lastUnreadCountersResync - started;
+                    }, delay)) {
+                        pendingUnreadCountersResync = false;
+                    }
                 }
                 updateWidgets(dialogsIds);
 
@@ -15293,8 +15316,16 @@ public class MessagesStorage extends BaseController {
         try {
             ArrayList<Long> dialogsToUpdate = new ArrayList<>();
             if (!messages.isEmpty()) {
+                if (channelId != 0 || originalDialogId != 0) {
+                    long did = channelId != 0 ? -channelId : originalDialogId;
+                    cursor = database.queryFinalized(String.format(Locale.US, "SELECT did FROM dialogs WHERE did = %d AND last_mid IN(%s)", did, TextUtils.join(",", messages)));
+                    if (cursor.next()) {
+                        dialogsToUpdate.add(did);
+                    }
+                    cursor.dispose();
+                    cursor = null;
+                }
                 if (channelId != 0) {
-                    dialogsToUpdate.add(-channelId);
                     state = database.executeFast("UPDATE dialogs SET (last_mid, last_mid_group) = (SELECT mid, group_id FROM messages_v2 WHERE uid = ? AND date = (SELECT MAX(date) FROM messages_v2 WHERE uid = ?)) WHERE did = ?");
                 } else {
                     if (originalDialogId == 0) {
@@ -15305,8 +15336,6 @@ public class MessagesStorage extends BaseController {
                         }
                         cursor.dispose();
                         cursor = null;
-                    } else {
-                        dialogsToUpdate.add(originalDialogId);
                     }
                     state = database.executeFast("UPDATE dialogs SET (last_mid, last_mid_group) = (SELECT mid, group_id FROM messages_v2 WHERE uid = ? AND date = (SELECT MAX(date) FROM messages_v2 WHERE uid = ? AND date != 0)) WHERE did = ?");
                 }
@@ -15332,6 +15361,10 @@ public class MessagesStorage extends BaseController {
                         dialogsToUpdate.add(did);
                     }
                 }
+            }
+            if (dialogsToUpdate.isEmpty()) {
+                getMessagesController().getTopicsController().updateTopicsWithDeletedMessages(originalDialogId, messages);
+                return;
             }
             String ids = TextUtils.join(",", dialogsToUpdate);
 

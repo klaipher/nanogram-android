@@ -11553,6 +11553,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             //prepareSendingDocumentInternal(accountInstance, info.path, info.path, null, null, dialogId, replyToMsg, replyToTopMsg, info.caption, info.entities, editingMessageObject, null, false, forceDocument, notify, scheduleDate, null);
                         }
                     } else {
+                        if (info.originalPhotoEntry != null && info.highQuality) {
+                            info.originalPhotoEntry.rebuildPhoto(true);
+                            if (info.originalPhotoEntry.imagePath != null) {
+                                info.path = info.originalPhotoEntry.imagePath;
+                            }
+                        }
                         String originalPath = info.path;
                         String tempPath = info.path;
                         if (tempPath == null && info.uri != null) {
@@ -11678,7 +11684,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                                     ensureMediaThumbExists(accountInstance, isEncrypted, photo, info.path, info.uri, 0);
                                 }
                                 if (photo == null) {
-                                    photo = accountInstance.getSendMessagesHelper().generatePhotoSizes(info.path, info.uri);
+                                    photo = accountInstance.getSendMessagesHelper().generatePhotoSizes(null, info.path, info.uri, info.highQuality);
                                     if (isEncrypted && info.canDeleteAfter) {
                                         new File(info.path).delete();
                                     }

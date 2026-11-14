@@ -123,6 +123,7 @@ import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.nanogram.NanogramFolderPins;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -3680,7 +3681,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     final boolean finalMuteAll = muteAll;
 
                     final MessagesController.DialogFilter finalFilter = filter;
+                    final boolean skipMuted = defaultTab && !getNotificationsController().showBadgeMuted;
                     for (int i = 0; i < dialogs.size(); i++) {
+                        if (skipMuted && isMutedWithoutMentions(dialogs.get(i))) {
+                            continue;
+                        }
                         if (dialogs.get(i).unread_mark || dialogs.get(i).unread_count > 0) {
                             hasUnread = true;
                         }
@@ -3737,7 +3742,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                 BulletinFactory.createMuteBulletin(DialogsActivity.this, finalMuteAll, count, null).show();
                             })
                             .addIf(hasUnread, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAllAsRead), () -> {
-                                markDialogsAsRead(dialogs);
+                                markDialogsAsRead(dialogs, skipMuted);
                             })
                             .addIf(hasShare, R.drawable.msg_share, FilterCreateActivity.withNew(filter != null && filter.isMyChatlist() ? -1 : 0, LocaleController.getString(R.string.LinkActionShare), true), () -> {
                                 if (shareEmpty[0]) {
@@ -8628,7 +8633,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             int maxPinnedCount;
             if (containsFilter && filter != null) {
-                maxPinnedCount = 100 - filter.alwaysShow.size();
+                maxPinnedCount = NanogramFolderPins.maxPinned(getUserConfig().isPremium() ? getMessagesController().dialogFiltersChatsLimitPremium : getMessagesController().dialogFiltersChatsLimitDefault, filter.alwaysShow.size(), pinnedCount);
             } else if (folderId != 0 || filter != null) {
                 if (getUserConfig().isPremium()) {
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountPremium;
@@ -9164,7 +9169,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             int maxPinnedCount;
             if (containsFilter) {
-                maxPinnedCount = 100 - filter.alwaysShow.size();
+                maxPinnedCount = NanogramFolderPins.maxPinned(getUserConfig().isPremium() ? getMessagesController().dialogFiltersChatsLimitPremium : getMessagesController().dialogFiltersChatsLimitDefault, filter.alwaysShow.size(), pinnedCount);
             } else if (folderId != 0 || filter != null) {
                 if (UserConfig.getInstance(currentAccount).isPremium()) {
                     maxPinnedCount = getMessagesController().maxFolderPinnedDialogsCountPremium;
@@ -9520,7 +9525,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         getMessagesController().markDialogAsUnread(did, null, 0);
     }
 
-    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs) {
+    private boolean isMutedWithoutMentions(TLRPC.Dialog dialog) {
+        return dialog.unread_mentions_count == 0 && getMessagesController().isDialogMuted(dialog.id, 0);
+    }
+
+    private void markDialogsAsRead(ArrayList<TLRPC.Dialog> dialogs, boolean skipMuted) {
         debugLastUpdateAction = 2;
         int selectedDialogIndex = -1;
 
@@ -9529,11 +9538,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         for (int i = 0; i < dialogs.size(); i++) {
             long did = dialogs.get(i).id;
             TLRPC.Dialog dialog = dialogs.get(i);
+            if (skipMuted && isMutedWithoutMentions(dialog)) {
+                continue;
+            }
             if (getMessagesController().isForum(did) || getMessagesController().isMonoForumWithManageRights(did)) {
                 getMessagesController().markAllTopicsAsRead(did);
             }
-            getMessagesController().markMentionsAsRead(did, 0);
-            getMessagesController().markDialogAsRead(did, dialog.top_message, dialog.top_message, dialog.last_message_date, false, 0, 0, true, 0);
+            if (dialog.unread_mentions_count > 0) {
+                getMessagesController().markMentionsAsRead(did, 0);
+            }
+            if (dialog.unread_count > 0 || dialog.unread_mark) {
+                getMessagesController().markDialogAsRead(did, dialog.top_message, dialog.top_message, dialog.last_message_date, false, 0, 0, true, 0);
+            }
         }
         if (selectedDialogIndex >= 0) {
             frozenDialogsList.remove(selectedDialogIndex);
@@ -10525,7 +10541,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
                 filterTabsView.checkTabsCounter();
             }
-            if (communityId != 0 ) {
+            // the avatar view is only created for the community chat list, not for the picker
+            if (communityId != 0 && communityAvatarImage != null) {
                 if ((mask & MessagesController.UPDATE_MASK_CHAT) != 0 || (mask & MessagesController.UPDATE_MASK_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_AVATAR) != 0 || (mask & MessagesController.UPDATE_MASK_CHAT_NAME) != 0) {
                     community = getMessagesController().getChat(communityId);
                     actionBar.setTitle(DialogObject.getName(community));

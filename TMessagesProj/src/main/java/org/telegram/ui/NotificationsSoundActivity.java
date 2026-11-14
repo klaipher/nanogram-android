@@ -574,7 +574,6 @@ public class NotificationsSoundActivity extends BaseFragment implements ChatAtta
         }
         if (getMediaDataController().ringtoneDataStore.isLoaded() && selectedTone == null) {
             selectedTone = defaultTone;
-            selectedToneChanged = true;
         }
         updateRows();
     }

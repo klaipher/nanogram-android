@@ -4989,6 +4989,7 @@ public class NotificationsController extends BaseController implements Notificat
         FileLog.d("showExtraNotifications: passcode="+passcode+" waitingForPasscode=" + waitingForPasscode + " selfUserId=" + selfUserId + " useSummaryNotification=" + useSummaryNotification);
 
         int maxCount = 7;
+        boolean anyChildAlerts = false;
         LongSparseArray<Person> personCache = new LongSparseArray<>();
         for (int b = 0, size = sortedDialogs.size(); b < size; b++) {
             if (holders.size() >= maxCount) {
@@ -5765,7 +5766,19 @@ public class NotificationsController extends BaseController implements Notificat
             }
 
             if (Build.VERSION.SDK_INT >= 26) {
-                setNotificationChannel(mainNotification, builder, useSummaryNotification);
+                final boolean alerts = useSummaryNotification && !isSilent && (dialogKey.story
+                        ? chatType == TYPE_STORIES
+                        : chatType != TYPE_STORIES && dialogId == lastDialogId && topicId == lastTopicId);
+                if (alerts) {
+                    builder.setChannelId(mainNotification.getChannelId());
+                    builder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN);
+                    anyChildAlerts = true;
+                } else {
+                    setNotificationChannel(mainNotification, builder, useSummaryNotification);
+                    if (useSummaryNotification) {
+                        builder.setOnlyAlertOnce(true);
+                    }
+                }
             }
             FileLog.d("showExtraNotifications: holders.add " + dialogId);
             holders.add(new NotificationHolder(internalId, dialogId, dialogKey.story, topicId, name, user, chat, builder));
@@ -5775,6 +5788,11 @@ public class NotificationsController extends BaseController implements Notificat
         if (useSummaryNotification) {
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("show summary with id " + notificationId);
+            }
+            if (Build.VERSION.SDK_INT >= 26 && anyChildAlerts) {
+                notificationBuilder.setChannelId(OTHER_NOTIFICATIONS_CHANNEL);
+                notificationBuilder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN);
+                mainNotification = notificationBuilder.build();
             }
             try {
                 notificationManager.notify(notificationId, mainNotification);

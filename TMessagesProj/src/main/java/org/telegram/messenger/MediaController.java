@@ -861,24 +861,24 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
 
         public void rebuildPhoto(boolean highQuality) {
-            final Pair<Integer, Integer> orientation = AndroidUtilities.getImageOrientation(filterPath != null ? filterPath : path);
+            final int[] orientation = org.telegram.messenger.nanogram.NanogramPhotoCrop.sourceOrientation(this);
             final Bitmap.CompressFormat compressFormat = Bitmap.CompressFormat.JPEG;
-            final Bitmap bitmap = StoryEntry.getScaledBitmap(opts -> BitmapFactory.decodeFile(filterPath != null ? filterPath : path, opts), AndroidUtilities.getPhotoSize(highQuality), AndroidUtilities.getPhotoSize(highQuality), false, true);
+            Bitmap b = fullPaintPath != null ? null : org.telegram.messenger.nanogram.NanogramPhotoCrop.renderHighQualityCrop(this, AndroidUtilities.getPhotoSize(highQuality));
+            final Bitmap bitmap = b != null ? null : StoryEntry.getScaledBitmap(opts -> BitmapFactory.decodeFile(filterPath != null ? filterPath : path, opts), AndroidUtilities.getPhotoSize(highQuality), AndroidUtilities.getPhotoSize(highQuality), false, true);
             if (imagePath != null) {
                 new File(imagePath).delete(); imagePath = null;
             }
 
-            Bitmap b;
-            if (cropState != null) {
-                b = PhotoViewer.createCroppedBitmap(bitmap, cropState, new int[] { orientation.first, orientation.second }, true);
+            if (b == null && cropState != null) {
+                b = PhotoViewer.createCroppedBitmap(bitmap, cropState, orientation, true);
                 bitmap.recycle();
-            } else {
-                if (orientation.first != 0) {
+            } else if (b == null) {
+                if (orientation[0] != 0) {
                     Matrix matrix = new Matrix();
-                    matrix.postRotate(orientation.first);
-                    if (orientation.second == 1) {
+                    matrix.postRotate(orientation[0]);
+                    if (orientation[1] == 1) {
                         matrix.postScale(-1, 1);
-                    } else if (orientation.second == 2) {
+                    } else if (orientation[1] == 2) {
                         matrix.postScale(1, -1);
                     }
                     int width1 = bitmap.getWidth();
@@ -5718,6 +5718,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         private CountDownLatch waitingForFile;
         private MessagesStorage.IntCallback onFinishRunnable;
         private boolean isMusic;
+        private File downloadedFile;
 
         public MediaLoader(Context context, AccountInstance accountInstance, ArrayList<MessageObject> messages, MessagesStorage.IntCallback onFinish) {
             currentAccount = accountInstance;
@@ -5791,7 +5792,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                             if (cancelled) {
                                 break;
                             }
-                            if (!sourceFile.exists()) {
+                            File justDownloadedFile = downloadedFile;
+                            downloadedFile = null;
+                            if (justDownloadedFile != null && justDownloadedFile.exists()) {
+                                sourceFile = justDownloadedFile;
+                            } else if (!sourceFile.exists()) {
                                 sourceFile = FileLoader.getInstance(currentAccount.getCurrentAccount()).getPathToAttach(message.messageOwner, true);
                                 FileLog.d("saving file: correcting path from " + path + " to " + (sourceFile == null ? null : sourceFile.getAbsolutePath()));
                             }
@@ -6108,6 +6113,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             if (id == NotificationCenter.fileLoaded || id == NotificationCenter.fileLoadFailed) {
                 String fileName = (String) args[0];
                 if (loadingMessageObjects.remove(fileName) != null) {
+                    if (id == NotificationCenter.fileLoaded && args.length > 1 && args[1] instanceof File) {
+                        downloadedFile = (File) args[1];
+                    }
                     waitingForFile.countDown();
                 }
             } else if (id == NotificationCenter.fileLoadProgressChanged) {

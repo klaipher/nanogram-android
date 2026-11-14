@@ -911,6 +911,7 @@ public class LocationController extends BaseController implements NotificationCe
         req.limit = 100;
         getConnectionsManager().sendRequest(req, (response, error) -> {
             if (error != null) {
+                AndroidUtilities.runOnUIThread(() -> cacheRequests.delete(did));
                 return;
             }
             AndroidUtilities.runOnUIThread(() -> {
