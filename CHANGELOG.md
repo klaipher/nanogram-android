@@ -5,6 +5,13 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Release optimization settings (AND-OPT-2, AND-OPT-3)
+- AND-OPT-2: gram-wallet `[profile.release]` now `opt-level = 3`, `lto = "fat"` (was `"z"`, no LTO); codegen-units=1,
+  panic=abort, debug=false, incremental=false unchanged. Rust objects are native, so the app's ThinLTO never covered them.
+- AND-OPT-3: `-Wl,--pack-dyn-relocs=android` (APS2) for libtmessages and libtwidget; size only, API 23+ loaders, not relr.
+- AND-OPT-1 (generated baseline and startup profile) NOT done here: needs `Tools/dev/ng profile` on the emulator, a
+  build/run that this change set forbids. Run it and commit `src/main/generated/baselineProfiles/`.
+
 ### Build-system modernization (prebuild caching, Rust pin, ThinLTO cache)
 - ccache now also fronts FFmpeg, libvpx (make-time `CC=`/`CXX=` override, so configure output, config.h and vpx_config
   stay identical; the prebuild runs without CCACHE_BASEDIR so object bytes match a no-ccache build too) and dav1d (meson cross-file `c = ['ccache', clang]`); openh264 unchanged.
