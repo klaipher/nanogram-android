@@ -10,7 +10,7 @@ and submodules where they are shared; fork the rest into klaipher.
 | Repo | Role |
 |---|---|
 | `klaipher/nanogram-android` (private) | The app. Root commit = history-free import of upstream release 13.2.2 (7303), DrKLO/Telegram 21f7d109. |
-| `klaipher/tgcalls` (existing, shared with iOS/Mac) | Branch `nanogram-android` (starts at upstream `dev/android` 545f5ae). Shared fixes are ported with `tools/dev/tgcalls-port` like iOS/Mac. |
+| `klaipher/tgcalls` (existing, shared with iOS/Mac) | Historical: branch `nanogram-android` (started at upstream `dev/android` 545f5ae) and the `tgcalls-port` tool. Since 2026-11-14 all three apps use ONE branch, `nanogram-shared`; there is no port step (see AGENTS.md). |
 | `klaipher/tlottie`, `wallet-engine`, `media`, `jlatexmath-android`, `libprisma`, `twidget`, `widget-sandbox` (new forks) | Telegram-specific submodules we may patch, kept under our control. |
 | Canonical upstreams (FFmpeg, BoringSSL, abseil, libvpx, dav1d, openh264, opus/ogg/opusfile, libyuv, tdlib/td, wamr, boost-regex) | Pristine third-party code; pinned by commit. Same policy as iOS (td, libvpx, dav1d also upstream there). |
 
