@@ -93,8 +93,10 @@ import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.camera.CameraInfo;
 import org.telegram.messenger.camera.CameraSession;
 import org.telegram.messenger.camera.Size;
+import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.video.MP4Builder;
 import org.telegram.messenger.video.Mp4Movie;
+import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
@@ -785,7 +787,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (bothCameras) {
                 for (int a = 0; a < 2; ++a) {
                     if (camera2Sessions[a] == null) {
-                        camera2Sessions[a] = Camera2Session.create(a == 0, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                        camera2Sessions[a] = createRoundCamera2Session(a == 0);
                         if (camera2Sessions[a] != null) {
                             camera2Sessions[a].setRecordingVideo(true);
                             previewSize[a] = new Size(camera2Sessions[a].getPreviewWidth(), camera2Sessions[a].getPreviewHeight());
@@ -805,7 +807,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 if (camera2SessionCurrent == null) return;
             } else {
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = createRoundCamera2Session(isFrontface);
                 if (camera2SessionCurrent == null) return;
                 camera2SessionCurrent.setRecordingVideo(true);
                 previewSize[0] = new Size(camera2SessionCurrent.getPreviewWidth(), camera2SessionCurrent.getPreviewHeight());
@@ -1004,7 +1006,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                 videoEditedInfo.estimatedDuration = endTime - startTime;
                 videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                videoEditedInfo.bitrate = 1000000;
+                videoEditedInfo.bitrate = roundOutputBitrate();
                 if (videoEditedInfo.startTime > 0) {
                     videoEditedInfo.startTime *= 1000;
                 }
@@ -1178,7 +1180,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     camera2SessionCurrent = null;
                     camera2Sessions[isFrontface ? 1 : 0] = null;
                 }
-                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = Camera2Session.create(isFrontface, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize, MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize);
+                camera2SessionCurrent = camera2Sessions[isFrontface ? 0 : 1] = createRoundCamera2Session(isFrontface);
                 if (camera2SessionCurrent == null) {
                     legacyCameraSwitchAwaitingFrame = false;
                     logLegacyCameraSwitchStage("failed: Camera2Session.create returned null");
@@ -1514,6 +1516,50 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
     private Bitmap firstFrameThumb;
     private volatile int surfaceIndex;
+
+    private boolean roundQualityBoosted() {
+        return RoundVideoEncodingPolicy.boosted(!NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_QUALITY_OFF), SharedConfig.getDevicePerformanceClass());
+    }
+
+    private int roundOutputSize() {
+        return RoundVideoEncodingPolicy.size(MessagesController.getInstance(currentAccount).roundVideoSize, roundQualityBoosted());
+    }
+
+    private int roundOutputBitrate() {
+        final MessagesController controller = MessagesController.getInstance(currentAccount);
+        final boolean boosted = roundQualityBoosted();
+        return RoundVideoEncodingPolicy.bitrate(controller.roundVideoBitrate * 1024, controller.roundVideoSize, RoundVideoEncodingPolicy.size(controller.roundVideoSize, boosted), boosted);
+    }
+
+    private Camera2Session createRoundCamera2Session(boolean front) {
+        final int serverSize = MessagesController.getInstance(UserConfig.selectedAccount).roundVideoSize;
+        final boolean boosted = roundQualityBoosted();
+        final int request = RoundVideoEncodingPolicy.cameraRequestSize(RoundVideoEncodingPolicy.size(serverSize, boosted), boosted);
+        return Camera2Session.create(front, request, request, boosted ? serverSize : 0);
+    }
+
+    private static void applyRoundQualityHints(MediaCodec encoder, MediaFormat format) {
+        try {
+            final MediaCodecInfo.CodecCapabilities capabilities = encoder.getCodecInfo().getCapabilitiesForType("video/avc");
+            final MediaCodecInfo.CodecProfileLevel[] profileLevels = capabilities.profileLevels;
+            final int[] profiles = new int[profileLevels.length];
+            final int[] levels = new int[profileLevels.length];
+            for (int a = 0; a < profileLevels.length; a++) {
+                profiles[a] = profileLevels[a].profile;
+                levels[a] = profileLevels[a].level;
+            }
+            final int[] high = RoundVideoEncodingPolicy.pickHighProfile(profiles, levels);
+            if (high != null) {
+                format.setInteger(MediaFormat.KEY_PROFILE, high[0]);
+                format.setInteger(MediaFormat.KEY_LEVEL, high[1]);
+            }
+            if (capabilities.getEncoderCapabilities() != null && capabilities.getEncoderCapabilities().isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
+                format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
 
     public class CameraGLThread extends DispatchQueue {
 
@@ -2382,8 +2428,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             started = true;
-            int resolution = MessagesController.getInstance(currentAccount).roundVideoSize;
-            int bitrate = MessagesController.getInstance(currentAccount).roundVideoBitrate * 1024;
+            int resolution = roundOutputSize();
+            int bitrate = roundOutputBitrate();
             AndroidUtilities.runOnUIThread(() -> {
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 512);
             });
@@ -2861,9 +2907,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 videoEditedInfo.key = key;
                 videoEditedInfo.iv = iv;
                 videoEditedInfo.estimatedSize = Math.max(1, size);
-                videoEditedInfo.framerate = 25;
-                videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                 videoEditedInfo.originalPath = previewFile.getAbsolutePath();
                 setupVideoPlayer(previewFile);
                 videoEditedInfo.estimatedDuration = recordedTime;
@@ -2957,9 +3003,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         videoEditedInfo.notReadyYet = true;
                         videoEditedInfo.thumb = firstFrameThumb;
@@ -3093,7 +3139,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             long endTime = videoEditedInfo.endTime >= 0 ? videoEditedInfo.endTime : videoEditedInfo.estimatedDuration;
                             videoEditedInfo.estimatedDuration = endTime - startTime;
                             videoEditedInfo.estimatedSize = Math.max(1, (long) (size * (videoEditedInfo.estimatedDuration / totalDuration)));
-                            videoEditedInfo.bitrate = 1000000;
+                            videoEditedInfo.bitrate = roundOutputBitrate();
                             if (videoEditedInfo.startTime > 0) {
                                 videoEditedInfo.startTime *= 1000;
                             }
@@ -3109,9 +3155,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         videoEditedInfo.encryptedFile = encryptedFile;
                         videoEditedInfo.key = key;
                         videoEditedInfo.iv = iv;
-                        videoEditedInfo.framerate = 25;
-                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = 360;
-                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = 360;
+                        videoEditedInfo.framerate = RoundVideoEncodingPolicy.frameRate(25, roundQualityBoosted());
+                        videoEditedInfo.resultWidth = videoEditedInfo.originalWidth = roundOutputSize();
+                        videoEditedInfo.resultHeight = videoEditedInfo.originalHeight = roundOutputSize();
                         videoEditedInfo.originalPath = videoFile.getAbsolutePath();
                         final VideoEditedInfo info = videoEditedInfo;
                         if (send == ENCODER_SEND_SEND) {
@@ -3278,7 +3324,27 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
                 format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
 
-                videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                if (roundQualityBoosted()) {
+                    MediaFormat boostedFormat = MediaFormat.createVideoFormat(VIDEO_MIME_TYPE, videoWidth, videoHeight);
+                    boostedFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+                    boostedFormat.setInteger(MediaFormat.KEY_BIT_RATE, videoBitrate);
+                    boostedFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
+                    boostedFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
+                    applyRoundQualityHints(videoEncoder, boostedFormat);
+                    try {
+                        videoEncoder.configure(boostedFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                        try {
+                            videoEncoder.release();
+                        } catch (Throwable ignore) {
+                        }
+                        videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
+                        videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                    }
+                } else {
+                    videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                }
                 surface = videoEncoder.createInputSurface();
                 videoEncoder.start();
 
