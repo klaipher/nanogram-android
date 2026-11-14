@@ -10,6 +10,7 @@
                                  signed release APK -> update.json -> GitHub releases (see docs/nanogram/releases.md)
   ng signing init                create the release keystore in ~/.config/nanogram-android/signing
   ng check                       pre-push gate: unit tests + arm64 debug build
+  ng profile [--serial S]        regenerate the ART baseline + startup profile on the running emulator
   ng prune [--max-gb N] [--dry-run]
   ng metrics                     show recorded build timings and sizes
 
@@ -552,6 +553,56 @@ def cmd_check(_: argparse.Namespace) -> None:
     info("check ok")
 
 
+# ---------------------------------------------------------------- profile
+
+PROFILE_DIR = ROOT / "TMessagesProj_App" / "src" / "main" / "generated" / "baselineProfiles"
+PROFILE_HAND = ROOT / "TMessagesProj_App" / "src" / "main" / "baseline-prof.txt"
+
+
+def line_count(path: Path) -> int:
+    return sum(1 for line in path.read_text().splitlines() if line.strip() and not line.startswith("#")) if path.exists() else 0
+
+
+def cmd_profile(a: argparse.Namespace) -> None:
+    """Run the baselineprofile generator (:baselineprofile) against the running, logged-out emulator."""
+    disk_guard()
+    adb = shutil.which("adb") or str(sdk_root() / "platform-tools/adb")
+    env = base_env()
+    secret_env(env, release=False)
+    if a.serial:
+        env["ANDROID_SERIAL"] = a.serial
+    devices = subprocess.run([adb, "devices"], capture_output=True, text=True, env=env).stdout.splitlines()[1:]
+    online = [d.split()[0] for d in devices if d.strip().endswith("device")]
+    if not online:
+        die("no running emulator/device; start the AVD (nanogram-api36-16k) first")
+    if len(online) > 1 and not a.serial:
+        die(f"several devices ({', '.join(online)}); pass --serial")
+    env["ORG_GRADLE_PROJECT_nanogramBuildNumber"] = build_number(None)
+    env["ORG_GRADLE_PROJECT_nanogramAbis"] = "arm64"
+    pre = cmd_prebuild(argparse.Namespace(abis="arm64", force=False))
+    env["ORG_GRADLE_PROJECT_nanogramPrebuildDir"] = str(pre)
+    log = LOGS / "profile.log"
+    t0 = time.time()
+    rc = gradlew([":TMessagesProj_App:generateBaselineProfile", "-Pnanogram.baselineProfile=true"], env, log)
+    secs = time.time() - t0
+    record("profile" if rc == 0 else "profile-FAILED", secs, {})
+    if rc != 0:
+        die(f"profile generation failed (exit {rc}); log {log}")
+    # The plugin saves into src (saveInSrc); fall back to its build output if it did not.
+    if not (PROFILE_DIR / "baseline-prof.txt").exists():
+        found = sorted((ROOT / "TMessagesProj_App" / "build").rglob("baseline-prof.txt"), key=lambda p: p.stat().st_mtime)
+        found = [p for p in found if "generated" not in p.parts and "baselineProfile" in str(p)]
+        if not found:
+            die("generation finished but no baseline-prof.txt was produced")
+        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(found[-1], PROFILE_DIR / "baseline-prof.txt")
+    gen = line_count(PROFILE_DIR / "baseline-prof.txt")
+    startup = line_count(PROFILE_DIR / "startup-prof.txt")
+    hand = line_count(PROFILE_HAND)
+    info(f"generated baseline-prof.txt {gen} lines, startup-prof.txt {startup} lines, hand-written {hand} lines ({secs:.0f}s)")
+    info(f"review and commit {PROFILE_DIR.relative_to(ROOT)}")
+
+
 def dir_size(p: Path) -> int:
     total = 0
     for root, _, files in os.walk(p):
@@ -641,6 +692,9 @@ def main() -> None:
     p.add_argument("action", choices=["init"])
     p.set_defaults(fn=cmd_signing)
     sub.add_parser("check").set_defaults(fn=cmd_check)
+    p = sub.add_parser("profile")
+    p.add_argument("--serial", help="adb serial when several devices are connected")
+    p.set_defaults(fn=cmd_profile)
     p = sub.add_parser("prune")
     p.add_argument("--max-gb", type=float)
     p.add_argument("--dry-run", action="store_true")

@@ -30,6 +30,33 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 | Uncompressed, 16 KB-aligned native libraries | app `packaging.jniLibs`, `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES` | no extracted copy on the device, ready for 16 KB-page devices |
 | Shallow submodules | `ng setup` | pinned commits only |
 
+## Profiles (ART baseline profile, startup profile)
+
+Sideloaded APKs get no Play cloud profile, so without help every install starts interpreted and only becomes fast
+after background dexopt (hours to days). The APK therefore carries its own profile and installs it itself.
+
+| Piece | Where | Effect |
+|---|---|---|
+| Profile in the APK | AGP packs `assets/dexopt/baseline.prof` (+ `.profm`) from `TMessagesProj_App/src/main/baseline-prof.txt` and `src/main/generated/baselineProfiles/baseline-prof.txt` in release builds; R8 rewrites it to the obfuscated names | known-hot classes and methods are compiled ahead of time |
+| `androidx.profileinstaller` 1.4.1 | app dependency | hands the profile to ART on first launch (Android 9+; a few seconds after start), no Play Store needed |
+| Startup profile | `src/main/generated/baselineProfiles/startup-prof.txt`, `dexLayoutOptimization = true` | R8 groups startup classes at the front of the dex files: fewer page faults on cold start |
+| Hand-written rules | `TMessagesProj_App/src/main/baseline-prof.txt` (wildcards) | post-login paths the emulator cannot reach: chat list, open chat, images, storage, connection callbacks, emoji and theme drawing |
+| Generator | `:baselineprofile` (macrobenchmark `BaselineProfileRule`) | records the logged-out start: cold start, intro swipes, Start Messaging, permission dialogs ("Don't allow"), phone login, country picker, diagnostics screen |
+
+Regenerate with the AVD `nanogram-api36-16k` running (API 36, not logged in):
+
+```sh
+Tools/dev/ng profile            # -> TMessagesProj_App/src/main/generated/baselineProfiles/, prints the line counts
+git add TMessagesProj_App/src/main/generated   # review the diff first, then commit
+```
+
+`ng profile` builds the app's `nonMinifiedRelease` variant (arm64, release native code), installs it on the emulator,
+runs the generator and merges the result into `src/main`. The `:baselineprofile` module is only part of the build with
+`-Pnanogram.baselineProfile=true`, which `ng profile` sets, so normal builds neither configure nor build it. While it is
+set only the `afat` release family exists. Regenerate after large UI or startup changes and at upstream release syncs
+(class and method names move); the committed profile keeps working in between, stale rules are ignored. Check a release
+APK with `unzip -l <apk> | grep dexopt` (expect `baseline.prof` and `baseline.profm`).
+
 ## Measurements
 
 Apple M-series, 10 cores; arm64 debug unless noted. Recorded by `ng metrics` (`~/.cache/nanogram-android/logs/metrics.tsv`).

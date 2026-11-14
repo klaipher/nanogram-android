@@ -5,6 +5,23 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ART baseline profile and startup profile for sideloaded installs
+- Sideloaded APKs get no Play cloud profile, so installs ran interpreted until background dexopt. The release APK now
+  carries `assets/dexopt/baseline.prof` and the app depends on `androidx.profileinstaller` 1.4.1, which installs it on
+  first launch (Android 9+).
+- `androidx.baselineprofile` 1.5.0 plugin in the app (`mergeIntoMain`, `saveInSrc`, no generation during builds,
+  `dexLayoutOptimization` = R8 startup-profile dex layout). New `:baselineprofile` module (macrobenchmark 1.5.0,
+  uiautomator 2.4.1) with `BaselineProfileGenerator`: startup test (also the startup profile) and a logged-out flow test
+  (intro swipes, Start Messaging, "Don't allow" on permission dialogs, phone login, country picker, diagnostics screen).
+  The module is included only with `-Pnanogram.baselineProfile=true`; then only the afat release, nonMinifiedRelease and
+  benchmarkRelease variants are enabled (`beforeVariants`), and the nonMinified/benchmark source sets use the release
+  manifest.
+- `TMessagesProj_App/src/main/baseline-prof.txt`: hand-written wildcard rules for post-login paths (chat list and cells,
+  chat and message cells, ImageReceiver/ImageLoader, MessagesController/MessagesStorage reads, SQLite wrapper,
+  ConnectionsManager callbacks, NotificationCenter, RecyclerListView, emoji/theme drawing, TL deserialization).
+- `Tools/dev/ng profile` runs `:TMessagesProj_App:generateBaselineProfile` on the running emulator and prints line counts;
+  docs in docs/nanogram/build.md (Profiles). Not yet built or measured. Commit: see git log of nanogram/profiles.
+
 ### Native LTO for all code (ThinLTO)
 - voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose
   final flags apply to every C++ target there, so upstream builds all C++ (tgnet, tgcalls, WebRTC, the main library)

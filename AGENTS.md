@@ -33,7 +33,7 @@ better, never how.
 ## Commands
 
 Everything goes through `Tools/dev/ng` (`ng --help`): `setup`, `doctor`, `prebuild`, `build [debug|release]`,
-`install`, `signing init`, `check`, `prune`, `metrics`. Build design and measurements:
+`install`, `signing init`, `check`, `profile`, `prune`, `metrics`. Build design and measurements:
 [docs/nanogram/build.md](docs/nanogram/build.md).
 
 ## Layout
