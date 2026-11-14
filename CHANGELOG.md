@@ -5,6 +5,21 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### libprisma: klaipher/libprisma nanogram (c061944d), the single source for iOS, macOS and Android (W2.I3)
+- `TMessagesProj/jni/third_party/libprisma` moves from Telegram's 94640c63 to klaipher/libprisma branch `nanogram` at
+  c061944d (`.gitmodules` url and branch). The fork carries Android's regex budget (`BudgetedPosition`, `weak_ptr` guard,
+  `search()`/`searchesToGiveUp`) reconciled with upstream's per-byte budget and with iOS's `TokenizeStats`/`TokenizeLimits`.
+- Deleted `jni/prisma/libprisma/*` (the four override files) and `jni/prisma/generate.js`. `prisma/CMakeLists.txt` no
+  longer copies sources into the build dir with `configure_file`; the `prisma` target compiles the submodule's
+  `libprisma/{Highlight,LanguageTree,SyntaxHighlighter,TokenList}.cpp` directly. `BOOST_REGEX_MAX_BLOCKS=1536`, the
+  `PrismaIncludes.h` force-include, `-O2` and the JNI bridge are unchanged.
+- `prisma/generate_prisma_grammars.sh` runs the submodule's `generate.js` with `PRISMA_JOIN_ALIASES=1` (every Prism CSS
+  class stays in the alias field; plain `npm start` would give the iOS grammars.dat and drop them).
+- Build steps (main session): `Tools/dev/ng check`; regenerate the asset with `TMessagesProj/jni/prisma/generate_prisma_grammars.sh`
+  (needs npm and network for `npm ci`) and check that `src/main/assets/grammars.dat` is unchanged (the committed file is
+  the output of the old Android generator at the same grammar version; a diff means the pin brought newer grammar
+  components, in which case commit the regenerated file). Emulator: code blocks incl. the regex-budget and HTML-tag attack cases.
+
 ### rnnoise: klaipher/rnnoise nanogram (d2d79970), the single source for iOS, macOS and Android (W2.I3)
 - Deleted the in-tree 2018 copy `TMessagesProj/jni/voip/rnnoise` (22 files, all unmodified xiph blobs, see
   docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/xiph/rnnoise` =

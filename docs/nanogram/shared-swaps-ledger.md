@@ -17,3 +17,17 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
   and `init_rnnoise` need the `rnnoise_` rename (same three as iOS).
 - Behaviour change (owner decision 2026-11-14): voice-message noise suppression (`audio.c`: `rnnoise_create(NULL)`,
   `rnnoise_process_frame`) uses the v0.2 built-in model instead of the 2018 model. The C API used is unchanged.
+
+## libprisma (jni/prisma/libprisma/*, jni/prisma/generate.js, deleted) -> klaipher/libprisma `nanogram` (submodule jni/third_party/libprisma, c061944d)
+
+- Copy: four full-source override files (`Highlight.{cpp,h}`, `SyntaxHighlighter.{cpp,h}`: Android's `BudgetedPosition`,
+  `weak_ptr` guard, `search()` and `searchesToGiveUp` regex-budget work, copied over the submodule's files by CMake
+  `configure_file` at configure time) and `generate.js` (upstream plus `alias.join(' ')`).
+- Base: Telegram libprisma 94640c63 (the previous Android pin).
+- Carried: the fork (base 94640c63) has the Android budget/search changes reconciled with upstream's per-byte budget
+  (both limits kept) and with iOS's `TokenizeStats`/`TokenizeLimits`; identifiers present in both the old overrides and
+  the fork: `BudgetedPosition` (28 vs 27 occurrences, the difference is the reconciled iOS code), `weak_ptr` 2/2,
+  `searchesToGiveUp` 2/2, `SyntaxHighlighter::search` 1/1. `generate.js` alias joining is the fork's
+  `PRISMA_JOIN_ALIASES=1` (default output = upstream/iOS), which `generate_prisma_grammars.sh` now sets.
+- Not proven by blob identity (the files were hand-reconciled in the fork, wave A): the emulator attack cases (regex
+  budget, HTML-tag) are the arbiter.

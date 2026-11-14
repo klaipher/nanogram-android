@@ -9,18 +9,9 @@ if(NOT EXISTS "${BOOST_REGEX_SOURCE_DIR}/include/boost/regex.hpp")
     message(FATAL_ERROR "Initialize TMessagesProj/jni/third_party/boost-regex")
 endif()
 
-# Build against full source overrides without changing the submodule checkout.
-set(PRISMA_CORE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source")
-file(MAKE_DIRECTORY "${PRISMA_CORE_DIR}")
-foreach(source IN ITEMS Highlight.cpp Highlight.h LanguageTree.cpp LanguageTree.h
-        SyntaxHighlighter.cpp SyntaxHighlighter.h TokenList.cpp TokenList.h UnicodeEscapes.h)
-    configure_file("${PRISMA_SOURCE_DIR}/libprisma/${source}"
-        "${PRISMA_CORE_DIR}/${source}" COPYONLY)
-endforeach()
-foreach(source IN ITEMS Highlight.cpp Highlight.h SyntaxHighlighter.cpp SyntaxHighlighter.h)
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/libprisma/${source}"
-        "${PRISMA_CORE_DIR}/${source}" COPYONLY)
-endforeach()
+# The core is the klaipher/libprisma `nanogram` submodule as it is (the Android regex-budget and bounded-tokenizing
+# changes live in that single source, shared with iOS and macOS).
+set(PRISMA_CORE_DIR "${PRISMA_SOURCE_DIR}/libprisma")
 
 add_library(prisma STATIC
     "${PRISMA_CORE_DIR}/Highlight.cpp"
@@ -31,6 +22,7 @@ set_target_properties(prisma PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_features(prisma PUBLIC cxx_std_17)
 # BudgetedPosition is twice the size of a pointer, which makes a saved state up to half as big
 # again, and Boost's limit is on the blocks they fill: the limit in characters stays where it was.
+# Every build of libprisma defines it (the fork's CMake target does too).
 target_compile_definitions(prisma PRIVATE BOOST_REGEX_STANDALONE NDEBUG BOOST_REGEX_MAX_BLOCKS=1536)
 target_include_directories(prisma PUBLIC
     "${PRISMA_CORE_DIR}"

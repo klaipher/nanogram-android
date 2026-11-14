@@ -60,6 +60,7 @@
 [submodule "TMessagesProj/jni/third_party/libprisma"]
 	path = TMessagesProj/jni/third_party/libprisma
 	url = https://github.com/klaipher/libprisma.git
+	branch = nanogram
 [submodule "TMessagesProj/jni/twidget/twidget"]
 	path = TMessagesProj/jni/twidget/twidget
 	url = https://github.com/klaipher/twidget.git
