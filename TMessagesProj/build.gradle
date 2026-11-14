@@ -32,58 +32,60 @@ repositories {
     google()
 }
 
-configurations {
-    compile.exclude module: 'support-v4'
-}
-
 configurations.all {
     exclude group: 'com.google.firebase', module: 'firebase-core'
     exclude group: 'androidx.recyclerview', module: 'recyclerview'
 }
 
 dependencies {
-    implementation 'androidx.core:core:1.16.0'
+    implementation 'androidx.core:core:1.19.1'
+    // Used directly by our code; AGP 9 no longer aligns the compile classpath with runtime-only versions.
+    implementation 'androidx.collection:collection:1.7.0'
+    compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+    // compileSdk 37 removed FingerprintManager from the SDK; devices still provide it (passcode and wallet unlock on M-Q).
+    compileOnly files('libs/compile-only/android-36-fingerprint-stubs.jar')
     implementation 'androidx.palette:palette:1.0.0'
-    implementation 'androidx.exifinterface:exifinterface:1.3.6'
-    implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+    implementation 'androidx.exifinterface:exifinterface:1.4.2'
+    implementation 'androidx.dynamicanimation:dynamicanimation:1.1.0'
     implementation "androidx.sharetarget:sharetarget:1.2.0"
     implementation 'androidx.interpolator:interpolator:1.0.0'
     implementation 'androidx.biometric:biometric:1.1.0'
-    implementation 'androidx.webkit:webkit:1.14.0'
+    implementation 'androidx.webkit:webkit:1.15.0'
 
-    implementation 'com.google.android.gms:play-services-cast-framework:21.4.0'
-    implementation "androidx.mediarouter:mediarouter:1.7.0"
+    // Newest releases that still support minSdk 23 (upstream's floor); the next ones need minSdk 24.
+    implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
+    implementation "androidx.mediarouter:mediarouter:1.8.1"
     implementation 'com.google.zxing:core:3.5.4'
     implementation 'com.neovisionaries:nv-websocket-client:2.14'
 
-    implementation 'androidx.car.app:app:1.4.0'
-    implementation 'androidx.car.app:app-projected:1.4.0'
+    implementation 'androidx.car.app:app:1.7.0'
+    implementation 'androidx.car.app:app-projected:1.7.0'
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 
-    compileOnly 'org.checkerframework:checker-qual:2.5.2'
-    compileOnly 'org.checkerframework:checker-compat-qual:2.5.0'
+    compileOnly 'org.checkerframework:checker-qual:4.4.0'
+    compileOnly 'org.checkerframework:checker-compat-qual:2.5.6'
 
-    implementation 'com.google.android.gms:play-services-maps:18.1.0'
-    implementation 'com.google.android.gms:play-services-auth:20.4.0'
+    implementation 'com.google.android.gms:play-services-maps:20.0.0'
+    implementation 'com.google.android.gms:play-services-auth:21.6.0'
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
-    implementation 'com.google.android.gms:play-services-wearable:18.0.0'
-    implementation 'com.google.android.gms:play-services-location:21.0.1'
-    implementation 'com.google.android.gms:play-services-wallet:19.1.0'
+    implementation 'com.google.android.gms:play-services-wearable:20.0.1'
+    implementation 'com.google.android.gms:play-services-location:21.4.0'
+    implementation 'com.google.android.gms:play-services-wallet:19.5.0'
     implementation 'com.googlecode.mp4parser:isoparser:1.0.6'
     implementation 'com.stripe:stripe-android:2.0.2'
     implementation 'com.google.mlkit:language-id:17.0.6'
-    implementation 'com.android.billingclient:billing:8.0.0'
-    implementation 'com.google.code.gson:gson:2.11.0'
-    implementation 'com.google.guava:guava:31.1-android'
-    implementation 'com.google.android.play:integrity:1.3.0'
-    implementation 'com.google.android.gms:play-services-safetynet:18.0.1'
+    implementation 'com.android.billingclient:billing:9.1.0'
+    implementation 'com.google.code.gson:gson:2.15.0'
+    implementation 'com.google.guava:guava:33.8.0-android'
+    implementation 'com.google.android.play:integrity:1.6.0'
+    implementation 'com.google.android.gms:play-services-safetynet:18.1.0'
 
     implementation 'com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1'
     implementation 'com.google.android.gms:play-services-mlkit-image-labeling:16.0.8'
 
-    // Pinned: firebase-pnv alone would pull credentials 1.5.0 (passkeys were built on 1.6.0-alpha04).
-    implementation "androidx.credentials:credentials:1.6.0-alpha04"
-    implementation "androidx.credentials:credentials-play-services-auth:1.6.0-alpha04"
+    // Pinned: firebase-pnv alone would pull an older credentials release.
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
 
     // 34.19.0 is the last BoM for minSdk 23: BoM 35.x requires minSdk 24 (33.16.0 was the last for Android 5).
     api platform('com.google.firebase:firebase-bom:34.19.0')
@@ -109,15 +111,15 @@ dependencies {
 
 //    implementation 'com.google.mlkit:translate:17.0.3'
 
-    implementation 'com.google.android.recaptcha:recaptcha:18.7.1'
+    implementation 'com.google.android.recaptcha:recaptcha:18.8.0'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 
 android {
-    compileSdkVersion 36
-    buildToolsVersion '36.0.0'
-    ndkVersion "27.2.12479018"
+    compileSdk rootProject.ext.nanogramCompileSdk
+    buildToolsVersion rootProject.ext.nanogramBuildTools
+    ndkVersion rootProject.ext.nanogramNdk
 
 
     externalNativeBuild {
@@ -129,24 +131,23 @@ android {
     // IWidgetEngine: the widget engine's isolated process (WidgetEngineService).
     buildFeatures {
         aidl true
+        buildConfig true
     }
 
-    lintOptions {
-        disable 'MissingTranslation'
-        disable 'ExtraTranslation'
-        disable 'BlockedPrivateApi'
+    lint {
+        disable += ['MissingTranslation', 'ExtraTranslation', 'BlockedPrivateApi']
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
 
         coreLibraryDesugaringEnabled true
     }
 
     defaultConfig {
-        minSdkVersion 23
-        targetSdkVersion 36
+        minSdk 23
+        targetSdk 36
 
         // Own api_id/api_hash come from Tools/dev/ng (environment); plain Gradle builds keep upstream's public values.
         buildConfigField "int", "NANOGRAM_API_ID", (findProperty('nanogramApiId') ?: '4').toString()
@@ -158,8 +159,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                version '3.22.1'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON',
+                version rootProject.ext.nanogramCmake
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                         "-DNANOGRAM_CCACHE=${providers.environmentVariable('NANOGRAM_CCACHE').getOrElse('')}",
                         "-DNANOGRAM_PREBUILD_DIR=${findProperty('nanogramPrebuildDir') ?: ''}"
             }

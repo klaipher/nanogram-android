@@ -6,11 +6,11 @@ buildscript {
         maven { url 'https://developer.huawei.com/repo/' }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.13.2'
-        classpath 'com.google.gms:google-services:4.5.0'
-        classpath 'com.huawei.agconnect:agcp:1.9.1.301'
+        classpath 'com.android.tools.build:gradle:9.5.1'
+        classpath 'com.google.gms:google-services:4.6.0'
+        classpath 'com.huawei.agconnect:agcp:1.9.6.300'
         classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.8'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21"
     }
 }
 repositories {
@@ -18,6 +18,13 @@ repositories {
 }
 
 // Nanogram: arm64-v8a only by default (like Apple-Silicon-only on the Mac); -PnanogramAbis=all builds every ABI.
+// Toolchain pins shared with Tools/dev/ng (Tools/dev/toolchain.properties is the single source).
+def nanogramToolchain = new Properties()
+file('Tools/dev/toolchain.properties').withInputStream { nanogramToolchain.load(it) }
+ext.nanogramCompileSdk = nanogramToolchain.getProperty('compileSdk').tokenize('.')[0].toInteger()
+ext.nanogramBuildTools = nanogramToolchain.getProperty('buildTools')
+ext.nanogramNdk = nanogramToolchain.getProperty('ndk')
+ext.nanogramCmake = nanogramToolchain.getProperty('cmake')
 ext.nanogramAbiFilters = (findProperty('nanogramAbis') ?: 'arm64') == 'all' ?
         ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'] : ['arm64-v8a']
 
@@ -45,7 +52,7 @@ subprojects {
                     def manifestFile = file("${project.projectDir}/src/main/AndroidManifest.xml")
 
                     if (manifestFile.exists()) {
-                        def manifest = new XmlSlurper().parse(manifestFile)
+                        def manifest = new groovy.xml.XmlSlurper().parse(manifestFile)
                         def manifestPackage = manifest.@package.text()
 
                         if (manifestPackage) {

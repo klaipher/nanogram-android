@@ -32,7 +32,7 @@ import javax.crypto.Mac;
 public final class FingerprintManagerCompatApi23 {
 
     private static FingerprintManager getFingerprintManager(Context ctx) {
-        return (FingerprintManager) ctx.getSystemService(Context.FINGERPRINT_SERVICE);
+        return (FingerprintManager) ctx.getSystemService("fingerprint");
     }
 
     public static boolean hasEnrolledFingerprints(Context context) {

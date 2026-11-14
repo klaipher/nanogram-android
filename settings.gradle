@@ -18,4 +18,15 @@ dependencyResolutionManagement {
 }
 
 gradle.ext.androidxMediaModulePrefix = 'TMessagesProj_Modules:media3:media-'
-apply from: file("TMessagesProj_Modules/media/core_settings.gradle")
+// Nanogram: only the 11 androidx/media modules the app uses (upstream includes all 40 through core_settings.gradle).
+gradle.ext.androidxMediaSettingsDir = file('TMessagesProj_Modules/media').canonicalPath
+[
+    'lib-common': 'common', 'lib-container': 'container', 'lib-database': 'database',
+    'lib-datasource': 'datasource', 'lib-decoder': 'decoder', 'lib-extractor': 'extractor',
+    'lib-exoplayer': 'exoplayer', 'lib-exoplayer-dash': 'exoplayer_dash', 'lib-exoplayer-hls': 'exoplayer_hls',
+    'lib-decoder-ffmpeg': 'decoder_ffmpeg', 'lib-session': 'session',
+].each { name, dir ->
+    def path = ':' + gradle.ext.androidxMediaModulePrefix + name
+    include path
+    project(path).projectDir = file("TMessagesProj_Modules/media/libraries/${dir}")
+}

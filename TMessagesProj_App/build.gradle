@@ -6,10 +6,6 @@ repositories {
     google()
 }
 
-configurations {
-    compile.exclude module: 'support-v4'
-}
-
 configurations.all {
     exclude group: 'com.google.firebase', module: 'firebase-core'
     exclude group: 'androidx.recyclerview', module: 'recyclerview'
@@ -22,21 +18,22 @@ dependencies {
 }
 
 android {
-    compileSdkVersion 36
-    buildToolsVersion '36.0.0'
+    compileSdk rootProject.ext.nanogramCompileSdk
+    buildToolsVersion rootProject.ext.nanogramBuildTools
+    // The app strips native libraries with this NDK's llvm-strip.
+    ndkVersion rootProject.ext.nanogramNdk
 
     defaultConfig.applicationId = APP_PACKAGE
 
 
-    lintOptions {
-        disable 'MissingTranslation'
-        disable 'ExtraTranslation'
-        disable 'BlockedPrivateApi'
+    lint {
+        disable += ['MissingTranslation', 'ExtraTranslation', 'BlockedPrivateApi']
+        checkReleaseBuilds = false
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
 
         coreLibraryDesugaringEnabled true
     }
@@ -64,7 +61,7 @@ android {
         }
     }
 
-    packagingOptions {
+    packaging {
         jniLibs {
             // Nanogram: native libraries stay uncompressed and page-aligned and load straight from the APK:
             // no second extracted copy on the device and faster first start, at the cost of a larger APK download.
@@ -121,15 +118,12 @@ android {
         manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
     }
 
-    flavorDimensions "minApi"
+    flavorDimensions = ["minApi"]
 
     productFlavors {
         bundleAfat {
             ndk {
                 abiFilters(*rootProject.ext.nanogramAbiFilters)
-            }
-            ext {
-                abiVersionCode = 1
             }
             buildConfigField "boolean", "BUNDLE", "true"
         }
@@ -146,55 +140,53 @@ android {
             sourceSets.standalone {
                 manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_standalone.xml'
             }
-            ext {
-                abiVersionCode = 9
-            }
             buildConfigField "boolean", "BUNDLE", "false"
         }
     }
 
     defaultConfig.versionCode = Integer.parseInt(APP_VERSION_CODE)
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            outputFileName = "app.apk"
-            output.versionCodeOverride = defaultConfig.versionCode * 10 + variant.productFlavors.get(0).abiVersionCode
-        }
-    }
-
-    variantFilter { variant ->
-        def names = variant.flavors*.name
-        if (variant.buildType.name != "release" && !names.contains("afat")) {
-            setIgnore(true)
-        }
-    }
-
     defaultConfig {
-        minSdkVersion 23
-        targetSdkVersion 36
+        minSdk 23
+        targetSdk 36
         versionName APP_VERSION_NAME
-        ndkVersion "27.2.12479018"
 
         multiDexEnabled true
 
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
-        externalNativeBuild {
-            cmake {
-                version '3.22.1'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
-                targets 'tmessages.49', 'twidget'
-            }
-        }
     }
 
     buildFeatures {
         buildConfig = true
     }
     namespace 'org.telegram.messenger.regular'
+}
 
-    lintOptions {
-        checkReleaseBuilds false
+// Upstream's versionCode is APP_VERSION_CODE * 10 + ABI digit. Nanogram keeps the ABI digit (the app reads it) and
+// replaces the base with minutes since 2020-01-01 UTC of our build number (YYYYMMDDHHMM), so every build updates
+// the previous one while the marketing version follows upstream.
+def nanogramAbiDigit = [afat: 9, bundleAfat: 1]
+def nanogramBuildNumber = findProperty('nanogramBuildNumber')
+def nanogramVersionBase = { ->
+    if (nanogramBuildNumber == null) {
+        return Integer.parseInt(APP_VERSION_CODE)
+    }
+    def t = java.time.LocalDateTime.parse(nanogramBuildNumber.toString(), java.time.format.DateTimeFormatter.ofPattern('yyyyMMddHHmm'))
+    return (int) java.time.Duration.between(java.time.LocalDateTime.of(2020, 1, 1, 0, 0), t).toMinutes()
+}
+
+androidComponents {
+    beforeVariants(selector().all()) { variant ->
+        def flavor = variant.productFlavors.find { it.first == 'minApi' }?.second
+        if (variant.buildType != 'release' && flavor != 'afat') {
+            variant.enable = false
+        }
+    }
+    onVariants(selector().all()) { variant ->
+        def flavor = variant.productFlavors.find { it.first == 'minApi' }?.second
+        def code = nanogramVersionBase() * 10 + (nanogramAbiDigit[flavor] ?: 9)
+        variant.outputs.each { it.versionCode.set(code) }
     }
 }
 

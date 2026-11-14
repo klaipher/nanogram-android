@@ -49,12 +49,14 @@ export RUSTC
 
 if [ -n "$rustup_toolchain" ]; then
   missing_targets=
-  for target in \
-    aarch64-linux-android \
-    armv7-linux-androideabi \
-    i686-linux-android \
-    x86_64-linux-android
-  do
+  for abi in $ABIS; do
+    case "$abi" in
+      arm64-v8a) target=aarch64-linux-android ;;
+      armeabi-v7a) target=armv7-linux-androideabi ;;
+      x86) target=i686-linux-android ;;
+      x86_64) target=x86_64-linux-android ;;
+      *) echo "error: unsupported ABI $abi" >&2; exit 1 ;;
+    esac
     if ! rustup target list --toolchain "$rustup_toolchain" --installed | grep -qx "$target"; then
       missing_targets="$missing_targets $target"
     fi

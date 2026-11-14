@@ -103,6 +103,9 @@ def base_env() -> dict[str, str]:
         die(f"JDK {TC.get('jdk', '21')} not found: brew install openjdk@{TC.get('jdk', '21')}")
     env["JAVA_HOME"] = str(jh)
     env["ANDROID_HOME"] = str(sdk_root())
+    for extra in ("/opt/homebrew/opt/rustup/bin", str(HOME / ".cargo/bin")):
+        if Path(extra).is_dir() and extra not in env.get("PATH", ""):
+            env["PATH"] = extra + os.pathsep + env.get("PATH", "")
     env.pop("ANDROID_SDK_ROOT", None)
     # ccache for every native compile (CMake picks it up through NANOGRAM_CCACHE, see jni/CMakeLists.txt).
     ccache = shutil.which("ccache")
@@ -296,6 +299,10 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
         "INCLUDE_DIR": str(tmp / "include"),
         "PKGCONFIG_DIR": str(tmp / "pkgconfig"),
     })
+    if env.get("NANOGRAM_CCACHE"):
+        # CMake-based libraries (BoringSSL, td, tlottie, openh264, wamr) reuse earlier compiles.
+        env["CMAKE_C_COMPILER_LAUNCHER"] = env["NANOGRAM_CCACHE"]
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = env["NANOGRAM_CCACHE"]
     t0 = time.time()
     log = LOGS / f"prebuild-{dest.name}.log"
     info(f"building native prebuilts for {' '.join(abis)} (log {log})")
@@ -306,6 +313,8 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
     subprocess.call(["git", "checkout", "-q", "--", str(env_txt)], cwd=ROOT, stderr=subprocess.DEVNULL)
     if rc != 0:
         die(f"prebuild failed (exit {rc}); see {log}")
+    # The scripts' scratch tree (about 1 GB) is not needed once the archives are in the cache.
+    shutil.rmtree(PREBUILD_SRC / "build", ignore_errors=True)
     (tmp / "COMPLETE").write_text(json.dumps({"abis": abis, "ndk": TC["ndk"], "seconds": round(time.time() - t0)}))
     shutil.rmtree(dest, ignore_errors=True)
     tmp.rename(dest)

@@ -144,7 +144,7 @@ public final class GramWalletStorageAuth {
         // activity ViewModel with BotBiometry. No Cipher crosses the framework/OEM boundary.
         @SuppressWarnings("deprecation")
         private void fingerprints() {
-            FingerprintManager manager = (FingerprintManager) activity.getSystemService(Context.FINGERPRINT_SERVICE);
+            FingerprintManager manager = (FingerprintManager) activity.getSystemService("fingerprint");
             if (manager == null || !manager.isHardwareDetected() || !manager.hasEnrolledFingerprints()) {
                 credentials();
                 return;
