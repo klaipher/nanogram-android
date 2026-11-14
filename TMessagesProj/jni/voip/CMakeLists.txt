@@ -1697,7 +1697,6 @@ target_include_directories(voipandroid PUBLIC
         voip
         tgcalls
         tgcalls/tgcalls
-        rlottie/src/lottie
         third_party/boringssl/include
         openssl/include
         voip/webrtc
