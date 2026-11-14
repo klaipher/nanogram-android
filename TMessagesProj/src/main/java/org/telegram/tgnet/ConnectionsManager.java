@@ -966,17 +966,23 @@ public class ConnectionsManager extends BaseController {
                         FileLog.d("start mozilla txt task");
                     }
                     MozillaDnsLoadTask task = new MozillaDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
-                    FileLog.d("9. currentTask = mozilla");
-                    currentTask = task;
+                    try {
+                        task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
+                        currentTask = task;
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                    }
                 } else {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.d("start google txt task");
                     }
                     GoogleDnsLoadTask task = new GoogleDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
-                    FileLog.d("11. currentTask = dnstxt");
-                    currentTask = task;
+                    try {
+                        task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
+                        currentTask = task;
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                    }
                 }
             });
         });
@@ -1440,9 +1446,12 @@ public class ConnectionsManager extends BaseController {
                         FileLog.d("start mozilla task");
                     }
                     MozillaDnsLoadTask task = new MozillaDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
-                    FileLog.d("4. currentTask = mozilla");
-                    currentTask = task;
+                    try {
+                        task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
+                        currentTask = task;
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                    }
                 }
             });
         }
