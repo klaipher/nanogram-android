@@ -4231,10 +4231,9 @@ public class AndroidUtilities {
     }
 
     public static boolean copyFile(InputStream sourceFile, OutputStream out) throws IOException {
-        byte[] buf = new byte[4096];
+        byte[] buf = new byte[128 * 1024];
         int len;
         while ((len = sourceFile.read(buf)) > 0) {
-            Thread.yield();
             out.write(buf, 0, len);
         }
         out.close();
