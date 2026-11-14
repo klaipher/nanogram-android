@@ -659,6 +659,15 @@ public class VideoSeekPreviewImage extends View implements NotificationCenter.No
         }
     }
 
+    public void releaseScratchBitmap() {
+        Utilities.globalQueue.postRunnable(() -> {
+            if (scratchBitmap != null) {
+                scratchBitmap.recycle();
+                scratchBitmap = null;
+            }
+        });
+    }
+
     public void close() {
         if (loadRunnable != null) {
             Utilities.globalQueue.cancelRunnable(loadRunnable);
