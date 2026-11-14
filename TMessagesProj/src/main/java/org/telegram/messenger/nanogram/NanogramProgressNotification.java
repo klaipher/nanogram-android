@@ -15,11 +15,19 @@ import org.telegram.messenger.R;
  */
 public final class NanogramProgressNotification {
 
+    // Build.VERSION_CODES_FULL.BAKLAVA_1 (36.1), spelled out so the JVM tests do not need the constant.
+    private static final int PROMOTION_MIN_SDK_FULL = 36 * 100000 + 1;
+
     private NanogramProgressNotification() {
     }
 
     public static boolean isActive() {
         return Build.VERSION.SDK_INT >= 36 && NanogramSystemFlags.isEnabled(NanogramSystemFlags.PROGRESS_NOTIFICATIONS);
+    }
+
+    /** setRequestPromotedOngoing arrived in API 36.1; Android 16.0 gets the progress style without promotion. */
+    static boolean supportsPromotion(int sdkIntFull) {
+        return sdkIntFull >= PROMOTION_MIN_SDK_FULL;
     }
 
     public static int smallIcon(int fallback) {
@@ -55,7 +63,9 @@ public final class NanogramProgressNotification {
                     .addProgressSegment(new Notification.ProgressStyle.Segment(100))
                     .setProgress(percent)
                     .setProgressIndeterminate(indeterminate));
-            builder.setRequestPromotedOngoing(true);
+            if (supportsPromotion(Build.VERSION.SDK_INT_FULL)) {
+                builder.setRequestPromotedOngoing(true);
+            }
             if (!indeterminate) {
                 builder.setShortCriticalText(shortText(percent));
             }
