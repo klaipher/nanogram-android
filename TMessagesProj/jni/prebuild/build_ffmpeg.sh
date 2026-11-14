@@ -319,6 +319,8 @@ build_ffmpeg_for_abi() {
         --disable-avfilter
         --disable-network
         --disable-autodetect
+        # FFmpeg 9 builds an opt-in swscale backend with generated NEON kernels (host tool, only used with SWS_UNSTABLE).
+        --disable-unstable
         --disable-everything
         --enable-avcodec
         --enable-avformat
