@@ -76,3 +76,30 @@ nothing is lost. The manifest of sources is `shared/shared-libraries.json`.
 - Android's `assets/WidgetSandbox/*` bundles and `manifest.txt` are therefore still exactly the bundles of the pinned
   widget-sandbox (`packages/desktop/WidgetJS/*` hashes equal the assets, which equal the manifest): no regeneration needed.
   Both QuickJS trees use bytecode version 29, so the committed `.qbc` files stay valid.
+
+## tgcalls (submodule jni/tgcalls, branch nanogram-android 545f5ae) -> klaipher/tgcalls `nanogram-shared` (2a5daa0f)
+
+- Nothing in the Android line is lost: the shared head is the merge of 545f5ae into the iOS/macOS line (`git merge-base
+  --is-ancestor 545f5ae 2a5daa0` holds in the fork). Android-only code (`platform/android/**`, the renegotiation logic of
+  ea0f24e) is kept as is.
+- Android CMake: `tools/check_android_cmake.sh` (fork) against `voip/CMakeLists.txt` lists only the three host tests
+  (`v2/ContentNegotiationTest.cpp`, `v2/MtProtoDtlsTransportTest.cpp`, `v2/SignalingSctpOptionsTest.cpp`).
+- JNI bridge `org_telegram_messenger_voip_Instance.cpp`: source compatible with the merged `Instance.h` (const
+  `EncryptionKey::value` accepts the moved non-const array; `audioLevelsUpdated(float,float)` kept). No edit.
+- `voip/ReferenceCoreEmbedded.cpp` is regenerated with the fork's `tools/build_wasm_core.sh` (build step).
+
+## WebRTC (jni/voip/webrtc, 4,267 files, and src/main/java/org/webrtc, 173 files) -> klaipher/webrtc `nanogram` (fa0b3c5f)
+
+- C++: 4,090 files blob-identical in the fork; 92 generated JNI headers identical under `nanogram/android-generated`; 7 not
+  carried (generated `registered_field_trials.h`, produced at build time; six protobuf outputs no compiled file includes);
+  78 differ, each ledgered row by row in the fork (ledger-webrtc-fork.md section 5). The Android-only trees (legacy audio
+  device, iSAC, `common_types.h`, 143 files) were added to the fork identical.
+- Java: 173 of 173 files blob-identical in the four fork source directories used by Gradle. One extra upstream class
+  (`EglThread`) appears.
+- Dependencies: abseil (2065f4de, the pin Android already had), libsrtp v2.5.0 (a566a9cf) and crc32c (21fc8ef3) are the
+  fork's nested submodules; pffft (11 files), rnnoise-vad (7) and jni_zero (30) are blob-identical to the fork's
+  `third_party/` copies; libevent (Chromium snapshot, 40 files; 20 identical, 19 differ only by removed `HAVE_CONFIG_H` guards,
+  `config.h` = the fork's `android/config.h`) and usrsctp (61 unreferenced files) are dropped (stdlib task queue; nothing
+  includes usrsctp).
+- Config glue the app keeps: `voip/crc32c_config/crc32c/crc32c_config.h`, include shims and the field-trials generation in
+  `voip/CMakeLists.txt`.

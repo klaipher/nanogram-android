@@ -42,7 +42,9 @@ Everything goes through `Tools/dev/ng` (`ng --help`): `setup`, `doctor`, `prebui
 ## Layout
 
 - `TMessagesProj/` — the app library: Java UI and logic (`src/main/java/org/telegram`), native code (`jni/`: tgnet,
-  voip/tgcalls, tlottie, sqlite, wallet; prebuilt static libraries in `jni/prebuild`).
+  voip/tgcalls, tlottie, sqlite, wallet; prebuilt static libraries in `jni/prebuild`). WebRTC (C++ and `org.webrtc` Java) is the
+  submodule `jni/voip/webrtc` (klaipher/webrtc `nanogram`, shared with iOS/macOS); its nested abseil, libsrtp and crc32c
+  are the only copies of those libraries.
 - `TMessagesProj_App/` — the application module we ship (`afat` flavor, arm64 by default).
 - `TMessagesProj_Modules/media` — androidx/media fork (submodule).
 - `buildSrc/` — Gradle plugins that generate strings, TL schema code and assets.

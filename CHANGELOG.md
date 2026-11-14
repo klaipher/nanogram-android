@@ -5,6 +5,16 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Cleanup after the tgcalls and WebRTC swaps (W6)
+- Dead-name grep over the repository (tg_owt, nanogram-security-fixes, nanogram-mac, telegram-ios-dev, tgcalls-port,
+  usrsctp, libevent, jni_zero, `voip/rnnoise`, `voip/third_party`, `third_party/{absl,libsrtp,pffft,rnnoise}`): the only hits
+  left are history (this file, the bootstrap plan, `shared-swaps-ledger.md`) and the live paths under `jni/voip/webrtc/third_party`
+  and `jni/third_party/xiph/rnnoise`. The tgcalls fork branch `nanogram-android` appears only as the historical source of 545f5ae.
+- `NANOGRAM-CHANGES.md`: the old "WebRTC" row (`Candidate::set_type`) became "WebRTC source" and "WebRTC dependencies"; the rnnoise
+  row no longer says `jni/third_party/rnnoise` is kept. `AGENTS.md` layout names the WebRTC submodule. The shared manifest
+  (`shared/shared-libraries.json`) must list webrtc fa0b3c5f once, with abseil, libsrtp and crc32c as its nested pins and the
+  Android `absl` path removed; `shared/` is not checked out here, the main session updates nanogram-deps.
+
 ### WebRTC Java: org.webrtc from the fork, in-app copy deleted (W5.5)
 - Deleted `TMessagesProj/src/main/java/org/webrtc` (173 files). `TMessagesProj/build.gradle` adds the fork's Java directories
   as `java.srcDirs` of the `main` source set: `jni/voip/webrtc/sdk/android/api`, `sdk/android/src/java`,
