@@ -33,6 +33,7 @@ import androidx.annotation.NonNull;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AudioInputPreference;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
@@ -83,6 +84,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
     private final FlashViews.ImageViewInvertable switchCameraButton;
     private final FlashViews.ImageViewInvertable flashButton;
     private final RoundLensButton lensButton;
+    private final RecorderMicSwitcher.Chip micButton;
     private final ImageView muteImageView;
     private final FlashViews flashViews;
     private final int[] screenPosition = new int[2];
@@ -267,6 +269,9 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         buttonsLayout.addView(lensButton, LayoutHelper.createLinear(44, 44));
         lensButton.setOnClickListener(view -> toggleLens());
 
+        micButton = new RecorderMicSwitcher.Chip(context, resourcesProvider);
+        buttonsLayout.addView(micButton, LayoutHelper.createLinear(44, 44));
+
         buttonIconSize = dp(isNewDesign ? 24 : 28);
         switchCameraDrawable = new RLottieDrawable(
                 R.raw.roundcamera_flip,
@@ -282,10 +287,12 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
             flashViews.add(switchCameraButton);
             flashViews.add(flashButton);
             flashViews.add(lensButton);
+            flashViews.add(micButton);
         } else if (resourcesProvider != null && !resourcesProvider.isDark()) {
             switchCameraButton.setInvert(0.6f);
             flashButton.setInvert(0.6f);
             lensButton.setInvert(0.6f);
+            micButton.setInvert(0.6f);
         }
 
         muteImageView = new ImageView(context);
@@ -340,6 +347,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
 
     @Override
     public void destroy(boolean async) {
+        micButton.getSwitcher().reset();
         setRecordingUiFrameClockActive(false);
         cancelCameraFlipAnimation();
         if (zoomResetAnimator != null) zoomResetAnimator.cancel();
@@ -573,6 +581,7 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
         if (isSendFinishing()) return;
         // Refused once the result was delivered: the recording is being sent.
         if (session == null || !session.cancel()) return;
+        micButton.getSwitcher().reset();
         pendingSend = null;
         postRecordStopped(byGesture ? 0 : 6);
         if (upload != null) upload.release(true);
@@ -763,9 +772,12 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                     || info.getState() == RoundVideoSession.State.RELEASED) {
                 cancelCameraFlipAnimation();
                 startHeavyOperations();
+                micButton.getSwitcher().reset();
             }
             if (previous == RoundVideoSession.State.RECORDING
                     && info.getState() == RoundVideoSession.State.PAUSING) {
+                // The preview plays over the normal media route, not the call-quality link of a switched microphone.
+                AudioInputPreference.releaseSwitchRoute();
                 postRecordStopped(2);
             }
             updateButtons();
@@ -1065,6 +1077,10 @@ public final class InstantCameraView2 extends InstantCameraViewBase {
                     LocaleController.formatString(R.string.AccDescrRoundLens, label)
             );
         }
+        micButton.setBulletinContainer(this);
+        micButton.setControlsEnabled(stateInfo != null
+                && !cameraFlipInProgress
+                && (stateInfo.canControlCamera() || stateInfo.getState() == RoundVideoSession.State.STARTING));
         updateFlashIcon();
     }
 

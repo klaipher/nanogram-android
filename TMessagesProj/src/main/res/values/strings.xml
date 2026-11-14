@@ -11724,6 +11724,14 @@
     <string name="NanogramOnDeviceTranscriptionNoMic">Allow the microphone for Telegram to turn messages into text on your phone.</string>
     <string name="NanogramRecorderMicSwitch">Microphone switch while recording</string>
     <string name="NanogramRecorderMicSwitchInfo">Adds a button to round video and voice message recorders that switches between the phone microphone and your headset\'s microphone while you record. Handy when you step away from the phone. Bluetooth microphones record in lower quality.</string>
+    <string name="NanogramMicPhoneShort">Phone</string>
+    <string name="NanogramMicHeadsetShort">Headset</string>
+    <string name="NanogramMicBluetoothShort">Bluetooth</string>
+    <string name="AccDescrMicSource">Microphone: %1$s</string>
+    <string name="NanogramMicSwitchFailed">Couldn\'t switch the microphone</string>
+    <string name="NanogramMicSwitchAfterPause">The microphone will switch after you pause</string>
+    <string name="NanogramVoiceEnhancement">Voice enhancement</string>
+    <string name="NanogramVoiceEnhancementInfo">Cleans up voice messages and round videos: less noise and room echo, more even volume. With a Bluetooth headset it also restores some of the sound the headset loses. Uses a little more battery while recording.</string>
     <string name="NanogramFeaturesCamera">Camera</string>
     <string name="NanogramRoundWideAngle">Wide-angle round videos</string>
     <string name="NanogramRoundWideAngleInfo">Round videos start at the widest view of the front and back cameras, and a button switches between wide and normal while you record. Needs a phone with a wide-angle camera.</string>

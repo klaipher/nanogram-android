@@ -354,10 +354,15 @@ int initRecorder(const char *path, opus_int32 sampleRate) {
     _packet = malloc(max_frame_bytes);
     
     result = opus_encoder_ctl(_encoder, OPUS_SET_BITRATE(bitrate));
-    //result = opus_encoder_ctl(_encoder, OPUS_SET_COMPLEXITY(10));
     if (result != OPUS_OK) {
         LOGE("Error OPUS_SET_BITRATE returned: %s", opus_strerror(result));
         return 0;
+    }
+
+    // The fixed-point build only analyses the signal (speech and bandwidth detection) at complexity 10.
+    result = opus_encoder_ctl(_encoder, OPUS_SET_COMPLEXITY(10));
+    if (result != OPUS_OK) {
+        LOGE("Warning OPUS_SET_COMPLEXITY returned: %s", opus_strerror(result));
     }
     
 #ifdef OPUS_SET_LSB_DEPTH
@@ -1335,11 +1340,15 @@ static AudioRecorderContext *createAudioRecorderContext(const char *path, opus_i
     }
 
     result = opus_encoder_ctl(recorder->encoder, OPUS_SET_BITRATE(bitrate));
-    //result = opus_encoder_ctl(_encoder, OPUS_SET_COMPLEXITY(10));
     if (result != OPUS_OK) {
         LOGE("Error OPUS_SET_BITRATE returned: %s", opus_strerror(result));
         destroyAudioRecorderContext(recorder);
         return NULL;
+    }
+
+    result = opus_encoder_ctl(recorder->encoder, OPUS_SET_COMPLEXITY(10));
+    if (result != OPUS_OK) {
+        LOGE("Warning OPUS_SET_COMPLEXITY returned: %s", opus_strerror(result));
     }
 
 #ifdef OPUS_SET_LSB_DEPTH
@@ -1934,6 +1943,38 @@ JNIEXPORT jlong Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nFlus
 ) {
     AudioRecorderContext *recorder = (AudioRecorderContext *) (intptr_t) handle;
     return flushAudioRecorderContext(recorder);
+}
+
+JNIEXPORT jboolean Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nSetMaxBandwidth(
+        JNIEnv *env,
+        jclass clazz,
+        jlong handle,
+        jint bandwidth
+) {
+    AudioRecorderContext *recorder = (AudioRecorderContext *) (intptr_t) handle;
+    if (!recorder || !recorder->encoder
+            || bandwidth < OPUS_BANDWIDTH_NARROWBAND || bandwidth > OPUS_BANDWIDTH_FULLBAND) {
+        return JNI_FALSE;
+    }
+    return opus_encoder_ctl(recorder->encoder, OPUS_SET_MAX_BANDWIDTH(bandwidth)) == OPUS_OK
+            ? JNI_TRUE
+            : JNI_FALSE;
+}
+
+JNIEXPORT jboolean Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nSetVoiceSignal(
+        JNIEnv *env,
+        jclass clazz,
+        jlong handle,
+        jboolean voice
+) {
+    AudioRecorderContext *recorder = (AudioRecorderContext *) (intptr_t) handle;
+    if (!recorder || !recorder->encoder) {
+        return JNI_FALSE;
+    }
+    return opus_encoder_ctl(
+            recorder->encoder,
+            OPUS_SET_SIGNAL(voice ? OPUS_SIGNAL_VOICE : OPUS_AUTO)
+    ) == OPUS_OK ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nFinish(

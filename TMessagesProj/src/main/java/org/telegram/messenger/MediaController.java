@@ -55,6 +55,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.os.PowerManager;
+import android.os.Process;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
@@ -1237,6 +1238,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private ArrayList<ByteBuffer> recordBuffers = new ArrayList<>();
     private ByteBuffer fileBuffer;
     public int recordBufferSize = 1280;
+    private int audioRecordBufferSize = 4 * 1920;
     public int sampleRate = 48000;
     private int sendAfterDone;
     private boolean sendAfterDoneNotify;
@@ -1584,6 +1586,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     minBuferSize = 1280;
                 }
                 recordBufferSize = minBuferSize;
+                audioRecordBufferSize = Math.max(4 * minBuferSize, 4 * 1920);
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
 
                 for (int a = 0; a < 5; a++) {
                     ByteBuffer buffer = ByteBuffer.allocateDirect(recordBufferSize);
@@ -3809,7 +3813,36 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     private void setBluetoothScoOn(boolean scoOn) {
-        AudioInputPreference.setBluetoothRouting(scoOn);
+        if (!scoOn) {
+            // Every false call ends a recording (pause only gives the switch's route back, see releaseSwitchRoute);
+            // the in-recorder microphone choice ends with it.
+            AudioInputPreference.clearSessionOverride();
+        }
+        if (!scoOn) {
+            releaseLegacyRoute();
+        }
+    }
+
+    private AudioRouteSession legacyRouteSession;
+    private AudioRouteMonitor legacyRouteMonitor;
+
+    /** Legacy recorder only; call on recordQueue (the wait for the route needs a worker thread). */
+    private void acquireLegacyRoute() {
+        releaseLegacyRoute();
+        legacyRouteSession = AudioInputPreference.acquireRoute();
+    }
+
+    private void releaseLegacyRoute() {
+        final AudioRouteMonitor monitor = legacyRouteMonitor;
+        legacyRouteMonitor = null;
+        if (monitor != null) {
+            monitor.stop();
+        }
+        final AudioRouteSession session = legacyRouteSession;
+        legacyRouteSession = null;
+        if (session != null) {
+            session.release();
+        }
     }
 
     public boolean playMessage(final MessageObject messageObject) {
@@ -4692,7 +4725,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         audioRecorderV2StartRunnable = () -> {
             audioRecorderV2StartRunnable = null;
             if (!audioRecorderV2Active) return;
-            setBluetoothScoOn(true);
 
             recordingAudio = new TLRPC.TL_document();
             recordingAudio.file_reference = new byte[0];
@@ -4796,7 +4828,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         file.getAbsolutePath()
                 );
                 requestRecordAudioFocus(false);
-                setBluetoothScoOn(false);
+                // Pause keeps the in-recorder microphone choice (the next segment follows it); only the switch's
+                // own Bluetooth hold is given back so the preview plays over the media route.
+                AudioInputPreference.releaseSwitchRoute();
             }
 
             @Override
@@ -5084,7 +5118,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         requestRecordAudioFocus(true);
         recordQueue.cancelRunnable(recordStartRunnable);
         recordQueue.postRunnable(() -> {
-            setBluetoothScoOn(true);
             sendAfterDone = 0;
             recordingAudio = new TLRPC.TL_document();
             recordingGuid = guid;
@@ -5128,6 +5161,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 recordingAudioFile.delete();
                 recordingAudioFile = null;
                 try {
+                    AudioInputPreference.unregister(audioRecorder);
                     audioRecorder.release();
                     audioRecorder = null;
                 } catch (Exception e2) {
@@ -5258,7 +5292,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             if (audioRecorderV2Controller != null) {
                 if (audioRecorderV2Controller.isPreviewing()) {
                     requestRecordAudioFocus(true);
-                    setBluetoothScoOn(true);
                 }
                 audioRecorderV2Controller.togglePause();
             }
@@ -5275,9 +5308,16 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     return;
                 }
                 sendAfterDone = 4;
-                audioRecorder.stop();
-                audioRecorder.release();
-                audioRecorder = null;
+                releaseLegacyRoute();
+                // The draft preview plays over the normal media route, not the call-quality link of a switched microphone.
+                AudioInputPreference.releaseSwitchRoute();
+                try {
+                    audioRecorder.stop();
+                } finally {
+                    AudioInputPreference.unregister(audioRecorder);
+                    audioRecorder.release();
+                    audioRecorder = null;
+                }
                 recordQueue.postRunnable(() -> {
                     stopRecord();
                     final TLRPC.TL_document audioToSend = recordingAudio;
@@ -5333,19 +5373,50 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                         return;
                     }
 
-                    AndroidUtilities.runOnUIThread(() -> {
-                        requestRecordAudioFocus(true);
-//                        MediaDataController.getInstance(recordingCurrentAccount).pushDraftVoiceMessage(recordDialogId, recordTopicId, null);
-//
-                        audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
+                    try {
+                        acquireLegacyRoute();
+                        audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioRecordBufferSize);
+                        if (audioRecorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                            throw new IllegalStateException("Unable to initialize AudioRecord");
+                        }
                         AudioInputPreference.applyTo(audioRecorder);
                         recordStartTime = System.currentTimeMillis();
                         writtenFrame = 0;
                         samplesCount = 0;
                         fileBuffer.rewind();
                         audioRecorder.startRecording();
-                        recordQueue.postRunnable(recordRunnable);
-
+                        if (audioRecorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                            throw new IllegalStateException("Unable to start AudioRecord");
+                        }
+                        legacyRouteMonitor = AudioRouteMonitor.start("voice-legacy", audioRecorder, legacyRouteSession, sampleRate, null);
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                        releaseLegacyRoute();
+                        if (audioRecorder != null) {
+                            try {
+                                AudioInputPreference.unregister(audioRecorder);
+                                audioRecorder.release();
+                            } catch (Throwable e2) {
+                                FileLog.e(e2);
+                            }
+                            audioRecorder = null;
+                        }
+                        stopRecord();
+                        if (recordingAudioFile != null) {
+                            recordingAudioFile.delete();
+                        }
+                        recordingAudioFile = recordingPrevAudioFile;
+                        audioRecorderPaused = true;
+                        AndroidUtilities.runOnUIThread(() -> {
+                            recordStartRunnable = null;
+                            requestRecordAudioFocus(false);
+                            NotificationCenter.getInstance(recordingCurrentAccount).postNotificationName(NotificationCenter.recordStartError, recordingGuid);
+                        });
+                        return;
+                    }
+                    recordQueue.postRunnable(recordRunnable);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        requestRecordAudioFocus(true);
                         NotificationCenter.getInstance(recordingCurrentAccount).postNotificationName(NotificationCenter.recordResumed);
                     });
                 });
@@ -5400,9 +5471,6 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 return;
             }
 
-            setBluetoothScoOn(true);
-
-
             sendAfterDone = 0;
             recordingAudio = new TLRPC.TL_document();
             recordingGuid = guid;
@@ -5441,8 +5509,13 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 }
 
                 audioRecorderPaused = false;
-                audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recordBufferSize);
-                        AudioInputPreference.applyTo(audioRecorder);
+                // Acquired only once the encoder started, so the early return above has nothing to release.
+                acquireLegacyRoute();
+                audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioRecordBufferSize);
+                if (audioRecorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                    throw new IllegalStateException("Unable to initialize AudioRecord");
+                }
+                AudioInputPreference.applyTo(audioRecorder);
                 recordStartTime = System.currentTimeMillis();
                 recordTimeCount = 0;
                 writtenFrame = 0;
@@ -5459,6 +5532,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 fileBuffer.rewind();
 
                 audioRecorder.startRecording();
+                legacyRouteMonitor = AudioRouteMonitor.start("voice-legacy", audioRecorder, legacyRouteSession != null ? legacyRouteSession : AudioRouteSession.none(AudioInputPreference.resolvedChoice()), sampleRate, null);
             } catch (Exception e) {
                 FileLog.e(e);
                 recordingAudio = null;
@@ -5471,6 +5545,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     recordingPrevAudioFile = null;
                 }
                 try {
+                    AudioInputPreference.unregister(audioRecorder);
                     audioRecorder.release();
                     audioRecorder = null;
                 } catch (Exception e2) {
@@ -5642,8 +5717,12 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         }
         try {
             if (audioRecorder != null) {
+                AudioInputPreference.unregister(audioRecorder);
                 audioRecorder.release();
                 audioRecorder = null;
+                // Stop, cancel, scheduled send and read failure all end here: give the route back and end the
+                // in-recorder microphone choice.
+                setBluetoothScoOn(false);
             }
         } catch (Exception e) {
             FileLog.e(e);
@@ -5684,8 +5763,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 sendAfterDoneScheduleDate = scheduleDate;
                 sendAfterDoneOnce = once;
                 sendAfterDonePayStars = payStars;
+                releaseLegacyRoute();
                 audioRecorder.stop();
-                setBluetoothScoOn(false);
             } catch (Exception e) {
                 FileLog.e(e);
                 if (recordingAudioFile != null) {

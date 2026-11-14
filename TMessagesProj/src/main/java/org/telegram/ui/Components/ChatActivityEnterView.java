@@ -612,6 +612,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     public boolean emojiViewVisible;
     private boolean botKeyboardViewVisible;
     private TimerView recordTimerView;
+    private RecorderMicSwitcher.Pill recordMicPill;
     private FrameLayout audioVideoButtonContainer;
     private boolean audioVideoButtonContainerForbidden;
     private ChatActivityEnterViewAnimatedIconView audioVideoSendButton;
@@ -2132,6 +2133,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         public void setSendButtonInvisible() {
             sendButtonVisible = false;
+            updateRecordMicPill();
             invalidate();
             if (controlsView != null) {
                 controlsView.invalidate();
@@ -2177,6 +2179,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
             if (startTranslation - lockAnimatedTranslation >= dp(57)) {
                 sendButtonVisible = true;
+                updateRecordMicPill();
                 if (controlsView != null) {
                     controlsView.showPauseHint();
                 }
@@ -4714,7 +4717,15 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     }
 
+    private void updateRecordMicPill() {
+        if (recordMicPill == null) {
+            return;
+        }
+        recordMicPill.setAllowed(recordingAudioVideo && !isInVideoMode() && recordCircle != null && recordCircle.isSendButtonVisible());
+    }
+
     private void startLockTransition() {
+        updateRecordMicPill();
         AnimatorSet animatorSet = new AnimatorSet();
         try {
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
@@ -9819,6 +9830,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 recordTimerView.stop();
             }
         }
+        updateRecordMicPill();
         delegate.onAudioVideoInterfaceUpdated();
         updateSendAsButton();
         lastRecordState = recordState;
@@ -9878,6 +9890,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         recordTimeContainer.addView(recordTimerView = new TimerView(getContext()), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER_VERTICAL, 6, 0, 0, 0));
 
         recordPanel.addView(recordTimeContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.CENTER_VERTICAL));
+
+        // Beside the send button, away from the timer and from the locked "Cancel" text in the middle.
+        recordPanel.addView(recordMicPill = new RecorderMicSwitcher.Pill(getContext(), resourcesProvider), LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 44, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 76, 0));
+        recordMicPill.setBulletinFragment(() -> parentFragment);
     }
 
     @Override
@@ -10499,6 +10515,9 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
         if (slideText != null) {
             slideText.updateColors();
+        }
+        if (recordMicPill != null) {
+            recordMicPill.updateColors();
         }
         if (recordTimerView != null) {
             recordTimerView.updateColors();
@@ -14464,6 +14483,11 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
             cancelRect.set((int) xi, (int) yi, (int) (xi + cancelLayout.getWidth()), (int) (yi + cancelLayout.getHeight()));
             cancelRect.inset(-dp(16), -dp(16));
+            if (recordMicPill != null) {
+                // Cancel is only tappable once locked; the pill (above this view) must not cover it.
+                recordMicPill.setOverlapped(cancelToProgress > 0 && recordMicPill.getLeft() > 0
+                        && recordMicPill.getLeft() < getLeft() + cancelRect.right && recordMicPill.getRight() > getLeft() + cancelRect.left);
+            }
             if (cancelToProgress > 0) {
                 selectableBackground.setBounds(
                         getMeasuredWidth() / 2 - w, getMeasuredHeight() / 2 - w,

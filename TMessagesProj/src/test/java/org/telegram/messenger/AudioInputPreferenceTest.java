@@ -58,4 +58,48 @@ public class AudioInputPreferenceTest {
         assertTrue(AudioInputPreference.isBluetoothType(BLE));
         assertFalse(AudioInputPreference.isBluetoothType(WIRED));
     }
+
+    @Test
+    public void quickPairPicksPhoneAndExternal() {
+        assertArrayEquals(new int[]{BUILTIN, WIRED}, AudioInputPreference.quickPair(new int[]{BUILTIN, WIRED}, false));
+        assertArrayEquals(new int[]{BUILTIN, BLE}, AudioInputPreference.quickPair(new int[]{BUILTIN, BT_SCO, BLE}, true));
+        assertArrayEquals(new int[]{BUILTIN, BT_SCO}, AudioInputPreference.quickPair(new int[]{BUILTIN, BT_SCO}, true));
+        assertArrayEquals(new int[0], AudioInputPreference.quickPair(new int[]{BUILTIN, BT_SCO}, false));
+        assertArrayEquals(new int[0], AudioInputPreference.quickPair(new int[]{BUILTIN}, true));
+        assertArrayEquals(new int[0], AudioInputPreference.quickPair(new int[]{WIRED}, true));
+        assertArrayEquals(new int[]{BUILTIN, WIRED}, AudioInputPreference.quickPair(new int[]{TELEPHONY, 99, BUILTIN, WIRED}, true));
+    }
+
+    @Test
+    public void toggleGoesBothWays() {
+        final int[] pair = {BUILTIN, BLE};
+        assertEquals(BLE, AudioInputPreference.toggle(BUILTIN, pair));
+        assertEquals(BUILTIN, AudioInputPreference.toggle(BLE, pair));
+        assertEquals(BLE, AudioInputPreference.toggle(AudioInputPreference.AUTOMATIC, pair));
+        // An external input outside the pair (a headset that fell back to the other link) goes back to the phone.
+        assertEquals(BUILTIN, AudioInputPreference.toggle(USB_HEADSET, pair));
+        assertEquals(BUILTIN, AudioInputPreference.toggle(BT_SCO, pair));
+    }
+
+    @Test
+    public void switchAvailableMatrix() {
+        final int[] both = {BUILTIN, WIRED};
+        assertTrue(AudioInputPreference.switchAvailable(true, false, both, false));
+        assertFalse(AudioInputPreference.switchAvailable(false, false, both, false));
+        assertFalse(AudioInputPreference.switchAvailable(true, true, both, false));
+        assertFalse(AudioInputPreference.switchAvailable(true, false, new int[]{BUILTIN}, true));
+        assertFalse(AudioInputPreference.switchAvailable(true, false, new int[]{BUILTIN, BT_SCO}, false));
+        assertTrue(AudioInputPreference.switchAvailable(true, false, new int[]{BUILTIN, BT_SCO}, true));
+    }
+
+    @Test
+    public void overrideWinsWhileConnected() {
+        final int[] connected = {BUILTIN, WIRED};
+        assertEquals(BUILTIN, AudioInputPreference.resolveWithOverride(WIRED, BUILTIN, connected));
+        assertEquals(WIRED, AudioInputPreference.resolveWithOverride(AudioInputPreference.AUTOMATIC, WIRED, connected));
+        assertEquals(WIRED, AudioInputPreference.resolveWithOverride(WIRED, BLE, connected));
+        assertEquals(AudioInputPreference.AUTOMATIC, AudioInputPreference.resolveWithOverride(BLE, BLE, connected));
+        assertEquals(AudioInputPreference.AUTOMATIC, AudioInputPreference.resolveWithOverride(WIRED, AudioInputPreference.AUTOMATIC, connected));
+        assertEquals(WIRED, AudioInputPreference.resolveWithOverride(WIRED, AudioInputPreference.NONE, connected));
+    }
 }

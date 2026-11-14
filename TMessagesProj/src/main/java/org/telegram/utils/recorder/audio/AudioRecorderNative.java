@@ -44,6 +44,18 @@ final class AudioRecorderNative {
         return nFlush(nativeHandle);
     }
 
+    /** Encoder thread only. @param bandwidth an OPUS_BANDWIDTH_* value */
+    boolean setMaxBandwidth(int bandwidth) {
+        checkNotReleased();
+        return nSetMaxBandwidth(nativeHandle, bandwidth);
+    }
+
+    /** Encoder thread only. Speech hint for the Opus mode decision; false returns to automatic. */
+    boolean setVoiceSignal(boolean voice) {
+        checkNotReleased();
+        return nSetVoiceSignal(nativeHandle, voice);
+    }
+
     boolean finish() {
         if (!released.compareAndSet(false, true)) {
             return false;
@@ -103,6 +115,10 @@ final class AudioRecorderNative {
     private static native int nWriteFrame(long handle, ByteBuffer frame, int length);
 
     private static native long nFlush(long handle);
+
+    private static native boolean nSetMaxBandwidth(long handle, int bandwidth);
+
+    private static native boolean nSetVoiceSignal(long handle, boolean voice);
 
     private static native boolean nFinish(long handle);
 

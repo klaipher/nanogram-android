@@ -271,6 +271,7 @@ public final class NanogramDiagnostics {
             addSafely(out, "performance-experiments.txt", NanogramPerfExperiments::currentReport);
             addSafely(out, "health-energy.txt", () -> NanogramHealth.fullReport(context));
             addSafely(out, "exit-history.txt", () -> NanogramExitInfo.describeAll(context));
+            addSafely(out, "audio-route.txt", org.telegram.messenger.AudioRouteReport::describe);
             addCrashes(context, out);
             addTraces(context, out);
             addProfiles(context, out);
@@ -357,6 +358,7 @@ public final class NanogramDiagnostics {
                 + "  performance-experiments.txt  switch states and durations of the performance experiments since each switch last changed (no content)\n"
                 + "  health-energy.txt  CPU time, wakelocks, network and energy numbers of Nanogram since app start and since each switch change; phone energy only on phones with power monitors (Android 15+); battery and heat (counts and durations only)\n"
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
+                + "  audio-route.txt    microphone route of the latest voice and round video recordings: requested and actual input type, sample rates, codec class (no audio, no names)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"
                 + "  profiles/          system traces recorded on request or by ANR/cold-start triggers (Android 15+); they can show thread and function names\n"

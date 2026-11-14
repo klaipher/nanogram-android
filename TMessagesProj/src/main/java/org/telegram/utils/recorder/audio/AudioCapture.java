@@ -1,6 +1,11 @@
 package org.telegram.utils.recorder.audio;
 
 import org.telegram.messenger.AudioInputPreference;
+import org.telegram.messenger.AudioRouteMonitor;
+import org.telegram.messenger.AudioRouteSession;
+import org.telegram.messenger.AudioRouteReport;
+import org.telegram.messenger.nanogram.NanogramFeatures;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -48,6 +53,10 @@ final class AudioCapture {
 
     private static final long OUTPUT_FLUSH_INTERVAL_MS = 100L;
     private static final long PROGRESS_INTERVAL_MS = 32L;
+    private static final long EMPTY_READ_RETRY_MS = 5L;
+    private static final long LEADING_SILENCE_MAX_SAMPLES = SAMPLE_RATE / 2;
+    private static final int ENCODER_QUEUE_SOFT_CAP = 500;
+    private static final byte[] ZERO_FRAME = new byte[FRAME_BYTES];
 
     private final File outputFile;
     private final File prefixFile;
@@ -68,6 +77,14 @@ final class AudioCapture {
 
     // Capture thread.
     private AudioRecord audioRecord;
+    private AudioRouteSession routeSession;
+    private AudioRouteMonitor routeMonitor;
+    private LeadingSilenceTrimmer silenceTrimmer = new LeadingSilenceTrimmer(LEADING_SILENCE_MAX_SAMPLES);
+    private int audioRecordBufferSize;
+    private int consecutiveEmptyReads;
+    private int errorReopens;
+    private long lastReadMs;
+    private final AudioInputPreference.InputReopener inputReopener = this::requestReopenInput;
     private long capturedSamples;
     private long lastProgressMs;
 
@@ -80,9 +97,27 @@ final class AudioCapture {
     private boolean encodingFinished;
     private long lastFlushMs;
     private int maximumQueuedChunks;
+    private boolean queueCapReported;
     private long noiseProcessingCount;
     private long noiseProcessingTotalNs;
     private long noiseProcessingMaxNs;
+    private AudioVoiceEnhancer enhancer;
+    private int enhancerProfile = AudioVoiceEnhancer.PROFILE_NONE;
+    private boolean routeKnown;
+    private int routeType = -1;
+    private int[] routeRates = new int[0];
+    private int reportedClass = AudioVoiceEnhancer.CLASS_UNKNOWN;
+    private long enhancedFrames;
+    private long inputSamples;
+    private int inputPeak;
+    private long inputClipped;
+    private long inputSum;
+    private long lastEnhancerCheckFrames;
+    private AudioRecord.OnRoutingChangedListener routeListener;
+    // Capture thread: the routed device can still be unknown right after startRecording, so it is read again after the first data.
+    private boolean routePostedAfterData;
+    // Encoder thread: the backlog while a resumed recording re-encodes its prefix is not a CPU fault.
+    private boolean backlogDrained;
 
     /**
      * @param prefixFile    previous output whose range is re-encoded before the new samples
@@ -108,7 +143,7 @@ final class AudioCapture {
         captureThread = new HandlerThread("AudioRecorderCapture", Process.THREAD_PRIORITY_AUDIO);
         captureThread.start();
         captureHandler = new Handler(captureThread.getLooper());
-        encoderThread = new HandlerThread("AudioRecorderEncoder", Process.THREAD_PRIORITY_DEFAULT);
+        encoderThread = new HandlerThread("AudioRecorderEncoder", Process.THREAD_PRIORITY_AUDIO);
         encoderThread.start();
         encoderHandler = new Handler(encoderThread.getLooper());
     }
@@ -139,30 +174,141 @@ final class AudioCapture {
             if (minimumBufferSize <= 0) {
                 minimumBufferSize = FRAME_BYTES * 4;
             }
-            int audioRecordBufferSize = Math.max(minimumBufferSize * 2, FRAME_BYTES * 4);
-            audioRecord = new AudioRecord(
-                    MediaRecorder.AudioSource.DEFAULT,
-                    SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    audioRecordBufferSize
-            );
-            if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-                throw new IllegalStateException("Unable to initialize AudioRecord");
+            audioRecordBufferSize = Math.max(minimumBufferSize * 2, FRAME_BYTES * 4);
+            diagnostics.log("AudioRecord buffer: minBufferBytes=" + minimumBufferSize
+                    + ", bufferBytes=" + audioRecordBufferSize);
+            openInput("start");
+            if (stopRequested) {
+                stopCapture(null);
+                return;
             }
-            AudioInputPreference.applyTo(audioRecord);
-            audioRecord.startRecording();
-            if (audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
-                throw new IllegalStateException("Unable to start AudioRecord");
-            }
-            diagnostics.log("AudioRecord started: minBufferBytes=" + minimumBufferSize
-                    + ", bufferBytes=" + audioRecordBufferSize
-                    + ", sessionId=" + audioRecord.getAudioSessionId());
+            lastReadMs = SystemClock.elapsedRealtime();
+            AudioInputPreference.registerReopener(inputReopener);
             lastProgressMs = SystemClock.elapsedRealtime();
             callback.onStarted();
             captureHandler.post(this::readOnce);
         } catch (Throwable error) {
             stopCapture(asException(error));
+        }
+    }
+
+    /** Capture thread. Waits for the route (never on the main thread), then opens and starts the AudioRecord. */
+    private void openInput(String reason) {
+        AudioRouteSession session = AudioInputPreference.acquireRoute();
+        routeSession = session;
+        if (stopRequested) {
+            // stop() came while the route was acquired: do not open the microphone for nothing.
+            session.release();
+            routeSession = null;
+            return;
+        }
+        routePostedAfterData = false;
+        AudioRecord record = new AudioRecord(
+                MediaRecorder.AudioSource.DEFAULT,
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                audioRecordBufferSize
+        );
+        try {
+            if (record.getState() != AudioRecord.STATE_INITIALIZED) {
+                throw new IllegalStateException("Unable to initialize AudioRecord");
+            }
+            AudioInputPreference.applyTo(record);
+            record.startRecording();
+            if (record.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                throw new IllegalStateException("Unable to start AudioRecord");
+            }
+        } catch (Throwable error) {
+            AudioInputPreference.unregister(record);
+            record.release();
+            session.release();
+            routeSession = null;
+            throw error;
+        }
+        audioRecord = record;
+        routeListener = changed -> postRoute(changed);
+        record.addOnRoutingChangedListener(routeListener, captureHandler);
+        postRoute(record);
+        routeMonitor = AudioRouteMonitor.start("voice-v2", record, session, SAMPLE_RATE, diagnostics::log);
+        diagnostics.log("AudioRecord started (" + reason + "): sessionId=" + record.getAudioSessionId()
+                + ", routeAcquire=" + session.outcome() + " in " + session.acquireMs() + " ms");
+    }
+
+    /** Capture thread. Stops the monitor and the record and releases the route; returns a failure of stop(). */
+    @Nullable
+    private Throwable closeInput() {
+        Throwable failure = null;
+        AudioRouteMonitor monitor = routeMonitor;
+        routeMonitor = null;
+        if (monitor != null) monitor.stop();
+        AudioRecord record = audioRecord;
+        audioRecord = null;
+        if (record != null) {
+            if (routeListener != null) {
+                try {
+                    record.removeOnRoutingChangedListener(routeListener);
+                } catch (Throwable ignored) {
+                }
+                routeListener = null;
+            }
+            try {
+                if (record.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                    record.stop();
+                }
+            } catch (Throwable error) {
+                failure = error;
+            } finally {
+                AudioInputPreference.unregister(record);
+                record.release();
+            }
+        }
+        AudioRouteSession session = routeSession;
+        routeSession = null;
+        if (session != null) session.release();
+        return failure;
+    }
+
+    /** Any thread: moves capture to the input resolved now (read errors and the microphone switch). */
+    boolean requestReopenInput() {
+        if (captureStopped || stopRequested) return false;
+        captureHandler.post(() -> {
+            if (captureStopped || stopRequested) return;
+            try {
+                reopenInput("requested");
+            } catch (Throwable error) {
+                stopCapture(asException(error));
+            }
+        });
+        return true;
+    }
+
+    /**
+     * Capture thread. Keeps the encoder and the output, replaces the AudioRecord and its route and fills the time
+     * the microphone was away with silence, so the duration stays right.
+     */
+    private void reopenInput(String reason) {
+        diagnostics.log("reopening input: " + reason);
+        closeInput();
+        openInput("reopen: " + reason);
+        long nowMs = SystemClock.elapsedRealtime();
+        int silenceBytes = AudioReadPolicy.silenceBytes(nowMs - lastReadMs, SAMPLE_RATE);
+        queueSilence(silenceBytes);
+        diagnostics.log("input reopened: gapMs=" + (nowMs - lastReadMs) + ", silenceBytes=" + silenceBytes);
+        lastReadMs = nowMs;
+        consecutiveEmptyReads = 0;
+    }
+
+    private void queueSilence(int bytes) {
+        while (bytes > 0) {
+            final ByteBuffer chunk = obtainChunk();
+            int count = Math.min(bytes, FRAME_BYTES);
+            chunk.put(ZERO_FRAME, 0, count);
+            chunk.flip();
+            capturedSamples += count / 2;
+            queuedChunks.incrementAndGet();
+            encoderHandler.post(() -> encodeChunk(chunk));
+            bytes -= count;
         }
     }
 
@@ -176,8 +322,42 @@ final class AudioCapture {
         boolean queued = false;
         try {
             int bytesRead = audioRecord.read(chunk, chunk.capacity());
-            if (bytesRead <= 0) {
+            AudioReadPolicy.Action action = AudioReadPolicy.next(bytesRead, consecutiveEmptyReads, errorReopens);
+            if (action == AudioReadPolicy.Action.FAIL) {
                 throw new IllegalStateException("AudioRecord read failed: " + bytesRead);
+            }
+            if (action != AudioReadPolicy.Action.DATA) {
+                recycleChunk(chunk);
+                queued = true;
+                if (action == AudioReadPolicy.Action.RETRY) {
+                    consecutiveEmptyReads++;
+                    captureHandler.postDelayed(this::readOnce, EMPTY_READ_RETRY_MS);
+                } else {
+                    errorReopens++;
+                    reopenInput("read result " + bytesRead);
+                    captureHandler.post(this::readOnce);
+                }
+                return;
+            }
+            consecutiveEmptyReads = 0;
+            lastReadMs = SystemClock.elapsedRealtime();
+            if (!routePostedAfterData) {
+                routePostedAfterData = true;
+                postRoute(audioRecord);
+            }
+            int drop = silenceTrimmer.leadingBytesToDrop(chunk, bytesRead);
+            if (drop > 0) {
+                if (drop >= bytesRead) {
+                    recycleChunk(chunk);
+                    queued = true;
+                    captureHandler.post(this::readOnce);
+                    return;
+                }
+                chunk.position(drop);
+                chunk.limit(bytesRead);
+                chunk.compact();
+                chunk.flip();
+                bytesRead -= drop;
             }
             chunk.limit(bytesRead);
             long sum = 0L;
@@ -211,17 +391,12 @@ final class AudioCapture {
         if (failure != null) {
             diagnostics.error("capture failed", failure);
         }
-        if (audioRecord != null) {
-            try {
-                if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-                    audioRecord.stop();
-                }
-            } catch (Throwable error) {
-                if (failure == null) failure = asException(error);
-            } finally {
-                audioRecord.release();
-                audioRecord = null;
-            }
+        AudioInputPreference.unregisterReopener(inputReopener);
+        Throwable closeFailure = closeInput();
+        if (closeFailure != null && failure == null) failure = asException(closeFailure);
+        if (silenceTrimmer.trimmedSamples() > 0) {
+            diagnostics.log("leading digital silence trimmed: samples=" + silenceTrimmer.trimmedSamples()
+                    + ", ms=" + samplesToMs(silenceTrimmer.trimmedSamples()));
         }
         long samples = capturedSamples;
         Exception captureFailure = failure;
@@ -272,6 +447,10 @@ final class AudioCapture {
         try {
             if (encoderFailure != null || encodingFinished) return;
             maximumQueuedChunks = Math.max(maximumQueuedChunks, queued);
+            if (queued > ENCODER_QUEUE_SOFT_CAP && !queueCapReported) {
+                queueCapReported = true;
+                diagnostics.log("encoder queue over " + ENCODER_QUEUE_SOFT_CAP + " chunks");
+            }
             copyAndEncode(chunk);
             long nowMs = SystemClock.elapsedRealtime();
             if (nowMs - lastFlushMs >= OUTPUT_FLUSH_INTERVAL_MS) {
@@ -310,10 +489,149 @@ final class AudioCapture {
         }
     }
 
+    private void postRoute(@NonNull AudioRecord record) {
+        int type = -1;
+        int[] rates = new int[0];
+        try {
+            AudioDeviceInfo routed = record.getRoutedDevice();
+            if (routed != null) {
+                type = routed.getType();
+                rates = routed.getSampleRates();
+            }
+        } catch (Throwable ignored) {
+        }
+        final int routedType = type;
+        final int[] routedRates = rates;
+        encoderHandler.post(() -> applyRoute(routedType, routedRates));
+    }
+
+    /** Encoder thread: picks the voice enhancement profile and the Opus limits for the input that really records. */
+    private void applyRoute(int type, @NonNull int[] rates) {
+        if (encodingFinished || encoder == null || encoderFailure != null) return;
+        if (routeKnown && type == routeType) return;
+        routeKnown = true;
+        routeType = type;
+        routeRates = rates;
+        try {
+            int profile = AudioVoiceEnhancer.profileFor(NanogramFeatures.headsetVoiceEnhancement(), type);
+            if (profile != enhancerProfile) {
+                drainEnhancer();
+                if (enhancer != null) {
+                    enhancer.recycle();
+                    enhancer = null;
+                }
+                enhancerProfile = AudioVoiceEnhancer.PROFILE_NONE;
+                int initialClass = type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                        ? AudioVoiceEnhancer.CLASS_WIDE : AudioVoiceEnhancer.CLASS_SUPER_WIDE;
+                enhancer = AudioVoiceEnhancer.create(profile, initialClass,
+                        noiseSuppression == AudioRecordingSession.NoiseSuppression.RNNOISE, true);
+                if (enhancer != null) {
+                    enhancerProfile = profile;
+                    reportedClass = enhancer.bandwidthClass();
+                } else if (profile != AudioVoiceEnhancer.PROFILE_NONE) {
+                    diagnostics.log("voice enhancement unavailable; recording unprocessed PCM");
+                }
+            }
+            diagnostics.log("voice enhancement: inputType=" + type + ", rates=" + java.util.Arrays.toString(rates)
+                    + ", profile=" + enhancerProfile
+                    + ", delaySamples=" + (enhancer == null ? 0 : enhancer.delaySamples()));
+            applyOpusRoute();
+        } catch (Throwable error) {
+            diagnostics.error("voice enhancement route setup failed", error);
+            if (enhancer != null) {
+                enhancer.recycle();
+                enhancer = null;
+            }
+            enhancerProfile = AudioVoiceEnhancer.PROFILE_NONE;
+        }
+    }
+
+    private void applyOpusRoute() {
+        boolean processing = enhancer != null && enhancer.modifiesAudio();
+        boolean extending = processing && enhancer.profile() == AudioVoiceEnhancer.PROFILE_HEADSET
+                && enhancer.level() == AudioVoiceEnhancer.LEVEL_FULL;
+        int cls = enhancer == null ? AudioVoiceEnhancer.CLASS_UNKNOWN : enhancer.bandwidthClass();
+        int bandwidth = AudioVoiceEnhancer.opusMaxBandwidth(routeType, routeRates, cls, extending);
+        boolean limited = encoder.setMaxBandwidth(bandwidth);
+        // OPUS_SIGNAL stays automatic unless the enhancement changes the audio (then it is known to be speech).
+        boolean voice = encoder.setVoiceSignal(processing);
+        diagnostics.log("Opus route settings: maxBandwidth=" + bandwidth + " (" + limited + "), voiceSignal="
+                + processing + " (" + voice + "), measuredClass=" + AudioVoiceEnhancer.className(cls));
+    }
+
+    /** Writes what is still inside the chain; used before the chain is replaced and at the end. */
+    private void drainEnhancer() {
+        if (enhancer == null || !enhancer.modifiesAudio() || encoder == null) return;
+        ByteBuffer tail = ByteBuffer.allocateDirect(8192 * 2).order(ByteOrder.nativeOrder());
+        int samples = enhancer.flush(tail, 8192);
+        if (samples > 0) {
+            encoder.writeFrame(tail, samples * 2);
+        }
+    }
+
+    private void collectInputStats(int sampleCount) {
+        for (int index = 0; index < sampleCount; index++) {
+            int sample = frameBuffer.getShort(index * 2);
+            int magnitude = Math.abs(sample);
+            if (magnitude > inputPeak) inputPeak = magnitude;
+            if (magnitude >= 32767) inputClipped++;
+            inputSum += sample;
+        }
+        inputSamples += sampleCount;
+    }
+
+    /** Runs the chain on the frame; returns the bytes to encode, or 0 while the start-up delay is dropped. */
+    private int runEnhancer(int byteCount) {
+        int samples = enhancer.process(frameBuffer, byteCount / 2);
+        if (samples < 0) {
+            diagnostics.log("voice enhancement failed; recording unprocessed PCM");
+            enhancer.recycle();
+            enhancer = null;
+            enhancerProfile = AudioVoiceEnhancer.PROFILE_NONE;
+            return byteCount;
+        }
+        enhancedFrames++;
+        int queued = queuedChunks.get();
+        if (queued <= 5) {
+            backlogDrained = true;
+        }
+        // Only a backlog that built up after the encoder caught up counts: re-encoding a resumed prefix queues chunks too.
+        if (backlogDrained) {
+            if (queued > 500) {
+                enhancer.limitLevel(AudioVoiceEnhancer.LEVEL_BYPASS);
+            } else if (queued > 50) {
+                enhancer.limitLevel(AudioVoiceEnhancer.LEVEL_REDUCED);
+            }
+        }
+        if (enhancedFrames - lastEnhancerCheckFrames >= 50) {
+            lastEnhancerCheckFrames = enhancedFrames;
+            int micros = enhancer.takeAverageBlockMicros();
+            int cls = enhancer.bandwidthClass();
+            diagnostics.log("voice enhancement: averageBlockMicros=" + micros + ", level=" + enhancer.level()
+                    + ", class=" + AudioVoiceEnhancer.className(cls));
+            if (cls != reportedClass) {
+                reportedClass = cls;
+                applyOpusRoute();
+            }
+        }
+        return samples * 2;
+    }
+
     private void encodeFrame(int byteCount) {
         frameBuffer.position(0);
         frameBuffer.limit(byteCount);
-        if (noiseSuppressor != null) {
+        collectInputStats(byteCount / 2);
+        boolean enhanced = false;
+        if (enhancer != null) {
+            enhanced = enhancer.modifiesAudio();
+            int bytes = runEnhancer(byteCount);
+            if (enhancer == null) enhanced = false;
+            if (bytes <= 0) return;
+            byteCount = bytes;
+            frameBuffer.position(0);
+            frameBuffer.limit(byteCount);
+        }
+        if (noiseSuppressor != null && !enhanced) {
             long startedAtNs = System.nanoTime();
             boolean processed = noiseSuppressor.process(frameBuffer, byteCount / 2);
             long elapsedNs = System.nanoTime() - startedAtNs;
@@ -346,12 +664,18 @@ final class AudioCapture {
                 encodeFrame(frameBuffer.position());
                 frameBuffer.clear();
             }
+            if (failure == null) drainEnhancer();
         } catch (Throwable error) {
             failure = asException(error);
         } finally {
             if (noiseSuppressor != null) {
                 noiseSuppressor.recycle();
                 noiseSuppressor = null;
+            }
+            logEnhancementSummary();
+            if (enhancer != null) {
+                enhancer.recycle();
+                enhancer = null;
             }
             if (encoder != null) {
                 try {
@@ -383,6 +707,19 @@ final class AudioCapture {
         }
         encoderThread.quitSafely();
         chunkPool.clear();
+    }
+
+    private void logEnhancementSummary() {
+        if (inputSamples == 0L) return;
+        double peakDb = inputPeak == 0 ? -120d : 20d * Math.log10(inputPeak / 32768d);
+        String line = "input levels: peakDbfs=" + Math.round(peakDb * 10d) / 10d
+                + ", clippedSamples=" + inputClipped
+                + ", dcOffset=" + Math.round((double) inputSum / inputSamples)
+                + ", voiceEnhancement=" + (enhancer == null ? "off" : "profile " + enhancerProfile
+                + " class " + AudioVoiceEnhancer.className(enhancer.bandwidthClass())
+                + " level " + enhancer.level());
+        diagnostics.log(line);
+        AudioRouteReport.add("voice " + line);
     }
 
     @NonNull

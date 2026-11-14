@@ -9,7 +9,23 @@ public final class RoundAudioTimeline {
     public static final long REANCHOR_DRIFT_US = 30_000;
     public static final long ALIGN_WAIT_US = 500_000;
 
+    /** After a microphone switch the audio clock is allowed this much lag before silence is inserted. */
+    public static final long SILENCE_GUARD_US = 40_000;
+    public static final long SILENCE_MAX_US = 2_000_000;
+
     private RoundAudioTimeline() {
+    }
+
+    /**
+     * Frames of silence that put audio back on the video clock: the capture time of the next frame (actualUs) is later
+     * than where the encoder input stands (expectedUs). Nothing under the guard, never negative, capped at two seconds.
+     */
+    public static long silenceFrames(long expectedUs, long actualUs, int sampleRate) {
+        long lagUs = actualUs - expectedUs;
+        if (lagUs < SILENCE_GUARD_US) {
+            return 0;
+        }
+        return Math.min(lagUs, SILENCE_MAX_US) * sampleRate / 1_000_000L;
     }
 
     /**

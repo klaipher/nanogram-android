@@ -72,6 +72,8 @@ import androidx.media3.exoplayer.ExoPlayer;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AudioInputPreference;
+import org.telegram.messenger.AudioRouteMonitor;
+import org.telegram.messenger.AudioRouteSession;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AutoDeleteMediaTask;
 import org.telegram.messenger.BuildVars;
@@ -142,6 +144,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private RectF rect;
     private final FlashViews.ImageViewInvertable switchCameraButton;
     private final FlashViews.ImageViewInvertable flashButton;
+    private final RecorderMicSwitcher.Chip micButton;
     private final FlashViews flashViews;
     private RLottieDrawable flashOnDrawable, flashOffDrawable;
     private RLottieDrawable switchCameraDrawable;
@@ -401,12 +404,18 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         });
         updateFlash();
 
+        micButton = new RecorderMicSwitcher.Chip(context, resourcesProvider);
+        micButton.setBulletinContainer(this);
+        buttonsLayout.addView(micButton, LayoutHelper.createLinear(44, 44));
+
         if (!isNewDesign) {
             flashViews.add(switchCameraButton);
             flashViews.add(flashButton);
+            flashViews.add(micButton);
         } else if (!resourcesProvider.isDark()) {
             switchCameraButton.setInvert(0.6f);
             flashButton.setInvert(0.6f);
+            micButton.setInvert(0.6f);
         }
 
         muteImageView = new ImageView(context);
@@ -452,6 +461,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private boolean flashing;
     private boolean frontFlashing;
     private void updateFlash() {
+        if (micButton != null) {
+            micButton.setControlsEnabled(recording);
+        }
         final boolean shouldFrontFlash = flashing && recording && isFrontface;
         if (frontFlashing != shouldFrontFlash) {
             if (frontFlashing = shouldFrontFlash) {
@@ -602,7 +614,13 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         }
     }
 
+    // togglePause tears the camera down with hideCamera before the next segment: the in-recorder microphone choice must survive that.
+    private boolean resumingFromPause;
+
     public void destroy(boolean async) {
+        if (!resumingFromPause) {
+            micButton.getSwitcher().reset();
+        }
         if (useCamera2) {
             for (int a = 0; a < camera2Sessions.length; ++a) {
                 if (camera2Sessions[a] != null) {
@@ -688,10 +706,17 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 MediaController.getInstance().requestRecordAudioFocus(false);
             } else {
                 videoEncoder.pause();
+                // The draft preview plays over the normal media route; the next segment acquires the route again.
+                AudioInputPreference.releaseSwitchRoute();
             }
         } else if (videoEncoder != null) {
             videoEncoder.resume();
-            hideCamera(false);
+            resumingFromPause = true;
+            try {
+                hideCamera(false);
+            } finally {
+                resumingFromPause = false;
+            }
             if (videoPlayer != null) {
                 videoPlayer.releasePlayer(true);
                 videoPlayer = null;
@@ -1083,6 +1108,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     }
 
     public void cancel(boolean byGesture) {
+        micButton.getSwitcher().reset();
         stopProgressTimer();
         if (videoPlayer != null) {
             videoPlayer.releasePlayer(true);
@@ -2434,6 +2460,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     }
                 }
                 try {
+                    final AudioRouteMonitor monitor = audioRouteMonitor;
+                    if (monitor != null) {
+                        monitor.stop();
+                    }
+                    AudioInputPreference.unregister(audioRecorder);
                     audioRecorder.release();
                 } catch (Exception e) {
                     FileLog.e(e);
@@ -3142,12 +3173,11 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     audioEncoder.stop();
                     audioEncoder.release();
                     audioEncoder = null;
-
-                    setBluetoothScoOn(false);
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
             }
+            releaseAudioRoute();
             if (previewFile != null) {
                 previewFile.delete();
                 previewFile = null;
@@ -3315,12 +3345,26 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             });
         }
 
-        private void setBluetoothScoOn(boolean scoOn) {
-            AudioInputPreference.setBluetoothRouting(scoOn);
+        private AudioRouteSession audioRouteSession;
+        private volatile AudioRouteMonitor audioRouteMonitor;
+
+        private void releaseAudioRoute() {
+            final AudioRouteMonitor monitor = audioRouteMonitor;
+            audioRouteMonitor = null;
+            if (monitor != null) {
+                monitor.stop();
+            }
+            final AudioRouteSession session = audioRouteSession;
+            audioRouteSession = null;
+            if (session != null) {
+                session.release();
+            }
         }
 
         private void prepareEncoder(boolean fromPause) {
-            setBluetoothScoOn(true);
+            if (audioRouteSession == null) {
+                audioRouteSession = AudioInputPreference.acquireRoute();
+            }
 
             try {
                 int recordBufferSize = AudioRecord.getMinBufferSize(audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -3361,6 +3405,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
                 AudioInputPreference.applyTo(audioRecorder);
                 audioRecorder.startRecording();
+                audioRouteMonitor = AudioRouteMonitor.start("round-legacy", audioRecorder, audioRouteSession, audioSampleRate, null);
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera initied audio record with channels " + audioRecorder.getChannelCount() + " sample rate = " + audioRecorder.getSampleRate() + " bufferSize = " + bufferSize);
                 }
@@ -3375,6 +3420,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 MediaFormat audioFormat = new MediaFormat();
                 audioFormat.setString(MediaFormat.KEY_MIME, AUDIO_MIME_TYPE);
                 audioFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, audioSampleRate);
+                audioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
                 audioFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
                 audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, MessagesController.getInstance(currentAccount).roundAudioBitrate * 1024);
                 audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 2048 * AudioBufferInfo.MAX_SAMPLES);
@@ -3457,6 +3503,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.recordStarted, recordingGuid, false);
                 });
             } catch (Exception ioe) {
+                releaseAudioRoute();
                 throw new RuntimeException(ioe);
             }
 

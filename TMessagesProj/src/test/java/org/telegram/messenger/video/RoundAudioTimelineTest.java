@@ -117,4 +117,20 @@ public class RoundAudioTimelineTest {
         assertFalse(RoundAudioTimeline.alignmentTimedOut(400_000, 0));
         assertTrue(RoundAudioTimeline.alignmentTimedOut(600_000, 0));
     }
+
+    @Test
+    public void silenceCoversAStallOfOneHundredTwentyMilliseconds() {
+        assertEquals(5760, RoundAudioTimeline.silenceFrames(1_000_000L, 1_120_000L, RATE));
+    }
+
+    @Test
+    public void noSilenceUnderTheGuard() {
+        assertEquals(0, RoundAudioTimeline.silenceFrames(1_000_000L, 1_039_000L, RATE));
+    }
+
+    @Test
+    public void silenceIsNeverNegativeAndIsCapped() {
+        assertEquals(0, RoundAudioTimeline.silenceFrames(1_000_000L, 900_000L, RATE));
+        assertEquals(2 * RATE, RoundAudioTimeline.silenceFrames(0, 10_000_000L, RATE));
+    }
 }

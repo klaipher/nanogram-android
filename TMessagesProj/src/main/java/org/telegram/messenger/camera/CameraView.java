@@ -61,6 +61,7 @@ import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AudioInputPreference;
+import org.telegram.messenger.AudioRouteSession;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.DispatchQueue;
@@ -2446,6 +2447,8 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
         private Integer lastCameraId = 0;
 
         private AudioRecord audioRecorder;
+        private AudioRouteSession audioRoute;
+        private boolean audioThreadStarted;
         private FloatBuffer textureBuffer;
 
         private ArrayBlockingQueue<InstantCameraView.AudioBufferInfo> buffers = new ArrayBlockingQueue<>(10);
@@ -2528,9 +2531,14 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                     }
                 }
                 try {
+                    AudioInputPreference.unregister(audioRecorder);
                     audioRecorder.release();
                 } catch (Exception e) {
                     FileLog.e(e);
+                }
+                if (audioRoute != null) {
+                    audioRoute.release();
+                    audioRoute = null;
                 }
                 handler.sendMessage(handler.obtainMessage(MSG_STOP_RECORDING, sendWhenDone, 0));
             }
@@ -2996,6 +3004,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 for (int a = 0; a < 3; a++) {
                     buffers.add(new InstantCameraView.AudioBufferInfo());
                 }
+                audioRoute = AudioInputPreference.acquireRoute();
                 audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, audioSampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
                 AudioInputPreference.applyTo(audioRecorder);
                 audioRecorder.startRecording();
@@ -3005,6 +3014,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 Thread thread = new Thread(recorderRunnable);
                 thread.setPriority(Thread.MAX_PRIORITY);
                 thread.start();
+                audioThreadStarted = true;
 
                 audioBufferInfo = new MediaCodec.BufferInfo();
                 videoBufferInfo = new MediaCodec.BufferInfo();
@@ -3082,6 +3092,21 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 mediaMuxer.setAllowSyncFiles(false);
 
             } catch (Exception ioe) {
+                if (!audioThreadStarted) {
+                    // The recorder thread that releases these never started: give the microphone and the route back here.
+                    if (audioRecorder != null) {
+                        try {
+                            AudioInputPreference.unregister(audioRecorder);
+                            audioRecorder.release();
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                        }
+                    }
+                    if (audioRoute != null) {
+                        audioRoute.release();
+                        audioRoute = null;
+                    }
+                }
                 throw new RuntimeException(ioe);
             }
 

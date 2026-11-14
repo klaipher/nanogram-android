@@ -2,6 +2,7 @@ package org.telegram.ui;
 
 import static org.telegram.messenger.LocaleController.getString;
 
+import android.Manifest;
 import android.content.Context;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -22,6 +23,7 @@ import org.telegram.messenger.nanogram.NanogramOnDeviceTranscription;
 import org.telegram.messenger.nanogram.NanogramOnDeviceTranslation;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.PermissionRequest;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -45,9 +47,10 @@ public class NanogramFeaturesActivity extends UniversalFragment {
     private static final int ID_RECORDER_MIC_SWITCH = 10;
     private static final int ID_ENHANCED_PHOTOS = 11;
     private static final int ID_ENHANCED_PHOTO_MODE = 12;
+    private static final int ID_VOICE_ENHANCEMENT = 13;
 
     // Feature C turns this on when its recorder button lands; until then its row stays hidden.
-    private static final boolean RECORDER_MIC_SWITCH_AVAILABLE = false;
+    private static final boolean RECORDER_MIC_SWITCH_AVAILABLE = true;
 
     // Support probes run once off the main thread; null means not known yet, and the rows then behave as supported.
     private static volatile Boolean wideAngleSupported;
@@ -166,10 +169,12 @@ public class NanogramFeaturesActivity extends UniversalFragment {
         items.add(UItem.asButton(ID_MICROPHONE, getString(R.string.MicrophoneForRecordings), ThemeActivity.microphoneValue()));
         if (RECORDER_MIC_SWITCH_AVAILABLE) {
             items.add(UItem.asCheck(ID_RECORDER_MIC_SWITCH, getString(R.string.NanogramRecorderMicSwitch)).setChecked(NanogramFeatures.recorderMicSwitch()));
-            items.add(UItem.asShadow(getString(R.string.NanogramRecorderMicSwitchInfo)));
+            items.add(UItem.asShadow(getString(R.string.NanogramMicrophoneInfo) + "\n\n" + getString(R.string.NanogramRecorderMicSwitchInfo)));
         } else {
             items.add(UItem.asShadow(getString(R.string.NanogramMicrophoneInfo)));
         }
+        items.add(UItem.asCheck(ID_VOICE_ENHANCEMENT, getString(R.string.NanogramVoiceEnhancement)).setChecked(NanogramFeatures.headsetVoiceEnhancement()));
+        items.add(UItem.asShadow(getString(R.string.NanogramVoiceEnhancementInfo)));
 
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesCamera)));
         items.add(UItem.asCheck(ID_ROUND_WIDE_ANGLE, getString(R.string.NanogramRoundWideAngle)).setChecked(NanogramFeatures.roundWideAngle()));
@@ -285,6 +290,13 @@ public class NanogramFeaturesActivity extends UniversalFragment {
             }
             case ID_RECORDER_MIC_SWITCH:
                 NanogramFeatures.setRecorderMicSwitch(!NanogramFeatures.recorderMicSwitch());
+                if (NanogramFeatures.recorderMicSwitch() && !PermissionRequest.hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+                    // A denial keeps the switch on; Bluetooth then simply is not offered.
+                    PermissionRequest.ensurePermission(R.raw.permission_request_microphone, R.string.PermissionNoBluetoothWithHint, Manifest.permission.BLUETOOTH_CONNECT);
+                }
+                break;
+            case ID_VOICE_ENHANCEMENT:
+                NanogramFeatures.setHeadsetVoiceEnhancement(!NanogramFeatures.headsetVoiceEnhancement());
                 break;
             case ID_ENHANCED_PHOTOS:
                 if (!NanogramFeatures.enhancedPhotos() && !enhancedPhotosSupported()) {

@@ -19,6 +19,7 @@ public final class NanogramFeatures {
 
     private static final String ROUND_WIDE_ANGLE = "round_wide_angle";
     private static final String RECORDER_MIC_SWITCH = "recorder_mic_switch";
+    private static final String HEADSET_VOICE_ENHANCEMENT = "headset_voice_enhancement";
     private static final String PHOTO_ENHANCED = "photo_enhanced";
     private static final String PHOTO_ENHANCED_MODE = "photo_enhanced_mode";
 
@@ -110,6 +111,14 @@ public final class NanogramFeatures {
 
     public static void setRecorderMicSwitch(boolean value) {
         write(RECORDER_MIC_SWITCH, value);
+    }
+
+    public static boolean headsetVoiceEnhancement() {
+        return read(HEADSET_VOICE_ENHANCEMENT, false);
+    }
+
+    public static void setHeadsetVoiceEnhancement(boolean value) {
+        write(HEADSET_VOICE_ENHANCEMENT, value);
     }
 
     public static boolean enhancedPhotos() {

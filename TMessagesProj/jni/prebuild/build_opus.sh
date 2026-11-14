@@ -111,6 +111,29 @@ INCLUDES="$OPUS_SRC;$OPUS_SRC/include;$OPUS_SRC/celt;$OPUS_SRC/silk;$OPUS_SRC/si
 
 BASE_DEFS="OPUS_BUILD;FIXED_POINT;USE_ALLOCA;restrict=;LOCALE_NOT_USED;HAVE_LRINT;HAVE_LRINTF"
 
+# Opt-in: Opus 1.6 neural bandwidth extension (OSCE) in the decoder. Off by default: the shipped build is unchanged.
+# It needs the dnn sources and the model weight files (dnn/*_data.c, fetched by opus's dnn/download_model.sh), and it
+# grows the library by the model size. Run: OPUS_ENABLE_OSCE=1 ng prebuild
+if [ "${OPUS_ENABLE_OSCE:-0}" = "1" ]; then
+    DNN_MK="$OPUS_SRC/lpcnet_sources.mk"
+    [ -f "$DNN_MK" ] || { echo "ERROR: OPUS_ENABLE_OSCE=1 needs $DNN_MK (Opus 1.5 or newer)" >&2; exit 1; }
+    for f in lace_data.c nolace_data.c bbwenet_data.c fargan_data.c plc_data.c pitchdnn_data.c; do
+        [ -f "$OPUS_SRC/dnn/$f" ] || {
+            echo "ERROR: OPUS_ENABLE_OSCE=1 needs the model file dnn/$f: run dnn/download_model.sh in $OPUS_SRC" >&2
+            exit 1
+        }
+    done
+    # The model *_data.c files are part of these two lists already.
+    DNN_LIST="$({
+        mkvar "$DNN_MK" DEEP_PLC_SOURCES
+        mkvar "$DNN_MK" OSCE_SOURCES
+    } | to_cmake_list)"
+    [ -n "$DNN_LIST" ] || { echo "ERROR: no OSCE sources found in $DNN_MK" >&2; exit 1; }
+    BASE_LIST="$BASE_LIST;$DNN_LIST"
+    BASE_DEFS="$BASE_DEFS;ENABLE_DEEP_PLC;ENABLE_OSCE;ENABLE_OSCE_BWE"
+    INCLUDES="$INCLUDES;$OPUS_SRC/dnn"
+fi
+
 # Enable only intrinsic NEON support: no plain NEON macros, no RTCD and no
 # hand-written ARM assembly dependency.
 NEON_DEFS="OPUS_ARM_MAY_HAVE_NEON_INTR;OPUS_ARM_PRESUME_NEON_INTR"
