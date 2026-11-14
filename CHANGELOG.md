@@ -7,8 +7,10 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
-  and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio). voip, rnnoise and
-  twidget were already -O2/-O3; tgcalls_tp stays -Os (usrsctp, cold). No -O3: no loop kernel of ours is large enough
+  and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not
+  -Oz: tgcalls_tp's PUBLIC -Os (and rnnoise's PUBLIC -O3) was appended last to their command line and won over the
+  target's -O2, so -O2 is now also set per source (set_property SOURCE ... COMPILE_OPTIONS, which comes last). voip,
+  rnnoise and twidget were already -O2/-O3; tgcalls_tp itself stays -Os (usrsctp, cold). No -O3: no loop kernel of ours is large enough
   to pay for the growth. `-ffast-math` stays exactly where upstream had it; ThinLTO + gc-sections + icf stay on.
 - Prebuilts: opus `-Oz` -> `-O2` (voice messages and calls); FFmpeg `ENABLE_SMALL` 1 -> 0 with `--optflags=-O2`
   (--enable-small forces -Os and size-first paths); libvpx `LIBVPX_SMALL` 1 -> 0 (-O3 flags unchanged). Any script

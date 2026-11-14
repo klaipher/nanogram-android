@@ -319,6 +319,11 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
+
+# Interface options of linked targets (rnnoise -O3, tgcalls_tp -Os) are appended after the target's own, so the last -O
+# wins; source-level options come after those, which makes -O2 effective for the main library.
+get_target_property(NATIVE_LIB_SOURCES ${NATIVE_LIB} SOURCES)
+set_property(SOURCE ${NATIVE_LIB_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -O2)
 target_link_libraries(${NATIVE_LIB}
         -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
         webrtc_absl
