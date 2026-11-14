@@ -8,7 +8,8 @@ Newest first: version, build number, date, commit; what changed and how.
 ### ART baseline profile and startup profile for sideloaded installs
 - Sideloaded APKs get no Play cloud profile, so installs ran interpreted until background dexopt. The release APK now
   carries `assets/dexopt/baseline.prof` and the app depends on `androidx.profileinstaller` 1.4.1, which installs it on
-  first launch (Android 9+).
+  first launch (API 24+). ART compiles it at the next background dexopt (idle and charging), not at install; the gain is a
+  better-chosen method set there, and no `.dm` is shipped (the in-app updater and `adb install` carry only the APK).
 - `androidx.baselineprofile` 1.5.0 plugin in the app (`mergeIntoMain`, `saveInSrc`, no generation during builds,
   `dexLayoutOptimization` = R8 startup-profile dex layout). New `:baselineprofile` module (macrobenchmark 1.5.0,
   uiautomator 2.4.1) with `BaselineProfileGenerator`: startup test (also the startup profile) and a logged-out flow test
@@ -16,9 +17,14 @@ Newest first: version, build number, date, commit; what changed and how.
   The module is included only with `-Pnanogram.baselineProfile=true`; then only the afat release, nonMinifiedRelease and
   benchmarkRelease variants are enabled (`beforeVariants`), and the nonMinified/benchmark source sets use the release
   manifest.
+- Hand-written `src/main/baselineProfiles/startup-prof.txt` lists the logged-in cold-start classes (LaunchActivity,
+  MainTabsActivity, DialogsActivity, DialogCell, DialogsAdapter, storage and image core) explicitly, because the
+  generated startup profile only covers the logged-out start and R8 reads only `startup-prof.txt` files.
+- Profile-only variants (nonMinifiedRelease, benchmarkRelease) are disabled unless `-Pnanogram.baselineProfile=true`.
+  `ng build` takes the APK and mapping only from its own variant directory.
 - `TMessagesProj_App/src/main/baseline-prof.txt`: hand-written wildcard rules for post-login paths (chat list and cells,
   chat and message cells, ImageReceiver/ImageLoader, MessagesController/MessagesStorage reads, SQLite wrapper,
-  ConnectionsManager callbacks, NotificationCenter, RecyclerListView, emoji/theme drawing, TL deserialization).
+  ConnectionsManager callbacks, NotificationCenter, RecyclerListView, emoji/theme drawing, TL (de)serialization only, MainTabsActivity, narrowed AndroidUtilities).
 - `Tools/dev/ng profile` runs `:TMessagesProj_App:generateBaselineProfile` on the running emulator and prints line counts;
   docs in docs/nanogram/build.md (Profiles). Not yet built or measured. Commit: see git log of nanogram/profiles.
 
