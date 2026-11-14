@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- **Send Report masks phone numbers and e-mails** (owner, 2026-11-14), as on iOS and macOS: text logs (`.txt`, `.log`) in the diagnostics zip have `+` phone numbers replaced by `[phone]` and e-mail addresses by `[email]` (`NanogramReportMasking`, same patterns as iOS; tests `NanogramReportMaskingTest`). Traces, JSON and crash records are copied unchanged.
+- **Test fix**: `NanogramProfilingTest` assumed `android.os.ProfilingTrigger` is missing on the JVM; the compileSdk 37 stubs have it, so the test now checks the lookup itself (an unknown trigger name is unsupported, cold-start support follows the lookup).
 - **Build fix pin**: twidget 58053871 restores litehtml's style::add_length_property (lost in the Apple-layer merge; the Android link failed); nanogram-deps e7783ff2.
 - **Build fix pins**: quickjs 1bc6f4dc (forward declaration of js_set_uncatchable_pending; clang stopped on it), widget-sandbox e358184b, nanogram-deps 64a5d41e.
 - **Build fix: FFmpeg include path after the system headers**: the FFmpeg submodule root has a `VERSION` file, and on a case-insensitive disk `-I third_party/ffmpeg` made libc++'s `#include <version>` open it (tgcalls `CryptoHelper.cpp` failed). The native library and tgcalls now get `-idirafter <jni>/third_party/ffmpeg` instead of `-I`.

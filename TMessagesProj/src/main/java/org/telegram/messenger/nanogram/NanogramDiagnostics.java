@@ -487,7 +487,19 @@ public final class NanogramDiagnostics {
                 out.write(("[truncated: first " + ((length - maxBytes) >> 10) + " KB omitted]\n").getBytes(StandardCharsets.UTF_8));
                 in.skip(length - maxBytes);
             }
-            copyCapped(in, out, maxBytes);
+            if (NanogramReportMasking.isMaskedTextFile(name)) {
+                final java.io.ByteArrayOutputStream text = new java.io.ByteArrayOutputStream();
+                final byte[] buffer = new byte[32 * 1024];
+                long copied = 0;
+                int n;
+                while (copied < maxBytes && (n = in.read(buffer, 0, (int) Math.min(buffer.length, maxBytes - copied))) > 0) {
+                    text.write(buffer, 0, n);
+                    copied += n;
+                }
+                out.write(NanogramReportMasking.mask(text.toString("UTF-8")).getBytes(StandardCharsets.UTF_8));
+            } else {
+                copyCapped(in, out, maxBytes);
+            }
             out.closeEntry();
         } catch (java.io.FileNotFoundException e) {
             // Rotated or deleted while exporting.

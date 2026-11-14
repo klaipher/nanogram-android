@@ -184,7 +184,7 @@ public final class NanogramProfiling {
         return triggerType("TRIGGER_TYPE_COLD_START") != null;
     }
 
-    private static Integer triggerType(String field) {
+    static Integer triggerType(String field) {
         try {
             return Class.forName("android.os.ProfilingTrigger").getField(field).getInt(null);
         } catch (Throwable e) {
