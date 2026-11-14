@@ -24,9 +24,32 @@ public class NanogramTelecomCallTest {
     }
 
     @Test
+    public void everyDisconnectCodeIsOneTheSystemAccepts() {
+        for (int mask = 0; mask < 16; mask++) {
+            int code = NanogramTelecomCall.disconnectCode((mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0, (mask & 8) != 0);
+            assertTrue(code == DisconnectCause.LOCAL || code == DisconnectCause.REMOTE
+                    || code == DisconnectCause.MISSED || code == DisconnectCause.REJECTED);
+        }
+    }
+
+    @Test
+    public void outgoingCallsStartWithoutPrivateCallYet() {
+        boolean oneToOne = NanogramTelecomCall.oneToOne(false, true);
+        assertTrue(NanogramTelecomCall.startsCall(false, true, oneToOne));
+        assertTrue(NanogramTelecomCall.startsCall(true, false, oneToOne));
+        assertFalse(NanogramTelecomCall.startsCall(false, false, oneToOne));
+    }
+
+    @Test
+    public void groupCallsAndMissingUserDoNotStart() {
+        assertFalse(NanogramTelecomCall.startsCall(true, false, NanogramTelecomCall.oneToOne(true, true)));
+        assertFalse(NanogramTelecomCall.startsCall(true, false, NanogramTelecomCall.oneToOne(false, false)));
+    }
+
+    @Test
     public void disconnectCodeMapping() {
-        assertEquals(DisconnectCause.ERROR, NanogramTelecomCall.disconnectCode(true, true, true, true));
-        assertEquals(DisconnectCause.BUSY, NanogramTelecomCall.disconnectCode(false, true, false, false));
+        assertEquals(DisconnectCause.LOCAL, NanogramTelecomCall.disconnectCode(true, true, true, true));
+        assertEquals(DisconnectCause.REMOTE, NanogramTelecomCall.disconnectCode(false, true, false, false));
         assertEquals(DisconnectCause.REJECTED, NanogramTelecomCall.disconnectCode(false, false, false, true));
         assertEquals(DisconnectCause.MISSED, NanogramTelecomCall.disconnectCode(false, false, true, false));
         assertEquals(DisconnectCause.LOCAL, NanogramTelecomCall.disconnectCode(false, false, false, false));

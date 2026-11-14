@@ -45,17 +45,26 @@ final class NanogramTelecomCall {
         return sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && experimentOn && !legacyConnectionService && oneToOne;
     }
 
-    static int disconnectCode(boolean failed, boolean remoteBusy, boolean outgoingNotAnswered, boolean incomingDeclined) {
+    static boolean oneToOne(boolean hasGroupCall, boolean hasUser) {
+        return !hasGroupCall && hasUser;
+    }
+
+    static boolean startsCall(boolean incomingRinging, boolean outgoingRequesting, boolean oneToOne) {
+        return oneToOne && (incomingRinging || outgoingRequesting);
+    }
+
+    /** CallControl.disconnect accepts only LOCAL, REMOTE, MISSED and REJECTED. */
+    static int disconnectCode(boolean failed, boolean remoteBusy, boolean incomingNotAnswered, boolean incomingDeclined) {
         if (failed) {
-            return DisconnectCause.ERROR;
+            return DisconnectCause.LOCAL;
         }
         if (remoteBusy) {
-            return DisconnectCause.BUSY;
+            return DisconnectCause.REMOTE;
         }
         if (incomingDeclined) {
             return DisconnectCause.REJECTED;
         }
-        if (outgoingNotAnswered) {
+        if (incomingNotAnswered) {
             return DisconnectCause.MISSED;
         }
         return DisconnectCause.LOCAL;
@@ -66,6 +75,8 @@ final class NanogramTelecomCall {
     private final boolean video;
     private volatile CallControl control;
     private boolean pendingActive;
+    private boolean active;
+    private boolean answered;
     private boolean pendingAnswer;
     private int pendingDisconnect = -1;
     private boolean finished;
@@ -76,7 +87,7 @@ final class NanogramTelecomCall {
         this.video = video;
     }
 
-    void start(Context context, String displayName, long userId) {
+    void start(Context context, String displayName) {
         try {
             TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
             PhoneAccountHandle handle = new PhoneAccountHandle(new ComponentName(context, TelegramConnectionService.class), ACCOUNT_ID);
@@ -88,7 +99,7 @@ final class NanogramTelecomCall {
                     handle,
                     incoming ? CallAttributes.DIRECTION_INCOMING : CallAttributes.DIRECTION_OUTGOING,
                     displayName,
-                    Uri.fromParts("tel", "+99084" + userId, null)
+                    Uri.fromParts(PhoneAccount.SCHEME_SIP, "nanogram-call", null)
             ).setCallType(video ? CallAttributes.VIDEO_CALL : CallAttributes.AUDIO_CALL)
                     .setCallCapabilities(video ? CallAttributes.SUPPORTS_VIDEO_CALLING : 0)
                     .build();
@@ -114,7 +125,7 @@ final class NanogramTelecomCall {
 
     private synchronized void onControl(CallControl result) {
         if (finished) {
-            result.disconnect(new DisconnectCause(DisconnectCause.LOCAL), Runnable::run, noop());
+            safeDisconnect(result, DisconnectCause.LOCAL);
             return;
         }
         control = result;
@@ -130,14 +141,15 @@ final class NanogramTelecomCall {
             int code = pendingDisconnect;
             pendingDisconnect = -1;
             finished = true;
-            result.disconnect(new DisconnectCause(code), Runnable::run, noop());
+            safeDisconnect(result, code);
         }
     }
 
     synchronized void answer() {
-        if (finished) {
+        if (finished || answered) {
             return;
         }
+        answered = true;
         CallControl c = control;
         if (c == null) {
             pendingAnswer = true;
@@ -147,9 +159,10 @@ final class NanogramTelecomCall {
     }
 
     synchronized void setActive() {
-        if (finished) {
+        if (finished || active) {
             return;
         }
+        active = true;
         CallControl c = control;
         if (c == null) {
             pendingActive = true;
@@ -168,7 +181,15 @@ final class NanogramTelecomCall {
             return;
         }
         finished = true;
-        c.disconnect(new DisconnectCause(cause), Runnable::run, noop());
+        safeDisconnect(c, cause);
+    }
+
+    private static void safeDisconnect(CallControl c, int cause) {
+        try {
+            c.disconnect(new DisconnectCause(cause), Runnable::run, noop());
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     private synchronized boolean markFinishedBySystem() {
