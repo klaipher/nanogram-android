@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Tester round (Android 13.2.2 build 202611141530)
+- TESTER-4 (PiP round video could be dragged but not closed): `PipRoundVideoView` close is idempotent (closing/closed state, `PipRoundCloseState`): an animated close without a texture parent removes the window at once, a cancelled hide animation (`showTemporary`) still finishes the removal, `show()` closes an older instance and reports an addView failure; new small close button (top-right corner) next to the edge swipe. `MediaController` gets `showPip()`/`closePip()` (one place for the 5 create blocks and the 4 close blocks; the controller field is cleared by an on-closed listener) and `cleanupPlayer(.., stopService=true)` now closes the PiP outside the notify branch (history cleared while the circle plays) and before the restore-music early return. JVM test: `PipRoundCloseStateTest`.
 ### Build-system modernization (prebuild caching, Rust pin, ThinLTO cache)
 - ccache now also fronts FFmpeg, libvpx (make-time `CC=`/`CXX=` override, so configure output, config.h and vpx_config
   stay identical; the prebuild runs without CCACHE_BASEDIR so object bytes match a no-ccache build too) and dav1d (meson cross-file `c = ['ccache', clang]`); openh264 unchanged.
