@@ -1105,9 +1105,7 @@ public class ManageLinksActivity extends BaseFragment implements NotificationCen
                     options.add(R.drawable.msg_copy, getString(R.string.CopyLink), () -> {
                         try {
                             if (invite.link == null) return;
-                            android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                            android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
-                            clipboard.setPrimaryClip(clip);
+                            if (!org.telegram.messenger.nanogram.NanogramClipboard.copyLink(invite.link)) return;
                             BulletinFactory.createCopyLinkBulletin(ManageLinksActivity.this).show();
                         } catch (Exception e) {
                             FileLog.e(e);

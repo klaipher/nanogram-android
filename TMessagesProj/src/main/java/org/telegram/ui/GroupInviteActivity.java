@@ -137,9 +137,7 @@ public class GroupInviteActivity extends BaseFragment implements NotificationCen
                     return;
                 }
                 try {
-                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                    android.content.ClipData clip = android.content.ClipData.newPlainText("label", invite.link);
-                    clipboard.setPrimaryClip(clip);
+                    if (!org.telegram.messenger.nanogram.NanogramClipboard.copyLink(invite.link)) return;
                     BulletinFactory.createCopyLinkBulletin(this).show();
                 } catch (Exception e) {
                     FileLog.e(e);

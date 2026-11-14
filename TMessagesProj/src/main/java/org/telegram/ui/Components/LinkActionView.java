@@ -162,9 +162,9 @@ public class LinkActionView extends LinearLayout {
                 if (link == null) {
                     return;
                 }
-                android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
-                android.content.ClipData clip = android.content.ClipData.newPlainText("label", link);
-                clipboard.setPrimaryClip(clip);
+                if (!org.telegram.messenger.nanogram.NanogramClipboard.copyLink(link)) {
+                    return;
+                }
                 if (bottomSheet != null && bottomSheet.getContainer() != null) {
                     BulletinFactory.createCopyLinkBulletin(bottomSheet.getContainer()).show();
                 } else {
