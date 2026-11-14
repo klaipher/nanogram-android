@@ -34,6 +34,13 @@ if (NOT NANOGRAM_PREBUILD_DIR)
     if (NOT NANOGRAM_FFMPEG_PREBUILT_VERSION MATCHES "\"n?${NANOGRAM_FFMPEG_SRC_VERSION}[\".-]")
         message(FATAL_ERROR "Committed prebuild (${NANOGRAM_FFMPEG_PREBUILT_VERSION}) does not match FFmpeg ${NANOGRAM_FFMPEG_SRC_VERSION}; build through Tools/dev/ng or refresh jni/prebuild")
     endif()
+    # The wallet bridge builds against the fork's bindings (trust_recipient_public_key) and the include shim serves the
+    # fork's openh264 headers; the committed fallback predates both. Refuse it instead of failing in the compiler or
+    # linking the cisco v2.7.0 libopenh264.a against fork headers (ABI skew).
+    file(STRINGS ${NANOGRAM_PREBUILD_DIR}/include/wallet-engine/wallet_engine.hpp NANOGRAM_WALLET_TRUST_KEY REGEX "trust_recipient_public_key" LIMIT_COUNT 1)
+    if (NOT NANOGRAM_WALLET_TRUST_KEY)
+        message(FATAL_ERROR "Committed fallback prebuild is stale (wallet bindings lack trust_recipient_public_key, libopenh264.a is not the fork build); build through Tools/dev/ng prebuild (it passes nanogramPrebuildDir) or refresh jni/prebuild")
+    endif()
 
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a" OR ${ANDROID_ABI} STREQUAL "arm64-v8a")
     enable_language(ASM)
