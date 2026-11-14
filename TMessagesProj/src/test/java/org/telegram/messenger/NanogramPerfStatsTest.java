@@ -25,6 +25,15 @@ public class NanogramPerfStatsTest {
     }
 
     @Test
+    public void resetsOnlyTheGivenKeys() {
+        NanogramPerfStats.record("a", 1_000_000L);
+        NanogramPerfStats.record("b", 1_000_000L);
+        NanogramPerfStats.reset("a");
+        assertNull(NanogramPerfStats.snapshot().get("a"));
+        assertEquals(1, NanogramPerfStats.snapshot().get("b").count);
+    }
+
+    @Test
     public void countsSlowFrames() {
         NanogramPerfStats.record(NanogramPerfStats.FRAME_TIME, 10_000_000L);
         NanogramPerfStats.record(NanogramPerfStats.FRAME_TIME, 20_000_000L);

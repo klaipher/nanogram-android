@@ -72,7 +72,7 @@ public class AnimatedFileNative {
 
     public int getVideoFrame(Bitmap bitmap, boolean preview, float startTimeSeconds, float endTimeSeconds, boolean loop) {
         checkNotDestroyed();
-        final long start = bitmap != null && !preview ? System.nanoTime() : 0;
+        final long start = bitmap != null && !preview && Math.max(mMetaData[0], mMetaData[1]) <= org.telegram.messenger.NanogramGifDecodeFlags.SMALL_TILE_MAX_SIDE ? System.nanoTime() : 0;
         final int result = getVideoFrame(mNativePtr, bitmap, mMetaData, preview, startTimeSeconds, endTimeSeconds, loop);
         NanogramPerfStats.recordSince(NanogramPerfStats.GIF_FRAME_DECODE, start);
         return result;

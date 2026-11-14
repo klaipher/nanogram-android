@@ -58,6 +58,7 @@ public final class NanogramPerfExperiments {
     }
 
     public static void setEnabled(Experiment experiment, boolean enabled) {
+        NanogramPerfStats.reset(experiment.statKeys);
         switch (experiment) {
             case ADAPTIVE_REFRESH:
                 NanogramExperiments.setEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE, enabled);
@@ -115,7 +116,7 @@ public final class NanogramPerfExperiments {
     }
 
     public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot) {
-        StringBuilder sb = new StringBuilder("Performance experiments (since the app started; durations only)\n");
+        StringBuilder sb = new StringBuilder("Performance experiments (since each switch last changed; durations only)\n");
         sb.append("device: ").append(device).append('\n');
         for (Experiment experiment : Experiment.values()) {
             boolean supported = experiment.isSupported(sdkInt);

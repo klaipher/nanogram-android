@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Durations of the performance experiments since the app process started. Durations only: no content, ids or numbers. */
+/** Durations of the performance experiments since the experiment's switch last changed. Durations only: no content, ids or numbers. */
 public final class NanogramPerfStats {
 
     public static final String FRAME_TIME = "frameTime";
@@ -104,6 +104,12 @@ public final class NanogramPerfStats {
 
     public static void reset() {
         stats.clear();
+    }
+
+    public static void reset(String... keys) {
+        for (String key : keys) {
+            stats.remove(key);
+        }
     }
 
     public static String formatLine(String key, Snapshot s) {

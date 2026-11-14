@@ -301,7 +301,7 @@ public final class NanogramDiagnostics {
                 + NanogramSystemInfo.summaryLine() + "\n\n"
                 + "Files\n"
                 + "  device-info.txt    device, Android version, power and network state, permissions, notification channel states, memory\n"
-                + "  performance-experiments.txt  switch states and durations of the performance experiments since the app started (no content)\n"
+                + "  performance-experiments.txt  switch states and durations of the performance experiments since each switch last changed (no content)\n"
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"

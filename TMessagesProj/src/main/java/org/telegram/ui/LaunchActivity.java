@@ -857,7 +857,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         //    refreshRateController = new RefreshRateController(this);
         //}
         checkFrameMetrics();
-        nanogramFrameStats = NanogramFrameStats.attach(this);
+        attachNanogramFrameStats();
+    }
+
+    public void attachNanogramFrameStats() {
+        if (nanogramFrameStats == null && NanogramFrameStats.isCollecting()) {
+            nanogramFrameStats = NanogramFrameStats.attach(this);
+        }
     }
 
     public void checkFrameMetrics() {
@@ -7156,6 +7162,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             frameMetricsOverlayView.detach();
         }
         NanogramFrameStats.detach(this, nanogramFrameStats);
+        nanogramFrameStats = null;
     }
 
     private static void onDestroyStaticResources() {

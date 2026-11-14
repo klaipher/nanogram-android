@@ -25,6 +25,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatThemeController;
+import org.telegram.messenger.NanogramFrameStats;
 import org.telegram.messenger.NanogramPerfExperiments;
 import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.FileLog;
@@ -249,8 +250,12 @@ public class DebugSettingsActivity extends UniversalFragment {
     }
 
     private void fillPerformanceExperiments(ArrayList<UItem> items) {
+        NanogramFrameStats.startCollecting();
+        if (LaunchActivity.instance != null) {
+            LaunchActivity.instance.attachNanogramFrameStats();
+        }
         items.add(UItem.asHeader("Performance experiments"));
-        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nAll switches start off. Change one at a time, as the test guide says. Numbers are since the app started; reopen this screen to refresh. Send them with Nanogram diagnostics."));
+        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nAll switches start off. Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
         final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();
         for (NanogramPerfExperiments.Experiment experiment : NanogramPerfExperiments.Experiment.values()) {
             if (!experiment.isSupported(Build.VERSION.SDK_INT)) {

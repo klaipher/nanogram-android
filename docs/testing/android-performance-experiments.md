@@ -23,22 +23,23 @@ If a switch says "not available on this phone", your Android is too old for it. 
    Chrome, download the `.apk`, open it, allow "install unknown apps" for Chrome if asked). It updates the
    existing app and keeps your chats.
 2. **Open the switches:** Nanogram > Settings (profile tab) > scroll to the very bottom > tap the **version line**
-   (for example "Nanogram 13.2.2 (...)") **twice**. A "Debug settings" list opens. The first section is
-   **Performance experiments**.
+   (for example "Nanogram 13.2.2 (...)") **twice**. A **Debug Menu** list opens. Scroll down to the section
+   **Performance experiments** (below "Contacts and chats" and "Data"). Open it once before your first run: the
+   frame numbers are only collected after that.
 3. In that section you see **Device:** (for example "Google Pixel 8, SoC Tensor G3, Android 15"). Check that
    it is your phone. Below it every experiment has a switch (all off at first), a short description, and grey
-   numbers measured since Nanogram started.
+   numbers measured since that switch was last changed.
 4. Charge above 60% and do not charge during a test. Turn off Battery Saver and Adaptive Battery tricks you added
    yourself; keep Wi-Fi on. Keep the screen brightness the same for A and B (set it by hand, not automatic).
 5. Let the phone cool down before each run (not warm at the top back). Close other apps.
 
 ## How to switch between A and B
 
-1. Debug settings > Performance experiments > flip **one** switch. Only one switch is on at a time.
+1. Debug Menu > Performance experiments > flip **one** switch. Flipping a switch clears the numbers of that experiment, so the zip of run B holds only B. Only one switch is on at a time.
 2. Under the switch it says how it applies. When it says "Restart the app": open the recent-apps screen, swipe
    Nanogram away, open it again. "Applies to the next call": nothing to restart. "Close and reopen the camera": leave the
    camera screen and open it again.
-3. Open Debug settings again and check the switch shows what you want.
+3. Open the Debug Menu again and check the switch shows what you want.
 
 Always do **A (off) first, then B (on)**, back to back, same content and same place in the chat. Write down your
 result of A before you start B.
@@ -98,7 +99,7 @@ Script (about 5 minutes per run):
 1. Open a chat with many photos (a group with photo posts), or Shared Media > Photos of such a chat.
 2. Scroll quickly up for 2 minutes, then back down.
 3. Open the attach menu (paperclip) > Gallery and scroll through your whole gallery grid.
-4. Open 5 photos full screen, swipe between them.
+4. Open 5 photos full screen, swipe between them (the full-screen viewer is not measured by `frameTime`; judge it by eye).
 
 Watch for: grey or empty cells while scrolling, a short freeze when a new row of pictures appears.
 The number `imageUpload` shows only when the switch is on (time spent preparing pictures for the screen). It is
@@ -112,7 +113,7 @@ Script (about 3 minutes per run):
 3. Watch a full-screen GIF for 30 seconds.
 
 Watch for: GIFs that play choppy, edges of GIFs that look softer or blocky in B (compare the same GIF).
-The number `gifFrameDecode` shows the time to decode one frame (lower is better; it also includes small videos).
+The number `gifFrameDecode` shows the time to decode one frame of clips up to 320 px (lower is better; it also includes small video stickers and emoji, which the switch does not change, so the gain shows smaller than it is).
 The line must show n greater than 0, otherwise repeat the run.
 
 ## Test 6: big chats and search (switch "Database tuning")
@@ -141,12 +142,12 @@ For each experiment, and for A and B separately, send the project owner (a messa
 - **Battery drop** over the 10 minutes (e.g. 4%).
 - The extra checks for calls and camera (works / wrong / not tested).
 - The **diagnostics zip**, made right after finishing that run, **before** you flip the switch or restart: Settings > Help >
-  **Send diagnostics** (or Debug settings > Nanogram diagnostics) > **Share diagnostics**. It contains a file
-  `performance-experiments.txt` with the state of every switch and the numbers since the app started: count, average and
+  **Send diagnostics** (or Debug Menu > Nanogram diagnostics) > **Share diagnostics**. It contains a file
+  `performance-experiments.txt` with the state of every switch and the numbers since that switch last changed: count, average and
   longest time per frame, per GIF frame, per camera start, per call setup. Only durations and the phone model are in that file. The zip also holds
   the normal diagnostic logs (device state, error log), so send it only if you are fine with that.
 
-The same numbers show in grey under the switches in Debug settings (close and reopen the screen to refresh). Numbers reset every time the app restarts, so take the zip before restarting.
+The same numbers show in grey under the switches in the Debug Menu (close and reopen the screen to refresh). Numbers reset every time the app restarts or you flip that experiment's switch, so take the zip before either.
 
 ## The decision rule (project owner)
 
@@ -154,9 +155,10 @@ An experiment is turned on by default for a device class (this Pixel generation)
 phone (at least 3 testers or 3 runs on at least 2 phone models):
 
 1. median smoothness in B is not lower than in A, and no more testers report stutter in B than in A;
-2. its measured time in the export (`frameTime`/`frameInterval` for refresh rate, `cameraFirstFrame`, `callSetup`, `imageUpload`
+2. its measured time in the export (`frameTime` and slow-frame counts for refresh rate, `cameraFirstFrame`, `callSetup`, `imageUpload`
    not worse than the cost it saves, `gifFrameDecode`) is not worse in B: average at most 5% higher and longest at most 25% higher,
-   and for the experiments meant to be faster (images, GIFs, camera) at least 10% lower on average;
+   and for the experiments meant to be faster (images, GIFs, camera) at least 10% lower on average. For refresh rate `frameInterval` is only
+   an observation: B is expected to be higher because content may draw below the top rate;
 3. median battery drop in B is at most 1 percentage point higher than in A, and no tester reports hot in B while cool or warm in A;
 4. for calls and camera: every extra check works in B. One wrong check (no sound, black camera, a call that cannot be hung up, framing that changes)
    keeps the experiment off.
