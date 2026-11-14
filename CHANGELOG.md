@@ -5,6 +5,24 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
+- `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
+  and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not
+  -Oz: tgcalls_tp's PUBLIC -Os (and rnnoise's PUBLIC -O3) was appended last to their command line and won over the
+  target's -O2, so -O2 is now also set per source (set_property SOURCE ... COMPILE_OPTIONS, which comes last). voip,
+  rnnoise and twidget were already -O2/-O3; tgcalls_tp itself stays -Os (usrsctp, cold). No -O3: no loop kernel of ours is large enough
+  to pay for the growth. `-ffast-math` stays exactly where upstream had it; ThinLTO + gc-sections + icf stay on.
+- Prebuilts: opus `-Oz` -> `-O2` (voice messages and calls); FFmpeg `ENABLE_SMALL` 1 -> 0 with `--optflags=-O2`
+  (--enable-small forces -Os and size-first paths); libvpx `LIBVPX_SMALL` 1 -> 0 (-O3 flags unchanged). Any script
+  change changes the `ng prebuild` cache key, so prebuilts rebuild once.
+- libvpx arm64: run-time CPU detection on and `neon_dotprod`/`neon_i8mm` kernels built next to the ARMv8.0 ones
+  (picked through getauxval, so ARMv8.0 phones run the baseline code). SVE/SVE2 stay off (`LIBVPX_ARM_SVE=1` to try).
+- Already covered, nothing added: BoringSSL (AES/SHA/PMULL by getauxval), libyuv (NEON dotprod/i8mm dispatch), dav1d and
+  FFmpeg aarch64 asm (dotprod/i8mm via cpu flags), webrtc and opus (NEON intrinsics, baseline), outline atomics (NDK r30
+  clang enables `+outline-atomics` by default; LSE chosen at run time). Global `-march` stays ARMv8.0-A and no
+  `-mtune` is added: little cores are in-order, a big-core schedule can slow them.
+- Measure: see docs/nanogram/build.md "Native speed flags".
+
 ### Native LTO for all code (ThinLTO)
 - voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose
   final flags apply to every C++ target there, so upstream builds all C++ (tgnet, tgcalls, WebRTC, the main library)

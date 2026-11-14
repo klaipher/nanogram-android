@@ -145,8 +145,9 @@ add_library(tgnet STATIC
         tgnet/ProxyCheckInfo.cpp
         tgnet/Handshake.cpp
         tgnet/Config.cpp)
+# Nanogram: -O2 for code that runs per message, per file chunk and per frame (was -Oz).
 target_compile_options(tgnet PUBLIC
-        -Wall -frtti -finline-functions -ffast-math -Oz)
+        -Wall -frtti -finline-functions -ffast-math -O2)
 set_target_properties(tgnet PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(tgnet PUBLIC
@@ -190,7 +191,7 @@ target_link_libraries(wallet_engine_jni PRIVATE wallet_engine_cpp)
 add_library(sqlite STATIC
         sqlite/sqlite3.c)
 target_compile_options(sqlite PUBLIC
-        -fno-strict-aliasing -Oz)
+        -fno-strict-aliasing -O2)
 set_target_properties(sqlite PROPERTIES
         ANDROID_ARM_MODE arm)
 target_compile_definitions(sqlite PUBLIC
@@ -275,7 +276,7 @@ set_property(SOURCE ${PRISMA_BRIDGE_SOURCES} APPEND PROPERTY
         COMPILE_DEFINITIONS BOOST_REGEX_STANDALONE)
 
 target_compile_options(${NATIVE_LIB} PUBLIC
-        -ffast-math -Oz -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
+        -ffast-math -O2 -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
 
 target_compile_definitions(${NATIVE_LIB} PUBLIC
         BSD=1 NULL=0 SOCKLEN_T=socklen_t ANDROID_NDK DISABLE_IMPORTGL AVOID_TABLES ANDROID_TILE_BASED_DECODE __STDC_CONSTANT_MACROS ANDROID_ARMV6_IDCT OPUS_BUILD FIXED_POINT USE_ALLOCA restrict= __EMX__ LOCALE_NOT_USED HAVE_LRINT HAVE_LRINTF)
@@ -318,6 +319,11 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map")
+
+# Interface options of linked targets (rnnoise -O3, tgcalls_tp -Os) are appended after the target's own, so the last -O
+# wins; source-level options come after those, which makes -O2 effective for the main library.
+get_target_property(NATIVE_LIB_SOURCES ${NATIVE_LIB} SOURCES)
+set_property(SOURCE ${NATIVE_LIB_SOURCES} APPEND PROPERTY COMPILE_OPTIONS -O2)
 target_link_libraries(${NATIVE_LIB}
         -Wl,--whole-archive rnnoise openh264 voipandroid -Wl,--no-whole-archive
         webrtc_absl

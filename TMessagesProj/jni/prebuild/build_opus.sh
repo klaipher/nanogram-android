@@ -139,7 +139,7 @@ target_include_directories(opus PRIVATE
 
 target_compile_options(opus PRIVATE
     -std=c11
-    -Oz
+    -O2
     -g0
     -ffast-math
     -funroll-loops

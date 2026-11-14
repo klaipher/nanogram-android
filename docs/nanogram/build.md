@@ -30,6 +30,16 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 | Uncompressed, 16 KB-aligned native libraries | app `packaging.jniLibs`, `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES` | no extracted copy on the device, ready for 16 KB-page devices |
 | Shallow submodules | `ng setup` | pinned commits only |
 
+## Native speed flags
+
+Hot code (tgnet, sqlite, image/gif/lottie glue, opus, FFmpeg, libvpx) is built for speed (-O2, no `--enable-small`);
+cold code (tgcalls_tp/usrsctp) stays -Os. libvpx arm64 adds dotprod/i8mm kernels chosen at run time. Compare before and
+after with `ng build release` on both commits: `ls -l` of `libtmessages.49.so` and APK size, and
+`unzip -l` for per-library sizes. Quick speed check on a device or emulator: `adb shell am start -W` cold start and
+`dumpsys gfxinfo` jank on a long chat list (sqlite), voice-message playback CPU (`top -H`), a VP9 .webm sticker
+(libvpx). Verify with `compile_commands.json` that tgnet/sqlite sources, `jni.c` and `image.cpp` end with `-O2` (the last `-O` on
+the line wins; a trailing `-Os` or `-O3` means an interface option of a linked target overrode it).
+
 ## Measurements
 
 Apple M-series, 10 cores; arm64 debug unless noted. Recorded by `ng metrics` (`~/.cache/nanogram-android/logs/metrics.tsv`).

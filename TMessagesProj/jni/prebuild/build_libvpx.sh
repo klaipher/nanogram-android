@@ -37,11 +37,14 @@ WORK_DIR="$BUILD_ROOT/work"
 INSTALL_DIR="$BUILD_ROOT/install"
 
 LIBVPX_REALTIME_ONLY="${LIBVPX_REALTIME_ONLY:-1}"
-LIBVPX_SMALL="${LIBVPX_SMALL:-1}"
+LIBVPX_SMALL="${LIBVPX_SMALL:-0}"
 LIBVPX_BETTER_HW_COMPATIBILITY="${LIBVPX_BETTER_HW_COMPATIBILITY:-1}"
 LIBVPX_WEBM_IO="${LIBVPX_WEBM_IO:-0}"
 LIBVPX_RUNTIME_CPU_DETECT="${LIBVPX_RUNTIME_CPU_DETECT:-auto}"
-LIBVPX_ARM_EXTENSIONS="${LIBVPX_ARM_EXTENSIONS:-0}"
+# Nanogram: arm64 builds the ARMv8.2 dotprod/i8mm kernels next to the baseline ones and picks them at run time
+# (getauxval). SVE stays off: no phone benefit worth the build risk.
+LIBVPX_ARM_EXTENSIONS="${LIBVPX_ARM_EXTENSIONS:-1}"
+LIBVPX_ARM_SVE="${LIBVPX_ARM_SVE:-0}"
 LIBVPX_SIZE_LIMIT="${LIBVPX_SIZE_LIMIT:-4096x4096}"
 
 UNWIND_TABLES="${UNWIND_TABLES:-0}"
@@ -63,7 +66,7 @@ require_bool() {
 
 for name in \
     LIBVPX_REALTIME_ONLY LIBVPX_SMALL LIBVPX_BETTER_HW_COMPATIBILITY \
-    LIBVPX_WEBM_IO LIBVPX_ARM_EXTENSIONS UNWIND_TABLES FRAME_POINTERS \
+    LIBVPX_WEBM_IO LIBVPX_ARM_EXTENSIONS LIBVPX_ARM_SVE UNWIND_TABLES FRAME_POINTERS \
     FUNCTION_SECTIONS ADDRSIG LIBVPX_ADDRSIG HIDDEN_VISIBILITY
 do
     require_bool "$name" "${!name}"
@@ -265,7 +268,7 @@ build_libvpx_for_abi() {
     runtime_cpu_detect="$LIBVPX_RUNTIME_CPU_DETECT"
     if [[ "$runtime_cpu_detect" == "auto" ]]; then
         case "$abi" in
-            x86|x86_64) runtime_cpu_detect="on" ;;
+            x86|x86_64|arm64-v8a) runtime_cpu_detect="on" ;;
             *) runtime_cpu_detect="off" ;;
         esac
     fi
@@ -286,10 +289,13 @@ build_libvpx_for_abi() {
             ;;
         arm64-v8a)
             libvpx_toggle neon_asm 0
-            libvpx_toggle neon_dotprod "$LIBVPX_ARM_EXTENSIONS"
-            libvpx_toggle neon_i8mm "$LIBVPX_ARM_EXTENSIONS"
-            libvpx_toggle sve "$LIBVPX_ARM_EXTENSIONS"
-            libvpx_toggle sve2 "$LIBVPX_ARM_EXTENSIONS"
+            # Extensions are only safe with run-time detection; without it they would be assumed present.
+            ext="$LIBVPX_ARM_EXTENSIONS"; sve="$LIBVPX_ARM_SVE"
+            [[ "$runtime_cpu_detect" == "on" ]] || { ext=0; sve=0; }
+            libvpx_toggle neon_dotprod "$ext"
+            libvpx_toggle neon_i8mm "$ext"
+            libvpx_toggle sve "$sve"
+            libvpx_toggle sve2 "$sve"
             ;;
     esac
 
