@@ -4,13 +4,7 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.os.CancellationSignal;
-
-import androidx.annotation.NonNull;
-import androidx.biometric.BiometricManager;
-import androidx.biometric.BiometricPrompt;
-import androidx.core.content.ContextCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
@@ -40,7 +34,7 @@ public final class GramWalletStorageAuth {
                 if (!isCurrent.get()) { request.finish("STORAGE_CANCELED"); return; }
                 active = request;
                 LaunchActivity activity = LaunchActivity.instance;
-                if (Build.VERSION.SDK_INT < 23 || activity == null || activity.isFinishing()
+                if (activity == null || activity.isFinishing()
                         || activity.isDestroyed() || activity.getSupportFragmentManager().isStateSaved()) {
                     request.finish("AUTH_UNAVAILABLE");
                     return;
@@ -83,13 +77,6 @@ public final class GramWalletStorageAuth {
         return true;
     }
 
-    public static void onActivityStopped(Activity activity) {
-        if (active != null && active.activity == activity && Build.VERSION.SDK_INT < 30 && !active.credentialStarted) {
-            active.finish("AUTH_CANCELED");
-            active.stopBiometrics();
-        }
-    }
-
     public static void onActivityDestroyed(Activity activity) {
         if (active != null && active.activity == activity) {
             active.finish("AUTH_CANCELED");
@@ -106,7 +93,6 @@ public final class GramWalletStorageAuth {
         boolean credentialStarted;
         int credentialCode;
         CancellationSignal cancellation;
-        BiometricPrompt legacyPrompt;
 
         void finish(String error) {
             if (latch.getCount() == 0) return;
@@ -117,14 +103,11 @@ public final class GramWalletStorageAuth {
         void start(boolean credentialOnly) {
             try {
                 if (credentialOnly) credentials();
-                else if (Build.VERSION.SDK_INT >= 30) platformBiometrics();
-                else androidxBiometrics();
+                else platformBiometrics();
             } catch (Exception e) { FileLog.e(e); credentials(); }
         }
 
-        // Framework prompt on R+: its own callback, device credential inside the prompt. Below R the AndroidX prompt is
-        // used because it restricts P-Q to strong biometrics, which the bare framework prompt does not.
-        @androidx.annotation.RequiresApi(30)
+        // Framework prompt: its own callback, device credential inside the prompt.
         private void platformBiometrics() {
             cancellation = new CancellationSignal();
             android.hardware.biometrics.BiometricPrompt.Builder builder = new android.hardware.biometrics.BiometricPrompt.Builder(activity)
@@ -141,29 +124,6 @@ public final class GramWalletStorageAuth {
                             else credentials();
                         }
                     });
-        }
-
-        // Android 6-10: AndroidX BiometricPrompt (fingerprint dialog) with a "use device PIN" button.
-        private void androidxBiometrics() {
-            if (BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
-                credentials();
-                return;
-            }
-            legacyPrompt = new BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), new BiometricPrompt.AuthenticationCallback() {
-                @Override public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
-                    if (!credentialStarted) finish(null);
-                }
-                @Override public void onAuthenticationError(int code, @NonNull CharSequence message) {
-                    if (!waiting() || credentialStarted) return;
-                    if (code == BiometricPrompt.ERROR_USER_CANCELED || code == BiometricPrompt.ERROR_CANCELED) finish("AUTH_CANCELED");
-                    else credentials();
-                }
-            });
-            legacyPrompt.authenticate(new BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(LocaleController.getString(R.string.WalletUnlock))
-                    .setNegativeButtonText(LocaleController.getString(R.string.WalletUseDevicePasscode))
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .build());
         }
 
         private boolean waiting() { return !expired && latch.getCount() != 0; }
@@ -186,8 +146,6 @@ public final class GramWalletStorageAuth {
 
         private void stopBiometrics() {
             try { if (cancellation != null) cancellation.cancel(); } catch (Exception e) { FileLog.e(e); }
-            try { if (legacyPrompt != null) legacyPrompt.cancelAuthentication(); } catch (Exception e) { FileLog.e(e); }
-            legacyPrompt = null;
         }
 
     }

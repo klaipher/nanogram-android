@@ -2,7 +2,6 @@ package org.telegram.messenger.nanogram;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
-import android.os.Build;
 import android.os.StrictMode;
 
 import org.telegram.messenger.BuildVars;
@@ -35,9 +34,7 @@ public final class NanogramStrictMode {
                     .detectActivityLeaks()
                     .detectFileUriExposure()
                     .penaltyLog();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                vm.detectUnsafeIntentLaunch().detectContentUriWithoutPermission();
-            }
+            vm.detectUnsafeIntentLaunch().detectContentUriWithoutPermission();
             StrictMode.setThreadPolicy(thread.build());
             StrictMode.setVmPolicy(vm.build());
         } catch (Throwable e) {

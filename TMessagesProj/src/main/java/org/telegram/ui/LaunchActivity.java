@@ -6977,7 +6977,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     @Override
     protected void onStop() {
         super.onStop();
-        GramWalletStorageAuth.onActivityStopped(this);
         isStarted = false;
         PipCoordinator.getInstance().onActivityStop(this);
         if (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible()) {

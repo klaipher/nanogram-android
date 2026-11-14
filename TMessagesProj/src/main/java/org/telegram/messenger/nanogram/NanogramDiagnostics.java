@@ -3,11 +3,11 @@ package org.telegram.messenger.nanogram;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
-import android.os.Build;
 import android.os.Process;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramHealth;
 import org.telegram.messenger.NanogramPerfExperiments;
 import org.telegram.ui.Components.ForegroundDetector;
 
@@ -91,7 +91,7 @@ public final class NanogramDiagnostics {
     public static String appLabel(Context context) {
         try {
             final PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
-            final long code = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+            final long code = info.getLongVersionCode();
             return info.versionName + " (" + code + ")";
         } catch (Throwable e) {
             return "unknown";
@@ -101,7 +101,7 @@ public final class NanogramDiagnostics {
     private static String buildNumber(Context context) {
         try {
             final PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
-            return String.valueOf(Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
+            return String.valueOf(info.getLongVersionCode());
         } catch (Throwable e) {
             return "0";
         }
@@ -125,6 +125,7 @@ public final class NanogramDiagnostics {
             logPreviousExits(context);
             NanogramProfiling.onAppStart(context);
         });
+        NanogramHealth.onAppStart(context);
     }
 
     // Puts exits and crashes since the last start into the quiet log, so a log alone tells what ended the previous run.
@@ -269,6 +270,7 @@ public final class NanogramDiagnostics {
             addText(out, "README.txt", readme(context));
             addSafely(out, "device-info.txt", () -> NanogramSystemInfo.build(context));
             addSafely(out, "performance-experiments.txt", NanogramPerfExperiments::currentReport);
+            addSafely(out, "health-energy.txt", () -> NanogramHealth.fullReport(context));
             addSafely(out, "exit-history.txt", () -> NanogramExitInfo.describeAll(context));
             addCrashes(context, out);
             addTraces(context, out);
@@ -302,6 +304,7 @@ public final class NanogramDiagnostics {
                 + "Files\n"
                 + "  device-info.txt    device, Android version, power and network state, permissions, notification channel states, memory\n"
                 + "  performance-experiments.txt  switch states and durations of the performance experiments since each switch last changed (no content)\n"
+                + "  health-energy.txt  CPU time, wakelocks, network and energy numbers of Nanogram since app start and since each switch change; phone energy only on phones with power monitors (Android 15+); battery and heat (counts and durations only)\n"
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"
@@ -326,9 +329,6 @@ public final class NanogramDiagnostics {
     }
 
     private static void addTraces(Context context, ZipOutputStream out) {
-        if (!NanogramExitInfo.isSupported()) {
-            return;
-        }
         try {
             int added = 0;
             for (NanogramExitInfo.Record record : NanogramExitInfo.load(context, NanogramExitInfo.MAX_RECORDS)) {

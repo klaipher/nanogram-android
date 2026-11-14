@@ -41,14 +41,7 @@ public final class NanogramExitInfo {
     private NanogramExitInfo() {
     }
 
-    public static boolean isSupported() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
-    }
-
     public static List<Record> load(Context context, int max) {
-        if (!isSupported()) {
-            return new ArrayList<>();
-        }
         try {
             return Api30.load(context, max);
         } catch (Throwable e) {
@@ -66,11 +59,11 @@ public final class NanogramExitInfo {
     }
 
     public static boolean hasTrace(Record record) {
-        return isSupported() && record.raw != null && (record.reason == ApplicationExitInfo.REASON_ANR || record.reason == ApplicationExitInfo.REASON_CRASH_NATIVE);
+        return record.raw != null && (record.reason == ApplicationExitInfo.REASON_ANR || record.reason == ApplicationExitInfo.REASON_CRASH_NATIVE);
     }
 
     public static InputStream openTrace(Record record) throws IOException {
-        if (!isSupported() || record.raw == null) {
+        if (record.raw == null) {
             return null;
         }
         return Api30.openTrace(record.raw);
@@ -88,16 +81,12 @@ public final class NanogramExitInfo {
 
     public static String describeAll(Context context) {
         final StringBuilder sb = new StringBuilder();
-        if (!isSupported()) {
-            sb.append("Process exit history needs Android 11 (API 30); this device runs API ").append(Build.VERSION.SDK_INT).append(".\n");
-        } else {
-            final List<Record> records = load(context, MAX_RECORDS);
-            if (records.isEmpty()) {
-                sb.append("No exit records (fresh install, or the system keeps none).\n");
-            }
-            for (Record record : records) {
-                sb.append(describe(record)).append('\n');
-            }
+        final List<Record> records = load(context, MAX_RECORDS);
+        if (records.isEmpty()) {
+            sb.append("No exit records (fresh install, or the system keeps none).\n");
+        }
+        for (Record record : records) {
+            sb.append(describe(record)).append('\n');
         }
         sb.append("\nProcess start history (needs Android 15, API 35):\n");
         if (Build.VERSION.SDK_INT < 35) {

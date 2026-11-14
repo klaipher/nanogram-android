@@ -117,7 +117,7 @@ public final class NanogramSystemInfo {
         final PackageInfo info = pm.getPackageInfo(context.getPackageName(), 0);
         r.line("package", context.getPackageName());
         r.line("versionName", info.versionName);
-        r.line("versionCode", Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
+        r.line("versionCode", info.getLongVersionCode());
         r.line("build flavor", BuildVars.DEBUG_VERSION ? "debug" : "release");
         r.line("first install", NanogramDiagnostics.formatTime(info.firstInstallTime));
         r.line("last update", NanogramDiagnostics.formatTime(info.lastUpdateTime));
@@ -125,42 +125,25 @@ public final class NanogramSystemInfo {
         r.line("process uptime", ((SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()) / 1000) + " s");
         r.line("verbose logs", NanogramLog.isVerbose());
         r.run("install source", () -> {
-            if (Build.VERSION.SDK_INT >= 30) {
-                final android.content.pm.InstallSourceInfo source = pm.getInstallSourceInfo(context.getPackageName());
-                r.since("installing package", 30, source.getInstallingPackageName());
-                if (Build.VERSION.SDK_INT >= 34) {
-                    r.since("update ownership", 34, source.getUpdateOwnerPackageName());
-                }
-            } else {
-                r.line("installing package", pm.getInstallerPackageName(context.getPackageName()));
+            final android.content.pm.InstallSourceInfo source = pm.getInstallSourceInfo(context.getPackageName());
+            r.line("installing package", source.getInstallingPackageName());
+            if (Build.VERSION.SDK_INT >= 34) {
+                r.since("update ownership", 34, source.getUpdateOwnerPackageName());
             }
         });
         r.run("signing certificate", () -> r.line("signing cert SHA-256", signingFingerprint(context)));
         r.run("webview", () -> {
-            if (Build.VERSION.SDK_INT >= 26) {
-                final PackageInfo webView = WebView.getCurrentWebViewPackage();
-                r.since("WebView", 26, webView == null ? "none" : webView.packageName + " " + webView.versionName);
-            } else {
-                r.unavailable("WebView", 26);
-            }
+            final PackageInfo webView = WebView.getCurrentWebViewPackage();
+            r.line("WebView", webView == null ? "none" : webView.packageName + " " + webView.versionName);
         });
     }
 
     private static String signingFingerprint(Context context) throws Exception {
         final PackageManager pm = context.getPackageManager();
-        final byte[] cert;
-        if (Build.VERSION.SDK_INT >= 28) {
-            final PackageInfo info = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
-            final SigningInfo signing = info.signingInfo;
-            final Signature[] signers = signing == null ? null : signing.getApkContentsSigners();
-            cert = signers == null || signers.length == 0 ? null : signers[0].toByteArray();
-        } else {
-            @SuppressWarnings("deprecation")
-            final PackageInfo info = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNATURES);
-            @SuppressWarnings("deprecation")
-            final Signature[] signers = info.signatures;
-            cert = signers == null || signers.length == 0 ? null : signers[0].toByteArray();
-        }
+        final PackageInfo info = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
+        final SigningInfo signing = info.signingInfo;
+        final Signature[] signers = signing == null ? null : signing.getApkContentsSigners();
+        final byte[] cert = signers == null || signers.length == 0 ? null : signers[0].toByteArray();
         if (cert == null) {
             return "none";
         }
@@ -179,11 +162,7 @@ public final class NanogramSystemInfo {
         r.line("brand", Build.BRAND);
         r.line("model", Build.MODEL);
         r.line("device / product / hardware / board", Build.DEVICE + " / " + Build.PRODUCT + " / " + Build.HARDWARE + " / " + Build.BOARD);
-        if (Build.VERSION.SDK_INT >= 31) {
-            r.since("SoC", 31, Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL);
-        } else {
-            r.unavailable("SoC", 31);
-        }
+        r.line("SoC", Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL);
         r.line("Android", Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + (Build.VERSION.CODENAME.equals("REL") ? "" : ", " + Build.VERSION.CODENAME) + ")");
         r.line("security patch", Build.VERSION.SECURITY_PATCH);
         r.line("build fingerprint", Build.FINGERPRINT);
@@ -269,32 +248,16 @@ public final class NanogramSystemInfo {
         r.run("interactive", () -> r.line("screen interactive", pm.isInteractive()));
         r.run("battery optimization", () -> r.line("ignoring battery optimizations", pm.isIgnoringBatteryOptimizations(context.getPackageName())));
         r.run("thermal", () -> {
-            if (Build.VERSION.SDK_INT >= 29) {
-                r.since("thermal status", 29, thermalName(pm.getCurrentThermalStatus()));
-            } else {
-                r.unavailable("thermal status", 29);
-            }
-            if (Build.VERSION.SDK_INT >= 30) {
-                r.since("thermal headroom (10 s forecast, 1.0 = throttling)", 30, pm.getThermalHeadroom(10));
-            } else {
-                r.unavailable("thermal headroom", 30);
-            }
+            r.line("thermal status", thermalName(pm.getCurrentThermalStatus()));
+            r.line("thermal headroom (10 s forecast, 1.0 = throttling)", pm.getThermalHeadroom(10));
         });
         final ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         r.run("background restricted", () -> {
-            if (Build.VERSION.SDK_INT >= 28) {
-                r.since("background restricted by the user", 28, am.isBackgroundRestricted());
-            } else {
-                r.unavailable("background restricted", 28);
-            }
+            r.line("background restricted by the user", am.isBackgroundRestricted());
         });
         r.run("standby bucket", () -> {
-            if (Build.VERSION.SDK_INT >= 28) {
-                final UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
-                r.since("app standby bucket", 28, bucketName(usm.getAppStandbyBucket()));
-            } else {
-                r.unavailable("app standby bucket", 28);
-            }
+            final UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
+            r.line("app standby bucket", bucketName(usm.getAppStandbyBucket()));
         });
         r.run("data saver", () -> {
             final ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -367,12 +330,8 @@ public final class NanogramSystemInfo {
         });
         r.run("do not disturb", () -> r.line("interruption filter", nm.getCurrentInterruptionFilter()));
         r.run("exact alarms", () -> {
-            if (Build.VERSION.SDK_INT >= 31) {
-                final AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-                r.since("can schedule exact alarms", 31, alarm.canScheduleExactAlarms());
-            } else {
-                r.unavailable("can schedule exact alarms", 31);
-            }
+            final AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            r.line("can schedule exact alarms", alarm.canScheduleExactAlarms());
         });
         r.run("full-screen intent", () -> {
             if (Build.VERSION.SDK_INT >= 34) {
@@ -386,9 +345,7 @@ public final class NanogramSystemInfo {
             r.line("RECORD_AUDIO", granted(context, Manifest.permission.RECORD_AUDIO));
             r.line("CAMERA", granted(context, Manifest.permission.CAMERA));
             r.line("READ_CONTACTS", granted(context, Manifest.permission.READ_CONTACTS));
-            if (Build.VERSION.SDK_INT >= 31) {
-                r.since("BLUETOOTH_CONNECT", 31, granted(context, Manifest.permission.BLUETOOTH_CONNECT));
-            }
+            r.line("BLUETOOTH_CONNECT", granted(context, Manifest.permission.BLUETOOTH_CONNECT));
         });
     }
 
@@ -399,11 +356,7 @@ public final class NanogramSystemInfo {
     private static final Pattern GLOBAL_CHANNEL = Pattern.compile("^\\d+channel_(private|groups|channels|stories|reactions|silent)(_ia)?(_[0-9a-f]{1,5})?_-?\\d+$");
 
     private static void channels(Context context, Report r) {
-        r.section("Notification channels (Android 8+)");
-        if (Build.VERSION.SDK_INT < 26) {
-            r.line("channels", "not applicable below API 26");
-            return;
-        }
+        r.section("Notification channels");
         final NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         final List<NotificationChannel> channels = nm.getNotificationChannels();
         int perChat = 0;

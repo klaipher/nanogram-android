@@ -423,7 +423,7 @@ public class NanogramUpdater {
         final Context context = ApplicationLoader.applicationContext;
         final PackageManager pm = context.getPackageManager();
         try {
-            final int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES | PackageManager.GET_SIGNATURES : PackageManager.GET_SIGNATURES;
+            final int flags = PackageManager.GET_SIGNING_CERTIFICATES;
             final PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), flags);
             if (archive == null) {
                 return "not a valid APK";
@@ -431,7 +431,7 @@ public class NanogramUpdater {
             if (!context.getPackageName().equals(archive.packageName)) {
                 return "wrong package";
             }
-            final long archiveCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? archive.getLongVersionCode() : archive.versionCode;
+            final long archiveCode = archive.getLongVersionCode();
             if (archiveCode != expectedCode) {
                 return "version mismatch";
             }
@@ -447,18 +447,9 @@ public class NanogramUpdater {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private static TreeSet<String> signerDigests(PackageInfo info) throws Exception {
-        Signature[] signatures = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            final SigningInfo signingInfo = info.signingInfo;
-            if (signingInfo != null) {
-                signatures = signingInfo.getApkContentsSigners();
-            }
-        }
-        if (signatures == null || signatures.length == 0) {
-            signatures = info.signatures;
-        }
+        final SigningInfo signingInfo = info.signingInfo;
+        final Signature[] signatures = signingInfo == null ? null : signingInfo.getApkContentsSigners();
         final TreeSet<String> digests = new TreeSet<>();
         if (signatures != null) {
             for (Signature signature : signatures) {
@@ -482,7 +473,7 @@ public class NanogramUpdater {
             return;
         }
         final Context context = ApplicationLoader.applicationContext;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
+        if (!context.getPackageManager().canRequestPackageInstalls()) {
             if (activity != null) {
                 AlertsCreator.createApkRestrictedDialog(activity, null).show();
             }
@@ -504,9 +495,7 @@ public class NanogramUpdater {
                 }
                 final PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
                 params.setAppPackageName(context.getPackageName());
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
-                }
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
                 sessionId = installer.createSession(params);
                 try (PackageInstaller.Session session = installer.openSession(sessionId)) {
                     try (InputStream in = new FileInputStream(file); OutputStream out = session.openWrite("nanogram.apk", 0, file.length())) {
@@ -518,7 +507,7 @@ public class NanogramUpdater {
                         session.fsync(out);
                     }
                     final Intent intent = new Intent(INSTALL_ACTION).setPackage(context.getPackageName());
-                    final int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
+                    final int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE;
                     session.commit(PendingIntent.getBroadcast(context, sessionId, intent, flags).getIntentSender());
                 }
             } catch (Exception e) {

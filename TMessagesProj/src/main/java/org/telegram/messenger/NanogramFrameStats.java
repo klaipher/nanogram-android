@@ -1,7 +1,6 @@
 package org.telegram.messenger;
 
 import android.app.Activity;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.view.FrameMetrics;
@@ -45,9 +44,6 @@ public final class NanogramFrameStats {
     }
 
     public static Window.OnFrameMetricsAvailableListener attach(Activity activity) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            return null;
-        }
         try {
             if (handler == null) {
                 thread = new HandlerThread("nanogram-frame-stats");
@@ -76,7 +72,7 @@ public final class NanogramFrameStats {
     }
 
     public static void detach(Activity activity, Window.OnFrameMetricsAvailableListener listener) {
-        if (listener == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+        if (listener == null) {
             return;
         }
         try {
