@@ -225,11 +225,7 @@ public class ApplicationLoader extends Application {
 
                         }
 
-                        boolean isSlow = isConnectionSlow();
-                        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                            ConnectionsManager.getInstance(a).checkConnection();
-                            FileLoader.getInstance(a).onNetworkChanged(isSlow);
-                        }
+                        checkConnectionForAccounts();
                     }
                 };
                 IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -476,7 +472,7 @@ public class ApplicationLoader extends Application {
 
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
     private static void registerNetworkStateCallback() {
-        networkStateCallback = new ConnectivityManager.NetworkCallback() {
+        final ConnectivityManager.NetworkCallback callback = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(@NonNull Network network) {
                 lastKnownNetworkType = -1;
@@ -499,7 +495,8 @@ public class ApplicationLoader extends Application {
                 }
             }
         };
-        connectivityManager.registerDefaultNetworkCallback(networkStateCallback);
+        connectivityManager.registerDefaultNetworkCallback(callback);
+        networkStateCallback = callback;
     }
 
     private static void onDefaultNetworkChanged() {
@@ -509,13 +506,16 @@ public class ApplicationLoader extends Application {
         } catch (Throwable ignore) {
 
         }
-        AndroidUtilities.runOnUIThread(() -> {
-            final boolean isSlow = isConnectionSlow();
-            for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                ConnectionsManager.getInstance(a).checkConnection();
-                FileLoader.getInstance(a).onNetworkChanged(isSlow);
-            }
-        });
+        AndroidUtilities.runOnUIThread(ApplicationLoader::checkConnectionForAccounts);
+    }
+
+    // one place for both network paths (broadcast and callback), so account-slot rules apply to both
+    private static void checkConnectionForAccounts() {
+        final boolean isSlow = isConnectionSlow();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            ConnectionsManager.getInstance(a).checkConnection();
+            FileLoader.getInstance(a).onNetworkChanged(isSlow);
+        }
     }
 
     private static long lastNetworkCheck = -1;
