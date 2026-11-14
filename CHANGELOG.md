@@ -5,6 +5,13 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Shared FFmpeg fork (klaipher/FFmpeg, branch nanogram)
+- One FFmpeg source for Android, iOS and macOS: official n9.0.2 plus our commits — mov stsd_count reset and
+  VideoToolbox attachment skip (from the iOS copy), encryption_info stack exhaustion and HEVC slice layer check
+  (Telegram Android's former patches), VERSION 9.0.2. Android's submodule points at it (d84c50b); the two patch files
+  moved into the fork; build_ffmpeg.sh reads the fork's VERSION, so the library reports 9.0.2.
+- Android gains the mov.c security fix that iOS already had.
+
 ### FFmpeg 8.1 (release/8.1 @ 8dca158) -> 9.0.2 (f927fb8 submodule, 6ee351a build_ffmpeg.sh)
 - Submodule `third_party/ffmpeg` moved to tag n9.0.2 (libavcodec 63, libavformat 63, libavutil 61, libswscale 10,
   libswresample 7), the version iOS and macOS already ship. Not built or run yet.

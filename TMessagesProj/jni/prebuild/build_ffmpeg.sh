@@ -174,7 +174,8 @@ prepare_patched_source() {
     local source_dir="$1" destination="$2"
     local version patch_file patch_count=0
 
-    version="$(git -C "$source_dir" describe --tags --always 2>/dev/null || cat "$source_dir/RELEASE")"
+    # klaipher/FFmpeg (branch nanogram) ships VERSION; fall back to git describe, then RELEASE.
+    version="$(cat "$source_dir/VERSION" 2>/dev/null || git -C "$source_dir" describe --tags --always 2>/dev/null || cat "$source_dir/RELEASE")"
     mkdir -p "$destination"
     tar -C "$source_dir" --exclude=.git -cf - . | tar -C "$destination" -xf -
 

@@ -9,7 +9,8 @@
 	url = https://github.com/videolan/dav1d.git
 [submodule "TMessagesProj/jni/third_party/ffmpeg"]
 	path = TMessagesProj/jni/third_party/ffmpeg
-	url = https://github.com/FFmpeg/FFmpeg.git
+	url = https://github.com/klaipher/FFmpeg.git
+	branch = nanogram
 [submodule "TMessagesProj/lib/jlatexmath"]
 	path = TMessagesProj/lib/jlatexmath
 	url = https://github.com/klaipher/jlatexmath-android.git
