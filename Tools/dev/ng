@@ -409,9 +409,8 @@ def cmd_prebuild(a: argparse.Namespace) -> Path:
     info(f"building native prebuilts for {' '.join(abis)} (log {log})")
     with log.open("w") as fh:
         rc = subprocess.call(["bash", str(PREBUILD_SRC / "build_all.sh")], cwd=PREBUILD_SRC, env=env, stdout=fh, stderr=subprocess.STDOUT)
-    # build_all.sh writes build_env.txt next to itself; keep the repo clean and store it in the cache.
-    env_txt = PREBUILD_SRC / "build_env.txt"
-    subprocess.call(["git", "checkout", "-q", "--", str(env_txt)], cwd=ROOT, stderr=subprocess.DEVNULL)
+    # build_all.sh writes build_env.txt next to itself (git-ignored); it is not needed once the archives are in the cache.
+    (PREBUILD_SRC / "build_env.txt").unlink(missing_ok=True)
     if rc != 0:
         die(f"prebuild failed (exit {rc}); see {log}")
     # The scripts' scratch tree (about 1 GB) is not needed once the archives are in the cache.

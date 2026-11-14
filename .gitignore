@@ -13,9 +13,9 @@ TMessagesProj_App/afat/
 TMessagesProj_AppHockeyApp/afat/
 TMessagesProj_AppStandalone/afat/
 TMessagesProj_AppHuawei/afat/
-TMessagesProj/jni/ffmpeg/build_android
 
 # Nanogram
+TMessagesProj/jni/prebuild/build_env.txt
 build-output/
 TMessagesProj_App/google-services.json
 .kotlin/

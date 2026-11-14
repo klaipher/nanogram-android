@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- Cleanup: removed the unused ndk-build `jni/Application.mk` (Gradle builds through CMake only) and the tracked, generated `jni/prebuild/build_env.txt` (now git-ignored; `ng prebuild` deletes it after the run instead of `git checkout`); dropped the stale `.gitignore` entry `jni/ffmpeg/build_android`.
+
 ### Release optimization settings (AND-OPT-2, AND-OPT-3)
 - AND-OPT-2: gram-wallet `[profile.release]` now `opt-level = 3`, `lto = "fat"` (was `"z"`, no LTO); codegen-units=1,
   panic=abort, debug=false, incremental=false unchanged. Rust objects are native, so the app's ThinLTO never covered them.
