@@ -7,6 +7,11 @@ Android builds are distributed as APKs through GitHub releases. Friends install 
 | `klaipher/nanogram-android-releases` | release `android-v<versionName>-<build>` with the arm64 APK and `update.json`; short notes | public |
 | `klaipher/nanogram-android` | same tag, `mapping.txt`, `native-symbols.zip`, detailed notes from `CHANGELOG.md` | private |
 
+## One-time setup
+
+Create `klaipher/nanogram-android-releases` with an initial commit (a README): `gh release create` has no `--target`
+and fails on an empty repo.
+
 ## Cut a release
 
 1. Update `CHANGELOG.md` (`## Unreleased` or a `## <versionName> (<build>)` section): what changed and how, with commits.
@@ -15,6 +20,8 @@ Android builds are distributed as APKs through GitHub releases. Friends install 
 4. `Tools/dev/ng release --notes notes-public.md --dry-run` first: it builds (unless `--skip-build --build-number N`),
    writes `build-output/<build>/release/update.json` and prints the `gh` commands without running them.
 5. `Tools/dev/ng release --notes notes-public.md` creates the private release first, then the public one (marked latest).
+   If the public step fails, fix the cause and run it again with `--skip-build --build-number N`: an existing private
+   release for the tag is skipped.
    Friends' apps see it at `.../releases/latest/download/update.json` within 6 hours or through
    Settings > Check for updates.
 
@@ -35,3 +42,12 @@ SHA-256 and that the APK is signed with the same certificate as the installed ap
 - Updates download inside the app. On the first update Android asks to allow Nanogram to install apps; the app shows
   the system settings page and the next tap installs. Debug builds do not check unless the toggle in the debug menu is on.
 - Telegram's own update call (`help.getAppUpdate`) is never used by Nanogram.
+
+## Testing the update path on the emulator
+
+Debug builds (`org.klaipher.nanogram.beta`, debug key) can never install a release APK, so the toggle in the debug menu
+only tests check and download. For the full path (download, verify, install):
+
+1. Install release build N (signed with the release key) on the emulator.
+2. Publish release N+1 (`ng release`) or serve its APK and `update.json` from a test location.
+3. Open Settings > Check for updates, download, install.

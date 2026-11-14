@@ -15,6 +15,11 @@ Newest first: version, build number, date, commit; what changed and how.
 - `ng release`: release build, `update.json` (versionCode from aapt2), private release (APK, mapping, native symbols,
   CHANGELOG section) then public release marked latest; refuses dirty or unpushed trees; `--dry-run`. Helpers and tests in
   `Tools/dev/ngrelease.py`, `Tools/dev/tests`. Guide: `docs/nanogram/releases.md`.
+- Review fixes: update download uses `getContentLength` (the Long variant needs API 24); archive signers are read with
+  GET_SIGNATURES as well on Android 9; the installing state always ends (missing confirm intent, 10 minute timeout);
+  Settings status clears stale errors and throttles progress refresh; `ng release` requires package, versionCode,
+  versionName and minSdk in aapt2 output, zips release-variant native symbols (newest), and resumes when the private
+  release already exists.
 
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),
