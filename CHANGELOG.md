@@ -5,6 +5,17 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Build-system modernization (prebuild caching, Rust pin, ThinLTO cache)
+- ccache now also fronts FFmpeg, libvpx (make-time `CC=`/`CXX=` override, so configure output, config.h and vpx_config
+  stay identical) and dav1d (meson cross-file `c = ['ccache', clang]`); openh264 unchanged.
+- Rust: `rust=1.99.1` in toolchain.properties drives tlottie (was floating `stable`) and wallet-engine (was 1.96.1) via
+  RUSTUP_TOOLCHAIN; gram-wallet/rust-toolchain.toml bumped; wallet cargo target dir persists in
+  `<cache>/prebuild-work`; dev-profile debuginfo off for bindgen; `ng setup` installs the toolchain and Android targets.
+- Prebuild cache key now includes cmake/ninja/meson/(nasm)/rustc/cargo versions, recorded in COMPLETE.
+- Prebuild scripts default NDK/API to toolchain.properties instead of r27/API 21 (ng still passes both).
+- Release ThinLTO cache moved to `<cache>/thinlto` (`NANOGRAM_THINLTO_CACHE_DIR`), shared across .cxx trees.
+- Every prebuild-script change moves the prebuild key: one full prebuild, then cache hits.
+
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

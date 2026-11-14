@@ -21,8 +21,11 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 |---|---|---|
 | Pinned, current toolchain | `Tools/dev/toolchain.properties` (read by ng and Gradle) | JDK 21, Gradle 9.9, AGP 9.5, Kotlin 2.4, NDK r30, CMake 4.1, build-tools 37 |
 | arm64-v8a only | root `build.gradle` `nanogramAbiFilters` | one native build instead of four; `-PnanogramAbis=all` for all ABIs |
-| ccache for every native compile | `jni/CMakeLists.txt` `NANOGRAM_CCACHE`, cap 8 GB | clean native rebuilds become cache hits; shared across worktrees (`CCACHE_BASEDIR`) |
-| Debug native without LTO | `jni/CMakeLists.txt` | fast links in debug; release keeps upstream's full LTO |
+| ccache for every native compile, including the FFmpeg, libvpx and dav1d prebuilds | `jni/CMakeLists.txt` `NANOGRAM_CCACHE`; `prebuild/common.sh` `CCACHE_LAUNCHER` (make-time `CC=`, meson cross-file list), cap 8 GB | clean native rebuilds become cache hits; shared across worktrees (`CCACHE_BASEDIR`) |
+| Shared ThinLTO cache for release links | `NANOGRAM_THINLTO_CACHE_DIR` = `~/.cache/nanogram-android/thinlto`, `jni/CMakeLists.txt` | the lld cache (2 GB, self-pruning) survives new `.cxx/<hash>` trees, prebuild-key changes and worktrees |
+| One Rust 1.99.1 for tlottie and wallet-engine, persistent wallet target dir | `toolchain.properties` `rust=`, `ng prebuild` | same compiler as iOS/macOS; cargo skips unchanged wallet crates (`~/.cache/nanogram-android/prebuild-work`) |
+| Host tool versions in the prebuild key | `ng` `build_tool_versions` | a Homebrew or `rustup` upgrade rebuilds the prebuilts instead of reusing stale archives; the values are recorded in the cache entry's `COMPLETE` |
+| Debug native without LTO | `jni/CMakeLists.txt` | fast links in debug; release uses ThinLTO (see the shared ThinLTO cache below) |
 | Native prebuilts from source, cached by content | `ng prebuild` | rebuilt with our NDK/flags only when a submodule, script or the NDK changes; no new binaries in git |
 | Configuration cache (parallel) + build cache | `gradle.properties` | no-op builds in seconds; tasks restored from cache after `clean` |
 | Only the shipped modules | `settings.gradle` | 11 of 40 androidx/media modules; upstream's Huawei/HockeyApp/Standalone/test apps only with `-Pnanogram.allModules=true` |
@@ -87,3 +90,15 @@ Apple M-series, 10 cores; arm64 debug unless noted. Recorded by `ng metrics` (`~
 
 Disk: one native configuration tree (`TMessagesProj/.cxx/<type>/<hash>`) is about 2.5 GB; `ng prune` keeps only the
 newest per build type. ccache is capped at 8 GB (0.9 GB after a full arm64 build).
+
+## Measuring the build-system changes
+
+- Reproducibility gate (ccache must not change bytes): `NANOGRAM_CCACHE= Tools/dev/ng prebuild --force`, save
+  `shasum -a 256 ~/.cache/nanogram-android/prebuild/<key>/lib/arm64-v8a/*.a`; then `ccache -z` and run
+  `Tools/dev/ng prebuild --force` twice with ccache. The sha lists must be identical; the second ccache run should show
+  high hit rates in `ccache -s` and a much shorter time in `Tools/dev/ng metrics`.
+- Rust: `strings <lib>.a | grep 'rustc version'` on libtlottie.a and libwallet_engine.a shows 1.99.1; after touching a
+  prebuild script, the wallet crates log as `Fresh` in the prebuild log.
+- ThinLTO cache: `ng build release` twice with `rm -rf TMessagesProj/.cxx/RelWithDebInfo*` in between; the second link
+  of libtmessages is much shorter and `ls ~/.cache/nanogram-android/thinlto` holds entries.
+- Running a prebuild script by hand now defaults to the NDK and API pinned in `toolchain.properties` (env still wins).
