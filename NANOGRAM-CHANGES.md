@@ -4,7 +4,7 @@ Kept current with every change that alters behaviour or build compared with upst
 
 | Area | Difference | Why |
 |---|---|---|
-| Repositories | Telegram-specific submodules point at klaipher forks; tgcalls shares `klaipher/tgcalls` with iOS/Mac (branch `nanogram-android`); media fork branch `nanogram-android` | Control over patches, one tgcalls fork for all apps |
+| Repositories | Telegram-specific submodules point at klaipher forks; tgcalls shares `klaipher/tgcalls` with iOS/Mac (one branch for all three apps, `nanogram-shared`; the Android pin moves in the tgcalls integration step); `shared/` = klaipher/nanogram-deps (manifest and checker, same commit as iOS/Mac); media fork branch `nanogram-android` | Control over patches, one tgcalls fork for all apps |
 | Identity | `org.klaipher.nanogram`, app name Nanogram, own api_id/api_hash via BuildConfig, own release key, own Firebase config only | Separate app; no Telegram credentials or Firebase project |
 | Fork flags | `IS_BILLING_UNAVAILABLE = true`, `SUPPORTS_PASSKEYS = false`, empty Play Store URL | Play billing and passkeys only work for Telegram's app ids |
 | ABIs | arm64-v8a only by default (`-PnanogramAbis=all` for all four) | Speed and size; like Apple-Silicon-only on the Mac |

@@ -5,6 +5,17 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Shared libraries: one manifest, one checker, one source per library (W0.4)
+- New submodule `shared/` = klaipher/nanogram-deps (branch main, shallow), pinned at 7d5bd332, the same commit as Nanogram
+  iOS and macOS. It holds `shared-libraries.json` (every shared library with its single source and commit) and
+  `check_shared.py`. Android keeps no copy of either.
+- `Tools/git-hooks/pre-push` runs `python3 shared/check_shared.py --side android --quiet` before anything else and stops the
+  push when a pin differs from the manifest or when `shared/` is not checked out (`NG_PRE_PUSH_SHARED=0` skips it for one
+  push; `--no-verify` stays forbidden). Verified on a scratch repo: a correct gitlink passes, a skewed gitlink exits 1.
+- AGENTS.md: the shared-code rule now says one source per library and that all three pins move the same day; the
+  `tgcalls-port` and per-platform tgcalls branch wording is gone (tgcalls is one branch, `nanogram-shared`, for all apps;
+  the Android pin and `.gitmodules` branch move with the tgcalls integration step).
+
 ### Shared-library sources, no new repos (W1.3)
 - `.gitmodules`: dav1d url -> https://code.videolan.org/videolan/dav1d.git (pin 54706fc, tag 1.5.4) and wamr url ->
   https://github.com/bytecodealliance/wasm-micro-runtime.git (pin 25bd7eb); same commits, so no rebuild. Both match the

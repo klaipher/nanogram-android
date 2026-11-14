@@ -7,9 +7,12 @@ Guidance for coding agents working in Nanogram for Android (fork of Telegram for
 - Marketing version follows upstream (`APP_VERSION_NAME`); only the build number changes. Sync upstream only at
   released versions ("update to X.Y.Z (N)" commits on DrKLO/Telegram), never mid-development master, and only when the
   owner asks. The `upstream` remote has push disabled; never push upstream history to our repos.
-- A fix in shared code lands on every app that has it: tgcalls (`klaipher/tgcalls`: iOS `telegram-ios-dev`,
-  Mac `nanogram-mac-integration`, Android `nanogram-android`; port with the iOS repo's `tools/dev/tgcalls-port`),
-  tlottie, libprisma, wallet-engine, td.
+- A fix in shared code lands on every app that has it (td, tgcalls, webrtc, tlottie, libprisma, wallet-engine, ...). Shared
+  native code has ONE source (an official pin or ONE klaipher fork branch) listed in `shared/shared-libraries.json`
+  (submodule `shared/` = klaipher/nanogram-deps, the same commit as Nanogram iOS and macOS). A fix in shared native code
+  lands in that single source, then all three pins (iOS, Mac, Android) move the same day. No vendored copies and no
+  per-platform branches; tgcalls is the fork branch `nanogram-shared` for all three apps. The pre-push hook runs
+  `python3 shared/check_shared.py --side android`.
 - Never `--no-verify`. Never read or print `~/.config/telegram-ios`, `~/.config/nanogram-android/signing`, keystores or
   passwords; `Tools/dev/ng` reads them and passes them to Gradle through the environment. No scheduled jobs.
 - Agents do not build or launch the app (`ng build/check`, `./gradlew assemble*`); one combined build at the end of a
