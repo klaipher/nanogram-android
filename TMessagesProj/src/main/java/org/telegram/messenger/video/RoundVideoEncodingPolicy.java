@@ -5,7 +5,7 @@ public final class RoundVideoEncodingPolicy {
     public static final int PERFORMANCE_LOW = 0;
 
     public static final int MIN_BOOSTED_SIZE = 480;
-    public static final int MAX_SIZE = 720;
+    public static final int MAX_SIZE = 640; // TDLib's inputMessageVideoNote.length limit
     public static final int MAX_CAMERA_REQUEST = 960;
     public static final int BOOSTED_FRAME_RATE = 30;
     public static final int MAX_BOOSTED_BITRATE = 2_000_000;

@@ -30,7 +30,7 @@ public class RoundVideoEncodingPolicyTest {
     @Test
     public void largerServerValueIsHonouredButCappedAndEven() {
         assertEquals(640, RoundVideoEncodingPolicy.size(640, true));
-        assertEquals(720, RoundVideoEncodingPolicy.size(1080, true));
+        assertEquals(640, RoundVideoEncodingPolicy.size(1080, true));
         assertEquals(500, RoundVideoEncodingPolicy.size(501, true));
         assertEquals(0, RoundVideoEncodingPolicy.size(501, true) % 2);
     }
@@ -42,7 +42,7 @@ public class RoundVideoEncodingPolicyTest {
         assertTrue(bitrate > 1_048_576);
         assertTrue(bitrate <= 2_000_000);
         assertEquals(1_382_400, bitrate);
-        assertEquals(2_000_000, RoundVideoEncodingPolicy.bitrate(1_048_576, 384, 720, true));
+        assertEquals(2_000_000, RoundVideoEncodingPolicy.bitrate(1_048_576, 384, 640, true));
         assertEquals(3_000_000, RoundVideoEncodingPolicy.bitrate(3_000_000, 384, 480, true));
         assertEquals(1_048_576, RoundVideoEncodingPolicy.bitrate(1_048_576, 480, 480, true));
     }

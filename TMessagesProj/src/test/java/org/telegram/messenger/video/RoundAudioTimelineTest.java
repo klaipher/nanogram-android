@@ -91,9 +91,24 @@ public class RoundAudioTimelineTest {
     }
 
     @Test
-    public void audioStartsAtVideoFirstUnlessAudioBeginsLater() {
+    public void audioStartsAtTheEarlierOfVideoFirstAndFirstAudio() {
         assertEquals(1_000, RoundAudioTimeline.audioStartUs(1_000, 1_015));
         assertEquals(900, RoundAudioTimeline.audioStartUs(1_000, 900));
+    }
+
+    @Test
+    public void resumedSegmentUsesTheRawVideoClockNotTheShiftedOne() {
+        // Segment 1 ends at monotonic 5_000_000 us; the user pauses for 10 s; the first resumed frame arrives at raw
+        // 15_000_000 us and the recorder shifts it back to 5_000_000 for the video track.
+        final long rawFirstResumed = 15_000_000;
+        final long shiftedFirstResumed = 5_000_000;
+        final long firstAudioOffset = 15_010_000;
+        // Anchoring on the shifted value would give a start 10 s too early: audio PTS would jump ahead by the pause.
+        assertEquals(shiftedFirstResumed, RoundAudioTimeline.audioStartUs(shiftedFirstResumed, firstAudioOffset));
+        final long start = RoundAudioTimeline.audioStartUs(rawFirstResumed, firstAudioOffset);
+        assertEquals(rawFirstResumed, start);
+        final long prevAudioLast = 5_000_000;
+        assertEquals(prevAudioLast + 10_000, (firstAudioOffset - start) + prevAudioLast);
     }
 
     @Test

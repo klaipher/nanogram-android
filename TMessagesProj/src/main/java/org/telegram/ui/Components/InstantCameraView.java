@@ -1554,6 +1554,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (high != null) {
                 format.setInteger(MediaFormat.KEY_PROFILE, high[0]);
                 format.setInteger(MediaFormat.KEY_LEVEL, high[1]);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    // No B-frames: keeps timestamps monotonic for upload-while-recording and every client
+                    format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
+                }
             }
             if (capabilities.getEncoderCapabilities() != null && capabilities.getEncoderCapabilities().isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
                 format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
@@ -2282,6 +2286,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private long audioWaitStartUs = -1;
         private long videoFirst = -1;
         private long videoLast;
+        // Unshifted (monotonic-corrected, before the pause videoDiff shift) copies: audio offsets are raw monotonic.
+        private long videoFirstRawUs = -1;
+        private long videoLastRawNs;
         private long videoLastDt;
         private long videoDiff;
         private long prevVideoLast = -1;
@@ -2610,7 +2617,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             if (audioStartTime == -1) {
-                audioStartTime = avSyncFix ? RoundAudioTimeline.audioStartUs(videoFirst, input.offset[input.lastWroteBuffer]) : input.offset[input.lastWroteBuffer];
+                audioStartTime = avSyncFix ? RoundAudioTimeline.audioStartUs(videoFirstRawUs, input.offset[input.lastWroteBuffer]) : input.offset[input.lastWroteBuffer];
             }
             if (buffersToWrite.size() > 1) {
                 input = buffersToWrite.get(0);
@@ -2631,7 +2638,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         for (int a = input.lastWroteBuffer; a <= input.results; a++) {
                             if (a < input.results) {
                                 long totalTime = input.offset[a] - audioStartTime;
-                                if (!running && ((avSyncFix ? input.offset[a] >= videoLast / 1000 : input.offset[a] >= videoLast - desyncTime) || totalTime >= 60_000000)) {
+                                if (!running && ((avSyncFix ? input.offset[a] >= videoLastRawNs / 1000 : input.offset[a] >= videoLast - desyncTime) || totalTime >= 60_000000)) {
                                     if (BuildVars.LOGS_ENABLED) {
                                         if (totalTime >= 60_000000) {
                                             FileLog.d("InstantCamera stop audio encoding because recorded time more than 60s");
@@ -2688,7 +2695,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             for (int i = 0; i < buffersToWrite.size() && bufferIndex < 0; i++) {
                 AudioBufferInfo candidate = buffersToWrite.get(i);
                 for (int a = 0; a < candidate.results; a++) {
-                    if (candidate.offset[a] >= videoFirst) {
+                    if (candidate.offset[a] >= videoFirstRawUs) {
                         bufferIndex = i;
                         chunkIndex = a;
                         break;
@@ -2730,6 +2737,9 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 return;
             }
             if (avSyncFix) {
+                if (lastCameraId != null && !lastCameraId.equals(cameraId)) {
+                    videoClockOffsetKnown = false; // front and back sensors can report different timestamp sources
+                }
                 if (!videoClockOffsetKnown) {
                     videoClockOffsetKnown = true;
                     videoClockOffsetNs = RoundAudioTimeline.videoClockOffsetNs(timestampNanos, System.nanoTime(), SystemClock.elapsedRealtimeNanos());
@@ -2739,6 +2749,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 timestampNanos -= videoClockOffsetNs;
             }
+            final long rawTimestampNanos = timestampNanos;
             try {
                 drainEncoder(false);
             } catch (Exception e) {
@@ -2794,6 +2805,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
             if (videoFirst == -1) {
                 videoFirst = timestampNanos / 1000;
+                videoFirstRawUs = rawTimestampNanos / 1000;
                 audioWaitStartUs = System.nanoTime() / 1000;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera first video frame was at " + videoFirst);
@@ -2801,6 +2813,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
             videoLastDt = timestampNanos - videoLast;
             videoLast = timestampNanos;
+            videoLastRawNs = rawTimestampNanos;
 
             FloatBuffer textureBuffer = InstantCameraView.this.textureBuffer;
             FloatBuffer vertexBuffer = InstantCameraView.this.vertexBuffer;
@@ -3337,6 +3350,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 audioStartTime = -1;
                 audioFirst = -1;
                 videoFirst = -1;
+                videoFirstRawUs = -1;
                 videoLast = -1;
                 videoDiff = -1;
                 audioLast = -1;
