@@ -41,6 +41,7 @@ import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.utils.settings.StartupSettings;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Components.ForegroundDetector;
 import org.telegram.ui.Components.ItemOptions;
@@ -275,7 +276,9 @@ public class ApplicationLoader extends Application {
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        BillingController.getInstance().startConnection();
+        if (!(BuildVars.IS_BILLING_UNAVAILABLE && StartupSettings.skipPlayBillingAtStartup.get())) {
+            BillingController.getInstance().startConnection();
+        }
         // HTML widgets: the isolated engine's process up front, after the app's own start, so that a widget's first
         // frame does not wait for it.
         AndroidUtilities.runOnUIThread(() -> Utilities.globalQueue.postRunnable(

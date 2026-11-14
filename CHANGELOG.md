@@ -5,6 +5,12 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Startup: Play Billing connection skipped when purchases are unavailable, behind a flag (ANDROID-STARTUP-3)
+- `StartupSettings.skipPlayBillingAtStartup` (SharedPreferences `mainconfig`, key `startup_skip_play_billing`, default
+  OFF). When on and `BuildVars.IS_BILLING_UNAVAILABLE`, postInitApplication no longer calls
+  `BillingController.startConnection()` (currency JSON parse plus Play Store service bind on every process start,
+  push wakes included). Default stays off because the SMS-fee purchase in LoginActivity still queries a ready
+  BillingClient; enable only after confirming that flow on a build.
 ### Startup: per-account constants computed once (ANDROID-STARTUP-2)
 - ConnectionsManager keeps the app version string, install source, package id and the measured device performance
   class in static fields instead of recomputing them for each of the 4 account slots (the sysfs scan of
