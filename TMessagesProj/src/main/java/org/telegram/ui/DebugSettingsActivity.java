@@ -28,6 +28,7 @@ import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.NanogramDbTuning;
 import org.telegram.messenger.NanogramImageFlags;
 import org.telegram.messenger.NanogramUpdater;
 import org.telegram.messenger.NotificationCenter;
@@ -110,6 +111,7 @@ public class DebugSettingsActivity extends UniversalFragment {
     private static final int ID_COMPACT_MODE = 46;
     private static final int ID_NANOGRAM_DIAGNOSTICS = 90;
     private static final int ID_NANOGRAM_GPU_PREUPLOAD = 91;
+    private static final int ID_NANOGRAM_DB_TUNING = 92;
 
     @Override
     protected boolean useSimpleActionBar() {
@@ -186,6 +188,7 @@ public class DebugSettingsActivity extends UniversalFragment {
             items.add(UItem.asCheck(ID_FLOATING_DEBUG, getString(R.string.FloatingDebugEnable)).setChecked(SharedConfig.isFloatingDebugActive));
         }
         items.add(UItem.asCheck(ID_NANOGRAM_GPU_PREUPLOAD, "Upload decoded images to the GPU early").setChecked(NanogramImageFlags.isGpuPreuploadEnabled()));
+        items.add(UItem.asCheck(ID_NANOGRAM_DB_TUNING, "Larger database cache and mmap (restart)").setChecked(NanogramDbTuning.isEnabled()));
         items.add(UItem.asCheck(ID_EXPERIMENTAL, "Experimental settings").setChecked(SharedSettings.experimentalSettingsAllowed.get()));
         if (BuildVars.DEBUG_VERSION) {
             items.add(UItem.asCheck(ID_NANOGRAM_UPDATER, "GitHub update check in debug build").setChecked(NanogramUpdater.getInstance().isDebugToggleOn()));
@@ -453,6 +456,9 @@ public class DebugSettingsActivity extends UniversalFragment {
                 break;
             case ID_NANOGRAM_GPU_PREUPLOAD:
                 NanogramImageFlags.setGpuPreuploadEnabled(!NanogramImageFlags.isGpuPreuploadEnabled());
+                break;
+            case ID_NANOGRAM_DB_TUNING:
+                NanogramDbTuning.setEnabled(!NanogramDbTuning.isEnabled());
                 break;
             case ID_NANOGRAM_UPDATER:
                 NanogramUpdater.getInstance().setDebugToggle(!NanogramUpdater.getInstance().isDebugToggleOn());

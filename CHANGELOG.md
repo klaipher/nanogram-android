@@ -5,6 +5,12 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- ANDROID-DB-1 (flag, default OFF): optional cache4.db tuning after the existing PRAGMAs, also on the recovery re-open:
+  `cache_size = -8192` (average/high class), `mmap_size = 64 MB` (high class, 64-bit only), explicit
+  `wal_autocheckpoint = 1000`. Switch: Debug menu > "Larger database cache and mmap (restart)" (`NanogramDbTuning`, JVM
+  test `NanogramDbTuningTest`). Deferred: SQLite 3.39.3 -> current amalgamation and the compile options
+  (`SQLITE_DEFAULT_MEMSTATUS=0`, `SQLITE_OMIT_*`, ...) live in `jni/CMakeLists.txt`/`jni/sqlite`, owned by the build
+  stream; `SQLITE_DQS=0` needs a SQL audit first.
 - ANDROID-IMG-2: the in-memory image cache scales with the device instead of a fixed 30 MB cap: performance class HIGH
   with memoryClass >= 256 and >= 6 GB RAM gets 48 MB, other AVERAGE/HIGH devices with memoryClass >= 192 and >= 4 GB get
   32 MB (both capped at memoryClass/5); low class, `isLowRamDevice()`, small RAM and memoryClass < 192 keep upstream's

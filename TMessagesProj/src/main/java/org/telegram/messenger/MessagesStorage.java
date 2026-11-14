@@ -329,6 +329,7 @@ public class MessagesStorage extends BaseController {
             database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
             database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
             database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
+            NanogramDbTuning.apply(database);
 
             if (createTable) {
                 if (BuildVars.LOGS_ENABLED) {
@@ -443,6 +444,7 @@ public class MessagesStorage extends BaseController {
                 database.executeFast("PRAGMA journal_mode = WAL").stepThis().dispose();
                 database.executeFast("PRAGMA synchronous = NORMAL").stepThis().dispose();
                 database.executeFast("PRAGMA journal_size_limit = 10485760").stepThis().dispose();
+                NanogramDbTuning.apply(database);
             } catch (SQLiteException e) {
                 FileLog.e(new Exception(e));
                 restored = false;
