@@ -7,11 +7,14 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.SystemClock;
 
 import androidx.annotation.RequiresApi;
 import androidx.core.math.MathUtils;
 
+import org.telegram.messenger.nanogram.NanogramPowerPolicy;
+import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
@@ -109,7 +112,7 @@ public class LiteMode {
             loadPreference();
         }
         if (!ignorePowerSaving) {
-            if (powerSaverLevel > 0 && isBatteryLow(getBatteryLevel())) {
+            if (isPowerSaverConditionMet()) {
                 if (!lastPowerSaverApplied) {
                     onPowerSaverApplied(lastPowerSaverApplied = true);
                 }
@@ -128,8 +131,48 @@ public class LiteMode {
     private static volatile long lastBatteryLevelChecked;
     private static volatile boolean batteryLevelQueryRunning;
 
-    private static boolean isBatteryLow(int batteryLevel) {
-        return powerSaverLevel >= 100 || batteryLevel >= 0 && batteryLevel <= powerSaverLevel;
+    private static volatile boolean systemPowerSaver;
+    private static volatile int thermalStatus;
+    private static volatile boolean charging;
+
+    private static boolean isPowerSaverConditionMet() {
+        return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), charging, NanogramSystemFlags.isEnabled(NanogramSystemFlags.POWER_SKIP_WHILE_CHARGING), systemPowerSaver, thermalStatus);
+    }
+
+    private static void onSystemPowerSignalChanged() {
+        AndroidUtilities.runOnUIThread(() -> getValue(false));
+    }
+
+    private static void registerSystemPowerSignals(Context context) {
+        try {
+            final PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            if (powerManager == null) {
+                return;
+            }
+            systemPowerSaver = powerManager.isPowerSaveMode();
+            final BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    final boolean saver = powerManager.isPowerSaveMode();
+                    if (saver != systemPowerSaver) {
+                        systemPowerSaver = saver;
+                        onSystemPowerSignalChanged();
+                    }
+                }
+            };
+            context.registerReceiver(receiver, new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                thermalStatus = powerManager.getCurrentThermalStatus();
+                powerManager.addThermalStatusListener(Runnable::run, status -> {
+                    if (status != thermalStatus) {
+                        thermalStatus = status;
+                        onSystemPowerSignalChanged();
+                    }
+                });
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     // returns the cached level (-1 if unknown); BatteryReceiver is the main source, BatteryManager is only queried in background
@@ -176,6 +219,12 @@ public class LiteMode {
         }
         final int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
         final int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        final int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        final boolean nowCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
+        if (nowCharging != charging) {
+            charging = nowCharging;
+            onSystemPowerSignalChanged();
+        }
         if (level >= 0 && scale > 0) {
             setBatteryLevel(MathUtils.clamp(Math.round(level * 100f / scale), 0, 100));
         }
@@ -189,6 +238,7 @@ public class LiteMode {
         } catch (Throwable e) {
             FileLog.e(e);
         }
+        registerSystemPowerSignals(ApplicationLoader.applicationContext);
     }
 
     private static int preprocessFlag(int flag) {
