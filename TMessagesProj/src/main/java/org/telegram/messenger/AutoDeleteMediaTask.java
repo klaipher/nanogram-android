@@ -195,6 +195,21 @@ public class AutoDeleteMediaTask {
                 }
             }
 
+            // Copies of files shared into the app were never removed. 30 days keeps a failed send retryable.
+            try {
+                File[] sharedFiles = AndroidUtilities.getSharingDirectory().listFiles();
+                if (sharedFiles != null) {
+                    final long sharedBefore = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
+                    for (File shared : sharedFiles) {
+                        if (shared.isFile() && shared.lastModified() < sharedBefore && !usingFilePaths.contains(shared.getAbsolutePath())) {
+                            shared.delete();
+                        }
+                    }
+                }
+            } catch (Throwable e) {
+                FileLog.e(e);
+            }
+
             File stickersPath = new File(cacheDir, "acache");
             if (stickersPath.exists()) {
                 long currentTime = time - 60 * 60 * 24;
