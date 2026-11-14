@@ -6622,6 +6622,21 @@ public class Theme {
         }
     }
 
+    /** The light sensor is only needed while the UI is visible; lastBrightnessValue is kept to avoid a flicker on resume. */
+    public static void onAppPaused() {
+        if (lightSensorRegistered && sensorManager != null && lightSensor != null) {
+            sensorManager.unregisterListener(ambientSensorListener, lightSensor);
+            lightSensorRegistered = false;
+        }
+    }
+
+    public static void onAppResumed() {
+        if (selectedAutoNightType == AUTO_NIGHT_TYPE_AUTOMATIC && !lightSensorRegistered && lightSensor != null && sensorManager != null) {
+            sensorManager.registerListener(ambientSensorListener, lightSensor, 500000);
+            lightSensorRegistered = true;
+        }
+    }
+
     private static int needSwitchToTheme() {
         if (selectedAutoNightType == AUTO_NIGHT_TYPE_SCHEDULED) {
             Calendar calendar = Calendar.getInstance();
