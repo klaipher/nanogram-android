@@ -1101,6 +1101,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private int playerNum;
     private String shouldSavePositionForCurrentAudio;
     private long lastSaveTime;
+    private volatile long lastHiddenProgressTick;
     private float currentPlaybackSpeed = 1.0f;
     private float currentMusicPlaybackSpeed = 1.0f;
     private float fastPlaybackSpeed = 1.0f;
@@ -1695,6 +1696,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 @Override
                 public void run() {
                     synchronized (sync) {
+                        // Screen off: nothing draws the progress, so audio-only playback ticks once a second.
+                        if (audioPlayer != null && videoPlayer == null && !ApplicationLoader.isScreenOn) {
+                            final long tick = SystemClock.elapsedRealtime();
+                            if (tick - lastHiddenProgressTick < 1000) {
+                                return;
+                            }
+                            lastHiddenProgressTick = tick;
+                        }
                         AndroidUtilities.runOnUIThread(() -> {
                             if ((audioPlayer != null || videoPlayer != null) && !isPaused) {
                                 try {
