@@ -8,7 +8,7 @@ Newest first: version, build number, date, commit; what changed and how.
 ### Release optimization settings (AND-OPT-2, AND-OPT-3)
 - AND-OPT-2: gram-wallet `[profile.release]` now `opt-level = 3`, `lto = "fat"` (was `"z"`, no LTO); codegen-units=1,
   panic=abort, debug=false, incremental=false unchanged. Rust objects are native, so the app's ThinLTO never covered them.
-- AND-OPT-3: `-Wl,--pack-dyn-relocs=android` (APS2) for libtmessages and libtwidget; size only, API 23+ loaders, not relr.
+- AND-OPT-3: `-Wl,--pack-dyn-relocs=android` (APS2) for libtmessages and libtwidget, non-Debug builds only (generator expression, like the LTO flags); size only, API 23+ loaders, not relr.
 - Prebuild key now includes `TMessagesProj/jni/gram-wallet` (Cargo.toml profile, Cargo.lock, src, patch). Before, edits
   there never rebuilt the wallet engine, so this change would have linked the old opt-level z archive. The next build
   rebuilds the prebuilts once. The committed fallback `jni/prebuild/lib/*/libwallet_engine.a` (only used by builds outside
