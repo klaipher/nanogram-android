@@ -861,6 +861,7 @@ public class ConnectionsManager extends BaseController {
     }
 
     public static void onConnectionStateChanged(final int state, final int currentAccount) {
+        FileLog.i("connection state " + state + " account " + currentAccount);
         AndroidUtilities.runOnUIThread(() -> {
             getInstance(currentAccount).connectionState = state;
             AccountInstance.getInstance(currentAccount).getNotificationCenter().postNotificationName(NotificationCenter.didUpdateConnectionState);

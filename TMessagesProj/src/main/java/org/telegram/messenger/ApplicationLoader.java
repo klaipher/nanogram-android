@@ -36,6 +36,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
+import org.telegram.messenger.nanogram.NanogramDiagnostics;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
@@ -286,6 +287,27 @@ public class ApplicationLoader extends Application {
     }
 
     @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (org.telegram.utils.twidget.WidgetEngineService.isEngineProcess()) {
+            return;
+        }
+        // 10 = RUNNING_LOW, 15 = RUNNING_CRITICAL, 60 = MODERATE, 80 = COMPLETE: the levels worth knowing about after a memory kill.
+        if (level == 10 || level == 15 || level >= 60) {
+            FileLog.i("trim memory level " + level);
+        }
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        if (org.telegram.utils.twidget.WidgetEngineService.isEngineProcess()) {
+            return;
+        }
+        FileLog.i("low memory");
+    }
+
+    @Override
     public void onCreate() {
         applicationLoaderInstance = this;
         try {
@@ -303,6 +325,7 @@ public class ApplicationLoader extends Application {
 
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();
+        NanogramDiagnostics.onAppStart(applicationContext);
 
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d(helloWorld);
@@ -351,6 +374,7 @@ public class ApplicationLoader extends Application {
                 }
             }
         };
+        ForegroundDetector.getInstance().addListener(NanogramDiagnostics.foregroundListener());
         if (BuildConfig.DEBUG_VERSION) {
             new ANRDetector(FileLog::dumpANR);
         }
