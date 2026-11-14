@@ -136,6 +136,9 @@ android {
                 'jni/voip/webrtc/modules/audio_device/android/java/src',
                 'jni/voip/webrtc/rtc_base/java/src',
             ]
+            // Upstream-only class the app never carried: it needs EglBase.EglConnection, which the Telegram-modified
+            // EglBase.java in the fork does not have, so it cannot compile here. The other 173 files are the old org/webrtc set.
+            java.exclude '**/org/webrtc/EglThread.java'
         }
     }
 
