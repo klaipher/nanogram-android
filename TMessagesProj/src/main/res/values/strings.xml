@@ -6332,6 +6332,8 @@
     <string name="LiteOptionsAutoplayGifs">Autoplay GIFs</string>
     <string name="LiteOptionsParticles">Particles</string>
     <string name="LiteSmoothTransitions">Enable Smooth Transitions</string>
+    <string name="LiteFollowSystemSaver">Follow system Battery Saver and heat</string>
+    <string name="LiteFollowSystemSaverInfo">Reduce power usage when the system Battery Saver is on or the device is very hot, even if the battery slider is off.</string>
     <string name="LiteSmoothTransitionsInfo">You can disable animated transitions between different sections of the apps.</string>
     <string name="DynamicPackOrder">Dynamic Pack Order</string>
     <string name="DynamicPackOrderInfo">Automatically place recently used sticker packs at the front of the panel.</string>

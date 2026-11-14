@@ -98,6 +98,8 @@ public class LiteMode {
     private static int BATTERY_HIGH = 10;
 
     private static int powerSaverLevel;
+    private static volatile boolean followSystemPowerSaver = true;
+    private static volatile boolean skipPercentWhileCharging;
     private static boolean lastPowerSaverApplied;
 
     private static int value;
@@ -136,7 +138,16 @@ public class LiteMode {
     private static volatile boolean charging;
 
     private static boolean isPowerSaverConditionMet() {
-        return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), charging, NanogramSystemFlags.isEnabled(NanogramSystemFlags.POWER_SKIP_WHILE_CHARGING), systemPowerSaver, thermalStatus);
+        if (NanogramPowerPolicy.systemSignal(followSystemPowerSaver, systemPowerSaver, thermalStatus)) {
+            return true;
+        }
+        if (powerSaverLevel <= 0) {
+            return false;
+        }
+        if (powerSaverLevel >= 100) {
+            return true;
+        }
+        return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), charging, skipPercentWhileCharging, false, false, 0);
     }
 
     private static void onSystemPowerSignalChanged() {
@@ -390,6 +401,8 @@ public class LiteMode {
             onFlagsUpdate(prevValue, value);
         }
         powerSaverLevel = preferences.getInt("lite_mode_battery_level", batteryDefaultValue);
+        followSystemPowerSaver = preferences.getBoolean("lite_mode_follow_system", true);
+        skipPercentWhileCharging = NanogramSystemFlags.isEnabled(NanogramSystemFlags.POWER_SKIP_WHILE_CHARGING);
         loaded = true;
     }
 
@@ -409,6 +422,19 @@ public class LiteMode {
         savePreference();
 
         // check power saver applied
+        getValue(false);
+    }
+
+    public static boolean isFollowSystemPowerSaver() {
+        if (!loaded) {
+            loadPreference();
+        }
+        return followSystemPowerSaver;
+    }
+
+    public static void setFollowSystemPowerSaver(boolean follow) {
+        followSystemPowerSaver = follow;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("lite_mode_follow_system", follow).apply();
         getValue(false);
     }
 

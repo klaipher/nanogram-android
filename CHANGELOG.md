@@ -37,7 +37,7 @@ Newest first: version, build number, date, commit; what changed and how.
 - Not changed: `isConnectionSlow` and the Wi-Fi/roaming helpers still read `currentNetworkInfo` (refreshed once per network change instead of by every broadcast); they need the telephony subtype.
 - Tests: `NanogramNetworkStateTest` (JVM).
 ### ANDROID-POWER-1: Lite mode follows system Battery Saver and thermal status
-- LiteMode's power saver now also applies while the system Battery Saver is on or the thermal status is SEVERE or worse (`NanogramPowerPolicy`, fed by a POWER_SAVE_MODE_CHANGED receiver and `PowerManager.addThermalStatusListener`, API 29+). Previously only the battery percent threshold applied. On by default (owner decision); flips go through the existing `onPowerSaverApplied` path.
+- LiteMode's power saver now also applies while the system Battery Saver is on or the thermal status is SEVERE or worse (`NanogramPowerPolicy`, fed by a POWER_SAVE_MODE_CHANGED receiver and `PowerManager.addThermalStatusListener`, API 29+). Previously only the battery percent threshold applied. On by default (owner decision); flips go through the existing `onPowerSaverApplied` path. A switch under the Power Saver slider, "Follow system Battery Saver and heat" (pref `lite_mode_follow_system`, default on), opts out and takes precedence over the system signals even when the slider is off. Hot path: `LiteMode.getValue` skips the battery query and the flag lookup when the slider is off (the charging flag is cached at preference load).
 - Experimental flag `power_skip_charging` (`NanogramSystemFlags`, default off): ignore the percent trigger while charging.
 - Tests: `NanogramPowerPolicyTest` (JVM).
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
