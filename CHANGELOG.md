@@ -22,6 +22,10 @@ docs/nanogram/performance.md.
   IO-2: `synchronous=NORMAL` for cache4.db. IO-3: files database in WAL, one transaction in `putPath`. IO-4: MP4 muxer
   syncs once. IO-5: streaming reads cache the available window. IO-6: tgnet.dat writes coalesced (1 s). IO-7: no fsync
   for the usage counters. IO-8: 128 KB copy buffers. IO-9: `sharing/` copies deleted after 30 days.
+- Review fixes: no engine hold in a background or push-woken process; `cleanup()` forces the data file before closing so
+  the newest ranges are recorded on pause; `clearAll` waits for log deletion (`FileLog.cleanupLogsSync`); the start line
+  is queued first again (the label follows as `build ...`); `fatal` exits in debug-private even if the log did not
+  open; docs list the power-loss trade-offs of IO-1 and IO-2 and the right file name for IO-3.
 - Not done: BATTERY-4 (port of tgcalls ad9aa93, b483fca, abbdaed, 67e8982 with `tools/dev/tgcalls-port` from the iOS
   repo plus a pin bump) needs the shared fork and a native build; left for the main session.
 
