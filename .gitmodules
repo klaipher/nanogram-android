@@ -42,7 +42,7 @@
 [submodule "TMessagesProj_Modules/media"]
 	path = TMessagesProj_Modules/media
 	url = https://github.com/klaipher/media.git
-	branch = nanogram-android
+	branch = nanogram
 [submodule "TMessagesProj/jni/voip/webrtc"]
 	path = TMessagesProj/jni/voip/webrtc
 	url = https://github.com/klaipher/webrtc.git
@@ -54,7 +54,7 @@
 [submodule "TMessagesProj/jni/tgcalls"]
 	path = TMessagesProj/jni/tgcalls
 	url = https://github.com/klaipher/tgcalls.git
-	branch = nanogram-shared
+	branch = nanogram
 [submodule "TMessagesProj/jni/wallet-engine"]
 	path = TMessagesProj/jni/wallet-engine
 	url = https://github.com/klaipher/wallet-engine.git
