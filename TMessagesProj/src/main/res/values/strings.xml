@@ -11332,8 +11332,6 @@
 
     <!-- Wallet -->
     <string name="WalletUseDevicePasscode">Use device PIN or password</string>
-    <string name="WalletTouchFingerprint">Touch the fingerprint sensor to unlock your wallet.</string>
-    <string name="WalletFingerprintRetry">Fingerprint not recognized. Try again.</string>
     <string name="WalletUnlock">Unlock wallet</string>
     <string name="WalletAddressCopied">Wallet address is copied to clipboard</string>
     <string name="WalletCollectible">Collectible</string>
