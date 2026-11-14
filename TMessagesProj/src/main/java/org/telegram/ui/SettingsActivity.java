@@ -36,6 +36,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -77,6 +78,7 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.NanogramUpdater;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -153,6 +155,8 @@ import java.util.HashSet;
 
 public class SettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate, MainTabsActivity.TabFragmentDelegate, FactorAnimator.Target {
 
+    private long lastUpdateProgressRefresh;
+
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
 
     private final BoolAnimator animatorSearchPageVisible = new BoolAnimator(ANIMATOR_ID_SEARCH_PAGE_VISIBLE,
@@ -212,7 +216,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             .createObserversGroup(this)
             .add(NotificationCenter.updateInterfaces)
             .add(NotificationCenter.starBalanceUpdated)
-            .add(NotificationCenter.newSuggestionsAvailable);
+            .add(NotificationCenter.newSuggestionsAvailable)
+            .addGlobal(NotificationCenter.appUpdateAvailable)
+            .addGlobal(NotificationCenter.appUpdateLoading);
 
         if (arguments != null) {
             hasMainTabs = arguments.getBoolean("hasMainTabs", false);
@@ -510,7 +516,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
         } else if (id == NotificationCenter.updateInterfaces) {
             setInfo();
-        } else if (id == NotificationCenter.newSuggestionsAvailable) {
+        } else if (id == NotificationCenter.newSuggestionsAvailable || id == NotificationCenter.appUpdateAvailable || id == NotificationCenter.appUpdateLoading) {
+            if (id == NotificationCenter.appUpdateLoading) {
+                final long now = SystemClock.elapsedRealtime();
+                if (now - lastUpdateProgressRefresh < 400) {
+                    return;
+                }
+                lastUpdateProgressRefresh = now;
+            }
             if (listView != null) {
                 listView.adapter.update(true);
             }
@@ -842,6 +855,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
         items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));
         items.add(SettingCell.Factory.of(28, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.msg_log, getString(R.string.NanogramSendDiagnostics)));
+        if (ApplicationLoader.applicationLoaderInstance.isCustomUpdate()) {
+            items.add(SettingCell.Factory.of(29, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, 0, getString(R.string.NgUpdateCheck), null, getNanogramUpdateStatus()));
+        }
 
         if (SharedSettings.experimentalSettingsAllowed.get()) {
             items.add(UItem.asShadow(null));
@@ -1007,6 +1023,27 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 presentFragment(new HeaderSettingsActivity());
                 break;
             }
+            case 29: {
+                final NanogramUpdater updater = NanogramUpdater.getInstance();
+                if (updater.isDownloading() || updater.isChecking() || updater.isInstalling()) {
+                    break;
+                }
+                if (updater.getDownloadedFile() != null) {
+                    updater.install(getParentActivity());
+                } else if (updater.getUpdate() != null) {
+                    ApplicationLoader.applicationLoaderInstance.showCustomUpdateAppPopup(getParentActivity(), updater.getUpdate(), currentAccount);
+                } else {
+                    updater.checkForUpdate(true, () -> {
+                        if (listView != null) {
+                            listView.adapter.update(true);
+                        }
+                        if (updater.getUpdate() == null && !updater.hasCheckFailed()) {
+                            BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.YourVersionIsLatest)).show();
+                        }
+                    });
+                }
+                break;
+            }
         }
     }
 
@@ -1039,6 +1076,28 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
         }
         return false;
+    }
+
+    private String getNanogramUpdateStatus() {
+        final NanogramUpdater updater = NanogramUpdater.getInstance();
+        if (updater.isInstalling()) {
+            return getString(R.string.NgUpdateInstalling);
+        } else if (updater.isDownloading()) {
+            return formatString(R.string.AppUpdateDownloading, (int) (updater.getDownloadingProgress() * 100));
+        } else if (updater.isChecking()) {
+            return getString(R.string.NgUpdateChecking);
+        } else if (updater.getError() != null) {
+            return formatString(R.string.NgUpdateDownloadFailed, updater.getError());
+        } else if (updater.getDownloadedFile() != null) {
+            return formatString(R.string.NgUpdateReady, updater.getVersionName(), updater.getBuildNumber());
+        } else if (updater.getUpdate() != null) {
+            return formatString(R.string.NgUpdateAvailable, updater.getVersionName(), updater.getBuildNumber());
+        } else if (updater.hasCheckFailed()) {
+            return getString(R.string.NgUpdateFailed);
+        } else if (updater.getLastCheckTime() > 0) {
+            return getString(R.string.NgUpdateUpToDate);
+        }
+        return null;
     }
 
     public String getVersionName() {

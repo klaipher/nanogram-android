@@ -37,6 +37,22 @@ Newest first: version, build number, date, commit; what changed and how.
   `getStartComponent` only on API 36, default notification channel matching, update owner API 34, LOW_MEMORY/FREEZER only
   when not cached, separate budget for `FileLog.i`, synchronized `FileLog.init`, quiet file reuse, zips kept for an hour,
   verbose logs retained 3 days after switch-off with a privacy warning in README and screen.
+### In-app updates and release tooling
+- Updates come from GitHub: the app fetches `update.json` from `klaipher/nanogram-android-releases` (HTTPS, at most
+  every 6 hours, or from Settings > Check for updates), downloads the APK to its cache with progress, verifies SHA-256,
+  package name, versionCode and that the signing certificate equals the installed app's, then installs through a
+  PackageInstaller session (asks for "install unknown apps" first). `NanogramUpdater` plus copies of the beta update UI
+  (`NanogramUpdateLayout`, `NanogramUpdateAlertDialog`) are wired through upstream's custom-update hooks in
+  `ApplicationLoaderImpl`, so the existing "Update" bar and sheet are reused and `help.getAppUpdate` is never sent.
+  Off in debug builds unless the debug-menu toggle is on.
+- `ng release`: release build, `update.json` (versionCode from aapt2), private release (APK, mapping, native symbols,
+  CHANGELOG section) then public release marked latest; refuses dirty or unpushed trees; `--dry-run`. Helpers and tests in
+  `Tools/dev/ngrelease.py`, `Tools/dev/tests`. Guide: `docs/nanogram/releases.md`.
+- Review fixes: update download uses `getContentLength` (the Long variant needs API 24); archive signers are read with
+  GET_SIGNATURES as well on Android 9; the installing state always ends (missing confirm intent, 10 minute timeout);
+  Settings status clears stale errors and throttles progress refresh; `ng release` requires package, versionCode,
+  versionName and minSdk in aapt2 output, zips release-variant native symbols (newest), and resumes when the private
+  release already exists.
 
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),

@@ -6,6 +6,8 @@
   ng prebuild [--force]          build native prebuilt libraries into the content-addressed cache
   ng build [debug|release] [--abis arm64|all] [--build-number N] [--task T]
   ng install [APK]               adb install -r the newest build
+  ng release --notes FILE [--private-notes FILE] [--build-number N] [--skip-build] [--dry-run]
+                                 signed release APK -> update.json -> GitHub releases (see docs/nanogram/releases.md)
   ng signing init                create the release keystore in ~/.config/nanogram-android/signing
   ng check                       pre-push gate: unit tests + arm64 debug build
   ng prune [--max-gb N] [--dry-run]
@@ -26,6 +28,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ngrelease  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLCHAIN = ROOT / "Tools" / "dev" / "toolchain.properties"
@@ -371,7 +376,10 @@ def cmd_build(a: argparse.Namespace) -> None:
             shutil.copy2(cand, dest / "mapping.txt")
             break
     # Keep unstripped native libraries for symbolication (like dSYMs on iOS).
-    syms = sorted((ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so"))
+    syms = (ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so")
+    if a.variant == "release":
+        syms = (p for p in syms if {"RelWithDebInfo", "Release"} & set(p.parts))
+    syms = sorted(syms, key=lambda p: p.stat().st_mtime, reverse=True)
     if syms:
         shutil.make_archive(str(dest / "native-symbols"), "zip", root_dir=syms[0].parents[1])
     head = subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -395,6 +403,111 @@ def cmd_install(a: argparse.Namespace) -> None:
     apk = Path(a.apk) if a.apk else newest_apk()
     info(f"installing {apk.name}")
     sys.exit(subprocess.call([adb, "install", "-r", "-d", str(apk)]))
+
+
+# ---------------------------------------------------------------- release
+def aapt2_path() -> Path:
+    base = sdk_root() / "build-tools"
+    pinned = base / TC.get("buildTools", "") / "aapt2"
+    if pinned.exists():
+        return pinned
+    found = sorted(base.glob("*/aapt2"))
+    if not found:
+        die("aapt2 not found in the SDK build-tools; run `ng setup`")
+    return found[-1]
+
+
+def git_out(*args: str) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+
+
+def release_guards(dry: bool) -> str:
+    problems = []
+    if git_out("status", "--porcelain", "--ignore-submodules=dirty"):
+        problems.append("working tree is dirty")
+    commit = git_out("rev-parse", "HEAD")
+    if not git_out("branch", "-r", "--contains", commit):
+        problems.append("HEAD is not pushed to a remote branch")
+    for p in problems:
+        if dry:
+            print(f"ng: warning (dry run): {p}", file=sys.stderr)
+        else:
+            die(f"refusing to publish: {p}")
+    return commit
+
+
+def run_gh(cmd: list[str], dry: bool) -> None:
+    info(ngrelease.shell_line(cmd))
+    if not dry and subprocess.call(cmd, cwd=ROOT) != 0:
+        die(f"gh failed: {' '.join(cmd[:3])}")
+
+
+def cmd_release(a: argparse.Namespace) -> None:
+    dry = a.dry_run
+    commit = release_guards(dry)
+    public_notes = Path(a.notes)
+    if not public_notes.is_file():
+        die(f"notes file not found: {public_notes}")
+    if not dry and not shutil.which("gh"):
+        die("gh (GitHub CLI) is required")
+    if a.skip_build and not a.build_number:
+        die("--skip-build needs --build-number")
+    bn = ngrelease.check_build_number(build_number(a.build_number))
+    if not a.skip_build:
+        cmd_build(argparse.Namespace(variant="release", abis=TC.get("abis", "arm64"), build_number=bn, task=None,
+                                     clean=False, no_cache=False, upstream_prebuilts=False))
+    dest = OUT / bn
+    apks = sorted(dest.glob("*-release-*.apk"))
+    if not apks:
+        die(f"no release APK in {dest}; run without --skip-build")
+    built = apks[-1]
+    badging = ngrelease.read_badging(aapt2_path(), built)
+    version_name = badging.get("versionName") or ""
+    missing = [k for k in ("package", "versionCode", "versionName", "minSdk") if not badging.get(k)]
+    if missing:
+        die(f"aapt2 badging of {built.name} lacks {', '.join(missing)}")
+    code = int(badging["versionCode"])
+    if code != ngrelease.version_code(bn):
+        die(f"APK versionCode {code} does not match build number {bn}")
+    if badging["package"] != "org.klaipher.nanogram":
+        die(f"unexpected package {badging['package']}")
+    min_sdk = int(badging["minSdk"])
+
+    out = dest / "release"
+    out.mkdir(parents=True, exist_ok=True)
+    apk = out / ngrelease.apk_asset_name(version_name, bn)
+    shutil.copy2(built, apk)
+    manifest = ngrelease.build_manifest(
+        version_code=code, version_name=version_name, build=bn, sha256=ngrelease.sha256_file(apk),
+        size=apk.stat().st_size, notes=public_notes.read_text(), min_sdk=min_sdk)
+    manifest_file = out / "update.json"
+    manifest_file.write_text(ngrelease.manifest_json(manifest))
+    public_body = out / "public-notes.md"
+    public_body.write_text(public_notes.read_text().strip() + "\n")
+
+    if a.private_notes:
+        private_text = Path(a.private_notes).read_text()
+    else:
+        try:
+            private_text = ngrelease.extract_changelog((ROOT / "CHANGELOG.md").read_text(), version_name, bn)
+        except ValueError as e:
+            die(f"{e}; add the entry to CHANGELOG.md or pass --private-notes")
+    private_body = out / "private-notes.md"
+    private_body.write_text(private_text.strip() + "\n")
+
+    assets = [apk] + [dest / n for n in ("mapping.txt", "native-symbols.zip") if (dest / n).exists()]
+    info(f"{ngrelease.tag_name(version_name, bn)}: versionCode {code}, {apk.stat().st_size / 1e6:.1f} MB, sha256 {manifest['apkSha256'][:12]}...")
+    tag = ngrelease.tag_name(version_name, bn)
+    private_exists = not dry and subprocess.call(
+        ["gh", "release", "view", tag, "--repo", ngrelease.PRIVATE_REPO],
+        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    if private_exists:
+        info(f"private release {tag} already exists; skipping it (resuming)")
+    else:
+        run_gh(ngrelease.gh_private_release(assets, private_body, version_name, bn, commit), dry)
+    run_gh(ngrelease.gh_public_release(apk, manifest_file, public_body, version_name, bn), dry)
+    info(f"public: https://github.com/{ngrelease.PUBLIC_REPO}/releases/tag/{ngrelease.tag_name(version_name, bn)}")
+    info(f"update manifest: {manifest_file}")
 
 
 # ---------------------------------------------------------------- signing
@@ -517,6 +630,13 @@ def main() -> None:
     p = sub.add_parser("install")
     p.add_argument("apk", nargs="?")
     p.set_defaults(fn=cmd_install)
+    p = sub.add_parser("release")
+    p.add_argument("--notes", required=True, help="short public notes file (which areas improved, never how)")
+    p.add_argument("--private-notes", help="detailed notes file; default: matching CHANGELOG.md section")
+    p.add_argument("--build-number")
+    p.add_argument("--skip-build", action="store_true", help="reuse build-output/<build number>")
+    p.add_argument("--dry-run", action="store_true", help="do everything except the gh calls (print them)")
+    p.set_defaults(fn=cmd_release)
     p = sub.add_parser("signing")
     p.add_argument("action", choices=["init"])
     p.set_defaults(fn=cmd_signing)

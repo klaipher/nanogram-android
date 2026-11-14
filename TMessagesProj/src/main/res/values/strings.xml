@@ -2778,6 +2778,16 @@
     <string name="AppUpdateNow">Update Now</string>
     <string name="AppUpdateDownloadNow">Download Now</string>
     <string name="AppUpdateRemindMeLater">Remind me later</string>
+    <string name="NgUpdateApp">Update Nanogram</string>
+    <string name="NgUpdateVersion">Version %1$s (%2$s)</string>
+    <string name="NgUpdateInstalling">Installing...</string>
+    <string name="NgUpdateCheck">Check for updates</string>
+    <string name="NgUpdateChecking">Checking...</string>
+    <string name="NgUpdateUpToDate">Up to date</string>
+    <string name="NgUpdateFailed">Could not check for updates</string>
+    <string name="NgUpdateAvailable">Version %1$s (%2$s) is available</string>
+    <string name="NgUpdateReady">Version %1$s (%2$s) is ready to install</string>
+    <string name="NgUpdateDownloadFailed">Update failed: %1$s</string>
     <string name="AppUpdateChangelogEmpty">**What\'s new?**\n\n• Bug fixes and improvements.</string>
     <string name="Permanent">Permanent</string>
     <string name="LinkHashExpired">Link is no longer active</string>
