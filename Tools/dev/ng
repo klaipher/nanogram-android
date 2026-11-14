@@ -155,7 +155,7 @@ def secret_env(env: dict[str, str], release: bool) -> None:
         die("no release keystore; run `ng signing init`")
     gs = CONFIG / "google-services.json"
     target = ROOT / "TMessagesProj_App" / "google-services.json"
-    if gs.exists():
+    if release and gs.exists():
         shutil.copyfile(gs, target)
     elif target.exists() and not target.is_symlink():
         target.unlink()
@@ -229,7 +229,7 @@ def cmd_doctor(_: argparse.Namespace) -> None:
         print("ccache       " + " | ".join(l.strip() for l in out.splitlines() if "Hits" in l or "Cache size" in l))
     print(f"api creds    {'own (from iOS config)' if IOS_CREDS.exists() else 'MISSING (upstream defaults)'}")
     print(f"signing      {'ok' if (CONFIG / 'signing' / 'signing.properties').exists() else 'MISSING (ng signing init)'}")
-    print(f"FCM config   {'ok' if (CONFIG / 'google-services.json').exists() else 'MISSING (push off: owner creates Firebase project)'}")
+    print(f"FCM config   {'ok (release builds only; debug .beta has no Firebase app)' if (CONFIG / 'google-services.json').exists() else 'MISSING (push off: owner creates Firebase project)'}")
     print(f"free disk    {free_gb():.1f} GB (builds need {MIN_FREE_GB})")
 
 

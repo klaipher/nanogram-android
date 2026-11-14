@@ -15,7 +15,8 @@ Tools/dev/ng install     # adb install -r
 
 Release: `Tools/dev/ng signing init` once (keystore in `~/.config/nanogram-android/signing`, back it up),
 then `Tools/dev/ng build release`. Push notifications need our Firebase config at
-`~/.config/nanogram-android/google-services.json`.
+`~/.config/nanogram-android/google-services.json` (Firebase project `nanogram-3f206`, app `org.klaipher.nanogram`).
+`ng` copies it into the app for release builds only: debug builds (`.beta`) have no Firebase app, so they build without push.
 
 ## What makes it fast and small
 
