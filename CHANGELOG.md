@@ -5,6 +5,10 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Android media, database and search (modernization review, branch nanogram/mod-media)
+- ANDROID-IO-1: "Save to gallery/Downloads" copies in 4 MB `FileChannel.transferTo` chunks (`NanogramFileCopy`) instead
+  of 4 KB `transferFrom` calls (about 256k map/unmap round trips per GB); cancel and the 500 ms progress throttle kept.
+  JVM test: `NanogramFileCopyTest`.
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

@@ -6008,24 +6008,18 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                 } catch (Throwable e) {
                     FileLog.e(e);
                 }
-                long lastProgress = 0;
-                for (long a = 0; a < size; a += 4096) {
-                    if (cancelled) {
-                        break;
-                    }
-                    destination.transferFrom(source, a, Math.min(4096, size - a));
-                    if (a + 4096 >= size || lastProgress <= SystemClock.elapsedRealtime() - 500) {
-                        lastProgress = SystemClock.elapsedRealtime();
-                        final int progress = (int) (finishedProgress + 100.0f / messageObjects.size() * a / size);
-                        AndroidUtilities.runOnUIThread(() -> {
-                            try {
-                                progressDialog.setProgress(progress);
-                            } catch (Exception e) {
-                                FileLog.e(e);
-                            }
-                        });
-                    }
-                }
+                final float baseProgress = finishedProgress;
+                final int fileCount = messageObjects.size();
+                NanogramFileCopy.copy(source, destination, size, () -> cancelled, (done, total) -> {
+                    final int progress = (int) (baseProgress + 100.0f / fileCount * done / total);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        try {
+                            progressDialog.setProgress(progress);
+                        } catch (Exception e) {
+                            FileLog.e(e);
+                        }
+                    });
+                });
                 if (!cancelled) {
                     if (isMusic) {
                         AndroidUtilities.addMediaToGallery(destFile);
@@ -6217,19 +6211,17 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                             } catch (Throwable e) {
                                 FileLog.e(e);
                             }
-                            for (long a = 0; a < size; a += 4096) {
-                                if (cancelled[0]) {
-                                    break;
-                                }
-                                destination.transferFrom(source, a, Math.min(4096, size - a));
-                                if (finalProgress != null) {
-                                    if (lastProgress <= System.currentTimeMillis() - 500) {
-                                        lastProgress = System.currentTimeMillis();
-                                        final int progress = (int) ((float) a / (float) size * 100);
-                                        AndroidUtilities.runOnUIThread(() -> {
-                                            try {
-                                                finalProgress.setProgress(progress);
-                                            } catch (Exception e) {
+                            NanogramFileCopy.copy(source, destination, size, () -> cancelled[0], finalProgress == null ? null : (done, total) -> {
+                                final int progress = (int) ((float) done / (float) total * 100);
+                                AndroidUtilities.runOnUIThread(() -> {
+                                    try {
+                                        finalProgress.setProgress(progress);
+                                    } catch (Exception e) {
+                                        FileLog.e(e);
+                                    }
+                                });
+                            });
+                        } catch (Exception e) {
                                                 FileLog.e(e);
                                             }
                                         });
