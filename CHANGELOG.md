@@ -5,6 +5,19 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### rnnoise: klaipher/rnnoise nanogram (d2d79970), the single source for iOS, macOS and Android (W2.I3)
+- Deleted the in-tree 2018 copy `TMessagesProj/jni/voip/rnnoise` (22 files, all unmodified xiph blobs, see
+  docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/xiph/rnnoise` =
+  klaipher/rnnoise branch `nanogram` at d2d79970 (xiph v0.2 + portability headers + `denoise.c` hardening + trimmed model).
+  Not `jni/third_party/rnnoise`: that directory is Chromium's rnnoise-vad (`rnn_vad_weights`), a different library.
+- `voip/CMakeLists.txt` `rnnoise` target: sources are now the ten v0.2 files iOS builds (celt_lpc, denoise, kiss_fft, nnet,
+  nnet_default, parse_lpcnet_weights, pitch, rnn, rnnoise_data, rnnoise_tables; the dump/write tools with their own
+  `main()` are not built); the long `_celt_*`/`opus_fft_*` rename list and the Opus-style definitions
+  (`USE_KISS_FFT`, `NULL=0`, `restrict=`, `__EMX__`, ...) are gone, replaced by the three iOS renames `compute_rnn`,
+  `eband20ms`, `init_rnnoise`. PUBLIC compile options/definitions and ARM mode are unchanged.
+- Behaviour change (accepted): voice-message noise suppression uses the v0.2 built-in model (`audio.c` API unchanged).
+- Build step (main session): `ng check`; emulator: record a voice message with noise suppression on.
+
 ### OpenH264: klaipher/openh264 nanogram (3583f617), the single source for iOS, macOS and Android (W2.I3)
 - `TMessagesProj/jni/third_party/openh264` moves from cisco/openh264 v2.7.0 (1bca6231) to klaipher/openh264 branch `nanogram`
   at 3583f617 (`.gitmodules` url and branch): v2.7.0 plus the two commits iOS already ships, H.264 levels 6.0-6.2 and the

@@ -71,3 +71,7 @@
 	url = https://github.com/klaipher/nanogram-deps.git
 	branch = main
 	shallow = true
+[submodule "TMessagesProj/jni/third_party/xiph/rnnoise"]
+	path = TMessagesProj/jni/third_party/xiph/rnnoise
+	url = https://github.com/klaipher/rnnoise.git
+	branch = nanogram
