@@ -159,6 +159,7 @@ android {
             cmake {
                 arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-24', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
                         "-DNANOGRAM_CCACHE=${providers.environmentVariable('NANOGRAM_CCACHE').getOrElse('')}",
+                        "-DNANOGRAM_THINLTO_CACHE_DIR=${providers.environmentVariable('NANOGRAM_THINLTO_CACHE_DIR').getOrElse('')}",
                         "-DNANOGRAM_PREBUILD_DIR=${findProperty('nanogramPrebuildDir') ?: ''}"
             }
         }
