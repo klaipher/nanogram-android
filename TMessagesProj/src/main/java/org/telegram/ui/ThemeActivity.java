@@ -632,6 +632,15 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
         return false;
     }
 
+    private static String microphoneRowValue() {
+        final int stored = SharedConfig.recordInputDevice;
+        final int resolved = AudioInputPreference.resolve(stored, AudioInputPreference.connectedInputTypes());
+        if (resolved == AudioInputPreference.AUTOMATIC && AudioInputPreference.isSupportedType(stored)) {
+            return LocaleController.formatString(R.string.MicrophoneNotConnected, getString(microphoneTitle(stored)));
+        }
+        return getString(microphoneTitle(resolved));
+    }
+
     private static int microphoneTitle(int type) {
         switch (type) {
             case android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC:
@@ -2635,7 +2644,7 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
                     } else if (position == searchEngineRow) {
                         cell.setTextAndValue(getString(R.string.SearchEngine), SearchEngine.getCurrent().name, updateSearchEngine, false);
                     } else if (position == bluetoothScoRow) {
-                        cell.setTextAndValue(getString(R.string.MicrophoneForRecordings), getString(microphoneTitle(AudioInputPreference.resolve(SharedConfig.recordInputDevice, AudioInputPreference.connectedInputTypes()))), updateRecordViaSco, false);
+                        cell.setTextAndValue(getString(R.string.MicrophoneForRecordings), microphoneRowValue(), updateRecordViaSco, false);
                         updateRecordViaSco = false;
                     }
                     break;

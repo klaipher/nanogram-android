@@ -162,45 +162,56 @@ public final class AudioInputPreference {
         }
     }
 
-    public static synchronized void setBluetoothRouting(boolean on) {
+    private static final Object ROUTE_LOCK = new Object();
+
+    public static void setBluetoothRouting(boolean on) {
         final AudioManager am = (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
         if (am == null) {
             return;
         }
+        boolean wait = false;
+        AudioDeviceInfo waitDevice = null;
         try {
-            if (on) {
-                final int choice = resolvedChoice();
-                if (!shouldRoute(choice, VoIPService.isAnyKindOfCallActive()) || !isBluetoothType(choice)) {
-                    return;
-                }
-                if (Build.VERSION.SDK_INT >= 31) {
-                    for (AudioDeviceInfo device : am.getAvailableCommunicationDevices()) {
-                        if (device.getType() == choice) {
-                            if (am.setCommunicationDevice(device)) {
-                                communicationDeviceSet = true;
-                                waitForRoute(am, device);
+            synchronized (ROUTE_LOCK) {
+                if (on) {
+                    final int choice = resolvedChoice();
+                    if (!shouldRoute(choice, VoIPService.isAnyKindOfCallActive()) || !isBluetoothType(choice)) {
+                        return;
+                    }
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        for (AudioDeviceInfo device : am.getAvailableCommunicationDevices()) {
+                            if (device.getType() == choice) {
+                                if (am.setCommunicationDevice(device)) {
+                                    communicationDeviceSet = true;
+                                    wait = true;
+                                    waitDevice = device;
+                                }
+                                break;
                             }
-                            return;
+                        }
+                    } else if (choice == AudioDeviceInfo.TYPE_BLUETOOTH_SCO && am.isBluetoothScoAvailableOffCall() && !am.isBluetoothScoOn()) {
+                        am.startBluetoothSco();
+                        legacyScoStarted = true;
+                        wait = true;
+                    }
+                } else {
+                    if (communicationDeviceSet) {
+                        communicationDeviceSet = false;
+                        if (Build.VERSION.SDK_INT >= 31) {
+                            am.clearCommunicationDevice();
                         }
                     }
-                } else if (choice == AudioDeviceInfo.TYPE_BLUETOOTH_SCO && am.isBluetoothScoAvailableOffCall() && !am.isBluetoothScoOn()) {
-                    am.startBluetoothSco();
-                    legacyScoStarted = true;
-                    waitForRoute(am, null);
-                }
-            } else {
-                if (communicationDeviceSet) {
-                    communicationDeviceSet = false;
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        am.clearCommunicationDevice();
+                    if (legacyScoStarted) {
+                        legacyScoStarted = false;
+                        if (am.isBluetoothScoOn()) {
+                            am.stopBluetoothSco();
+                        }
                     }
                 }
-                if (legacyScoStarted) {
-                    legacyScoStarted = false;
-                    if (am.isBluetoothScoOn()) {
-                        am.stopBluetoothSco();
-                    }
-                }
+            }
+            // Sleep outside the lock so a UI-thread caller never queues behind a recorder thread waiting for the route.
+            if (wait) {
+                waitForRoute(am, waitDevice);
             }
         } catch (SecurityException ignored) {
         } catch (Throwable e) {

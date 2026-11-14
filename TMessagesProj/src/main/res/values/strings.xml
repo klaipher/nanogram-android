@@ -5936,6 +5936,7 @@
     <string name="MicrophoneForVoiceMessagesScoHint">Using a headset microphone may reduce background noise but will slightly decrease audio quality.</string>
     <string name="MicrophoneForRecordings">Microphone for voice messages and round videos</string>
     <string name="MicrophoneAutomatic">Automatic</string>
+    <string name="MicrophoneNotConnected">%1$s (not connected)</string>
     <string name="MicrophoneBuiltIn">Phone microphone</string>
     <string name="MicrophoneWired">Wired headset</string>
     <string name="MicrophoneUsb">USB headset</string>
