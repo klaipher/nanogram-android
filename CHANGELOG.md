@@ -64,6 +64,19 @@ Newest first: version, build number, date, commit; what changed and how.
   ConnectionsManager callbacks, NotificationCenter, RecyclerListView, emoji/theme drawing, TL (de)serialization only, MainTabsActivity, narrowed AndroidUtilities).
 - `Tools/dev/ng profile` runs `:TMessagesProj_App:generateBaselineProfile` on the running emulator and prints line counts;
   docs in docs/nanogram/build.md (Profiles). Not yet built or measured. Commit: see git log of nanogram/profiles.
+### Performance: UI (branch nanogram/perf-ui)
+- UI-1: Choreographer60FpsContent no longer posts a frame callback on every vsync from creation. It schedules on the first
+  subscription/invalidation and stops when no group, once-list or invalidation list has work (`hasWork()`); a restart
+  keeps the timing accumulators unless the last tick is older than two frame intervals, so callers that re-post a
+  one-shot invalidation from draw() (spoilers, typing/recording status drawables) keep their old rate.
+- UI-5: EditTextBoldCursor (API 24-28) registers its 2 fps blink invalidation only while focused and attached.
+- UI-3: removed setPreferredMaxRefreshRate from LaunchActivity.onConfigurationChanged and from the long-lived PiP windows
+  (VoIPPiPView x2, PipRoundVideoView, FloatingHost). Short-lived overlays keep it.
+- UI-6: kbd_height/kbd_height_land3 (all 8 sites) and MediaDataController draft save/clear use apply() instead of commit().
+- UI-8: Nanogram wordmark computes its baseline offset once, no FontMetrics allocation per draw.
+- BATTERY-7: Theme.onAppPaused()/onAppResumed() release and re-register the ambient light sensor (Automatic night mode)
+  from LaunchActivity.onPause/onResume; lastBrightnessValue is kept to avoid a flicker. Re-registration is direct, not via
+  checkAutoNightThemeConditions, so no theme change is evaluated on resume.
 
 ### Native LTO for all code (ThinLTO)
 - voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose

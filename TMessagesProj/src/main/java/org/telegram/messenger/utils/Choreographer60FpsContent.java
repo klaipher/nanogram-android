@@ -71,6 +71,8 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
     /** Current tick in the repeating 60-tick cycle; also used for legacy 30fps drawables. */
     private int mCounter;
 
+    private boolean mScheduled;
+
     // ── Public interface ──────────────────────────────────────────────────────
 
     /** Callback interface, mirrors {@link Choreographer.FrameCallback}. */
@@ -86,16 +88,19 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
     public void postInvalidateDrawable(Drawable drawable) {
         checkMainThread();
         mDrawablesToInvalidate.add(drawable);
+        ensureScheduled();
     }
 
     public void postInvalidateDrawable30fps(Drawable drawable) {
         checkMainThread();
         mDrawablesToInvalidate30fps.add(drawable);
+        ensureScheduled();
     }
 
     public void postInvalidateView(View view) {
         checkMainThread();
         mViewsToInvalidate.add(view);
+        ensureScheduled();
     }
 
     /**
@@ -124,6 +129,7 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
             group.runnableCallbacksOnce = new ReferenceList<>();
         }
         group.runnableCallbacksOnce.add(callback);
+        ensureScheduled();
     }
 
 
@@ -141,6 +147,7 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
         fps = Math.max(1, Math.min(fps, TARGET_FPS));
         removeFrameCallback(callback); // remove from any existing group first
         getOrCreateGroup(fps).runnableCallbacks.add(callback);
+        ensureScheduled();
     }
 
     /**
@@ -158,6 +165,7 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
         fps = Math.max(1, Math.min(fps, TARGET_FPS));
         removeFrameCallback(callback); // remove from any existing group first
         getOrCreateGroup(fps).callbacks.add(callback);
+        ensureScheduled();
     }
 
     /**
@@ -210,7 +218,35 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
     // ── Private implementation ────────────────────────────────────────────────
 
     private Choreographer60FpsContent() {
-        mChoreographer.postFrameCallback(this);
+    }
+
+    /** The vsync loop runs only while something is subscribed, so an idle app does not wake every frame. */
+    private void ensureScheduled() {
+        if (!mScheduled) {
+            mScheduled = true;
+            // One-shot re-posters (spoilers, typing dots) restart the loop every cycle; keep the timing then,
+            // and reset only after a real idle gap (frameTimeNanos is in the System.nanoTime domain).
+            if (mLastVsyncNs != 0 && System.nanoTime() - mLastVsyncNs > 2 * FRAME_INTERVAL_NS) {
+                mLastVsyncNs = 0;
+                mAccumulatedNs = 0;
+            }
+            mChoreographer.postFrameCallback(this);
+        }
+    }
+
+    private boolean hasWork() {
+        if (!mDrawablesToInvalidate.isEmpty() || !mDrawablesToInvalidate30fps.isEmpty()
+                || !mViewsToInvalidate.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < mGroups.size(); i++) {
+            CallbackGroup group = mGroups.valueAt(i);
+            if (!group.callbacks.isEmpty() || !group.runnableCallbacks.isEmpty()
+                    || (group.runnableCallbacksOnce != null && !group.runnableCallbacksOnce.isEmpty())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -227,7 +263,11 @@ public final class Choreographer60FpsContent implements Choreographer.FrameCallb
             }
         }
 
-        mChoreographer.postFrameCallback(this);
+        if (hasWork()) {
+            mChoreographer.postFrameCallback(this);
+        } else {
+            mScheduled = false;
+        }
     }
 
     private void dispatchFrame(long frameTimeNanos) {

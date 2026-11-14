@@ -6899,6 +6899,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         super.onPause();
         isResumed = false;
         WidgetMedia.onAppPaused(true);
+        Theme.onAppPaused();
         PipCoordinator.getInstance().onActivityPause(this);
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.stopAllHeavyOperations, 4096);
         ApplicationLoader.mainInterfacePaused = true;
@@ -7216,6 +7217,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             onResumeStaticCallback.run();
             onResumeStaticCallback = null;
         }
+        Theme.onAppResumed();
         if (Theme.selectedAutoNightType == Theme.AUTO_NIGHT_TYPE_SYSTEM) {
             Theme.checkAutoNightThemeConditions();
         }
@@ -7375,7 +7377,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     public void onConfigurationChanged(Configuration newConfig) {
         AndroidUtilities.checkDisplaySize(this, newConfig);
         orientationController.update();
-        AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
         super.onConfigurationChanged(newConfig);
         PipCoordinator.getInstance().onConfigurationChanged(newConfig);
         AndroidUtilities.resetTabletFlag();
