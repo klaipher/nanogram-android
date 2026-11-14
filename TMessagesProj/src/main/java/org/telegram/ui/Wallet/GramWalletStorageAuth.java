@@ -21,7 +21,7 @@ import org.telegram.ui.LaunchActivity;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-/** On P+ owns platform callbacks directly; never replaces AndroidX Biometric's activity-wide callback. */
+/** On R+ owns platform callbacks directly; on 7-10 it uses AndroidX Biometric, which shares one callback per activity, so its prompt is created per request and cancelled afterwards. */
 public final class GramWalletStorageAuth {
     // Reserved wallet result range. Distinct codes prevent a late result from a timed-out
     // credential screen from completing a subsequent request on the same activity.
@@ -40,7 +40,7 @@ public final class GramWalletStorageAuth {
                 if (!isCurrent.get()) { request.finish("STORAGE_CANCELED"); return; }
                 active = request;
                 LaunchActivity activity = LaunchActivity.instance;
-                if (Build.VERSION.SDK_INT < 24 || activity == null || activity.isFinishing()
+                if (Build.VERSION.SDK_INT < 23 || activity == null || activity.isFinishing()
                         || activity.isDestroyed() || activity.getSupportFragmentManager().isStateSaved()) {
                     request.finish("AUTH_UNAVAILABLE");
                     return;
@@ -117,24 +117,20 @@ public final class GramWalletStorageAuth {
         void start(boolean credentialOnly) {
             try {
                 if (credentialOnly) credentials();
-                else if (Build.VERSION.SDK_INT >= 28) platformBiometrics();
+                else if (Build.VERSION.SDK_INT >= 30) platformBiometrics();
                 else androidxBiometrics();
             } catch (Exception e) { FileLog.e(e); credentials(); }
         }
 
-        // Framework prompt on P+: its own callback, so it never shares AndroidX's activity-wide ViewModel with
-        // BotBiometry/PasscodeView. R+ offers device credential inside the prompt; P-Q get a "use device PIN" button.
-        @androidx.annotation.RequiresApi(28)
+        // Framework prompt on R+: its own callback, device credential inside the prompt. Below R the AndroidX prompt is
+        // used because it restricts P-Q to strong biometrics, which the bare framework prompt does not.
+        @androidx.annotation.RequiresApi(30)
         private void platformBiometrics() {
             cancellation = new CancellationSignal();
             android.hardware.biometrics.BiometricPrompt.Builder builder = new android.hardware.biometrics.BiometricPrompt.Builder(activity)
                     .setTitle(LocaleController.getString(R.string.WalletUnlock));
-            if (Build.VERSION.SDK_INT >= 30) {
-                builder.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
-                        | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
-            } else {
-                builder.setNegativeButton(LocaleController.getString(R.string.WalletUseDevicePasscode), activity.getMainExecutor(), (dialog, which) -> credentials());
-            }
+            builder.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
             builder.build().authenticate(cancellation, activity.getMainExecutor(),
                     new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
                         @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult result) { finish(null); }
@@ -147,7 +143,7 @@ public final class GramWalletStorageAuth {
                     });
         }
 
-        // Android 7.x-8.x: AndroidX BiometricPrompt (fingerprint dialog) with a "use device PIN" button.
+        // Android 6-10: AndroidX BiometricPrompt (fingerprint dialog) with a "use device PIN" button.
         private void androidxBiometrics() {
             if (BiometricManager.from(activity).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
                 credentials();
