@@ -5,6 +5,18 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-CAMERA-1: Camera2 capture (experiment, off by default)
+- Debug settings > "Nanogram: Camera2 for stories and chat camera" (`NanogramExperiments.camera2Capture`, default OFF)
+  turns on the existing Camera2Session in `CameraView` (story recorder, chat camera, round video), which upstream had
+  hard-disabled (`false && ...`). The QR/barcode scanners keep Camera1 (they read NV21 preview frames). If
+  `Camera2Session.create` returns null the view falls back to Camera1 instead of a black preview.
+- Video recording on Camera2 turns on video stabilization when the camera advertises it.
+- Counters `camera2Opened` / `camera2Unavailable` in the `nanogram_experiments` preferences for the beta.
+- Not done: 10-bit HLG output, flipping the default (needs the device matrix); Camera2 for InstantCameraView stays on
+  the old "Use Camera 2 API" switch.
+- Measure: 1 minute 1080p30 story on a Pixel and a Samsung, flag off vs on: preview latency, dropped frames
+  (`dumpsys media.camera`), battery, image quality. Tests: `NanogramCameraSupportTest`.
+
 ### ANDROID-DISPLAY-1: adaptive refresh rate hints (experiment, off by default)
 - Debug settings > "Nanogram: adaptive refresh rate hints (Android 15+)" (`NanogramExperiments.adaptiveRefreshRate`,
   default OFF). When on, on API 35+: views and drawables invalidated by the shared 60 fps clock vote

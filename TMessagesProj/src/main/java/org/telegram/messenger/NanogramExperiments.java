@@ -51,4 +51,21 @@ public final class NanogramExperiments {
         setEnabled(key, value);
         return value;
     }
+
+    public static void count(String key) {
+        try {
+            SharedPreferences prefs = ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            prefs.edit().putInt("count_" + key, prefs.getInt("count_" + key, 0) + 1).apply();
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
+    public static int getCount(String key) {
+        try {
+            return ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("count_" + key, 0);
+        } catch (Throwable e) {
+            return 0;
+        }
+    }
 }
