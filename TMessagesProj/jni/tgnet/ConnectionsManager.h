@@ -34,6 +34,7 @@ class ByteArray;
 class TL_config;
 class EventObject;
 class Config;
+class Timer;
 class ProxyCheckInfo;
 
 class ConnectionsManager {
@@ -94,6 +95,7 @@ private:
     void initDatacenters();
     void loadConfig();
     void saveConfig();
+    void scheduleSaveConfig();
     void saveConfigInternal(NativeByteBuffer *buffer);
     void select();
     void wakeup();
@@ -173,6 +175,8 @@ private:
     int32_t lastDcUpdateTime = 0;
     int64_t lastPingTime = getCurrentTimeMonotonicMillis();
     bool networkPaused = false;
+    Timer *saveConfigTimer = nullptr;
+    bool saveConfigPending = false;
     int32_t nextSleepTimeout = CONNECTION_BACKGROUND_KEEP_TIME;
     int64_t lastPauseTime = 0;
     int64_t lastMonotonicPauseTime = 0;

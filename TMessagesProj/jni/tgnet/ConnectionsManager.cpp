@@ -27,6 +27,7 @@
 #include "ApiScheme.h"
 #include "NativeByteBuffer.h"
 #include "Connection.h"
+#include "Timer.h"
 #include "Datacenter.h"
 #include "Request.h"
 #include "BuffersStorage.h"
@@ -477,7 +478,30 @@ void ConnectionsManager::saveConfigInternal(NativeByteBuffer *buffer) {
     }
 }
 
+// New session, init connection and bad salt are bursty at start and on the first media downloads: one fsynced rewrite
+// per second instead of one per event. A direct saveConfig() (auth, DC change, pause, cleanUp) writes everything at once.
+void ConnectionsManager::scheduleSaveConfig() {
+    if (saveConfigPending) {
+        return;
+    }
+    if (saveConfigTimer == nullptr) {
+        saveConfigTimer = new Timer(instanceNum, [&] {
+            saveConfigTimer->stop();
+            if (saveConfigPending) {
+                saveConfig();
+            }
+        });
+        saveConfigTimer->setTimeout(1000, false);
+    }
+    saveConfigPending = true;
+    saveConfigTimer->start();
+}
+
 void ConnectionsManager::saveConfig() {
+    if (saveConfigPending) {
+        saveConfigPending = false;
+        saveConfigTimer->stop();
+    }
     if (config == nullptr) {
         config = new Config(instanceNum, "tgnet.dat");
     }
@@ -1137,7 +1161,7 @@ void ConnectionsManager::processServerResponse(TLObject *message, int64_t messag
                 }
             }
 
-            saveConfig();
+            scheduleSaveConfig();
 
             if (datacenter->getDatacenterId() == currentDatacenterId && currentUserId) {
                 if (connection->getConnectionType() == ConnectionTypePush) {
@@ -1562,7 +1586,7 @@ void ConnectionsManager::processServerResponse(TLObject *message, int64_t messag
                             save = true;
                         }
                         if (save) {
-                            saveConfig();
+                            scheduleSaveConfig();
                             if (LOGS_ENABLED) DEBUG_D("dc%d init connection completed", datacenter->getDatacenterId());
                         }
                     }
@@ -1670,7 +1694,7 @@ void ConnectionsManager::processServerResponse(TLObject *message, int64_t messag
             salt->valid_until += 30 * 60;
             salt->salt = messageSalt;
             datacenter->addServerSalt(salt, media);
-            saveConfig();
+            scheduleSaveConfig();
 
             if (datacenter->hasAuthKey(ConnectionTypeGeneric, 1)) {
                 processRequestQueue(AllConnectionTypes, datacenter->getDatacenterId());
