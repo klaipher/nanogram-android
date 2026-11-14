@@ -2,4 +2,10 @@
 <resources>
     <string name="AppName">Nanogram</string>
     <string name="AppNameBeta">Nanogram Beta</string>
+    <string name="Page1Title">Nanogram</string>
+    <string name="AppIconVintage">Light</string>
+    <string name="AppIconAqua">Orbit</string>
+    <string name="AppIconPremium">Glass</string>
+    <string name="AppIconTurbo">Speed</string>
+    <string name="AppIconNox">Night</string>
 </resources>
