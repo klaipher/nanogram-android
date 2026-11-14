@@ -217,6 +217,10 @@ androidComponents {
         if (variant.buildType != null && variant.buildType.matches('(nonMinified|benchmark).+') && !variant.buildType.endsWith('Release')) {
             variant.enable = false
         }
+        // Outside profile generation these variants are not needed; the committed profile is still merged into release.
+        if (!nanogramProfileGeneration && variant.buildType != null && variant.buildType.matches('(nonMinified|benchmark).+')) {
+            variant.enable = false
+        }
         if (nanogramProfileGeneration && (flavor != 'afat' || !(variant.buildType in nanogramProfileBuildTypes))) {
             variant.enable = false
         }
