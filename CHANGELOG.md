@@ -5,6 +5,14 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Narrower R8 keep for tgnet, prepared and off by default (ANDROID-R8-1)
+- `TMessagesProj/proguard-rules-tgnet-narrow.pro`: `-keepnames` plus `-keepclassmembernames { <fields>; }` for
+  org.telegram.tgnet.**, and a full keep for tgnet.tl.TL_wallet** (WalletEngineBridge.cpp resolves its fields by name).
+  The blanket `-keep class org.telegram.tgnet.** { *; }` in proguard-rules.pro stays until a release build with the
+  narrow file passes the smoke test; enabling needs a proguardFiles entry in TMessagesProj_App/build.gradle (owned by the
+  build stream). TL classes are built through TLClassStore factories, so only Gson in FileLog (verbose dumps) and the
+  wallet JNI need names. Tools/r8_keep_check.py and proguard-checklist.md, which the rules file cites, are not in the tree.
+
 ### Empty catches in Nanogram-owned code now log (ANDROID-DESIGN-8)
 - Localization.addResLocalization logs a failed asset load, ProxySettings logs an unparsable `port` in a proxy link,
   RoundVideoCodecRecorder logs a skipped `MediaCodec.stop()` (debug level, expected on a codec that never started).
