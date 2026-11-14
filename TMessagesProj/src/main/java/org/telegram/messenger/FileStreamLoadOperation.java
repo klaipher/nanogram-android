@@ -50,6 +50,8 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
     private long requestedLength;
     private boolean opened;
     private long currentOffset;
+    private static final int AVAILABLE_WINDOW = 512 * 1024;
+    private long availableStart, availableEnd;
     private CountDownLatch countDownLatch;
     private RandomAccessFile file;
     private TLRPC.Document document;
@@ -106,6 +108,7 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
         }
         allStreams.put(document.id, this);
         currentOffset = dataSpec.position;
+        availableStart = availableEnd = 0;
         requestedLength = dataSpec.length;
         loadOperation = FileLoader.getInstance(currentAccount).loadStreamFile(this, document, null, parentObject, currentOffset, false, getCurrentPriority());
         bytesTransferred = 0;
@@ -160,8 +163,15 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
                 if (bytesRemaining < readLength) {
                     readLength = (int) bytesRemaining;
                 }
+                // Downloaded ranges only grow, so a window already reported as available needs no stageQueue round trip.
+                if (opened && file != null && currentOffset >= availableStart && currentOffset < availableEnd) {
+                    availableLength = (int) Math.min(readLength, availableEnd - currentOffset);
+                }
                 while ((availableLength == 0 && opened) || file == null) {
-                    availableLength = (int) loadOperation.getDownloadedLengthFromOffset(currentOffset, readLength)[0];
+                    final long got = loadOperation.getDownloadedLengthFromOffset(currentOffset, Math.max(readLength, AVAILABLE_WINDOW))[0];
+                    availableStart = currentOffset;
+                    availableEnd = currentOffset + got;
+                    availableLength = (int) Math.min(readLength, got);
                     if (availableLength == 0) {
                         countDownLatch = new CountDownLatch(1);
                         FileLoadOperation loadOperation = FileLoader.getInstance(currentAccount).loadStreamFile(this, document, null, parentObject, currentOffset, false, getCurrentPriority());
@@ -169,6 +179,7 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
 //                            FileLog.e("FileStreamLoadOperation " + document.id + " read: changed operation!");
                             this.loadOperation.removeStreamListener(this);
                             this.loadOperation = loadOperation;
+                            availableEnd = 0;
                         }
 //                        FileLog.e("FileStreamLoadOperation " + document.id + " read sleeping.... Zzz");
                         if (countDownLatch != null) {
@@ -210,6 +221,7 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
 //                            FileLog.e("FileStreamLoadOperation " + document.id + " read: changed operation!");
                                         this.loadOperation.removeStreamListener(this);
                                         this.loadOperation = newLoadOperation;
+                                        availableEnd = 0;
                                     }
                                 }
                             }
