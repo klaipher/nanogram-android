@@ -538,6 +538,12 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
     @AnyThread
     @Nullable
     public Bitmap getFrameAtTime(long ms, boolean precise) {
+        return getFrameAtTime(ms, precise, null);
+    }
+
+    @AnyThread
+    @Nullable
+    public Bitmap getFrameAtTime(long ms, boolean precise, @Nullable Bitmap scratch) {
         if (!decoderCreated || mDecoder == null) {
             return null;
         }
@@ -548,7 +554,7 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         if (!precise) {
             mDecoder.seekToMs(ms, precise);
         }
-        Bitmap backgroundBitmap = Bitmap.createBitmap(metaData[0], metaData[1], Bitmap.Config.ARGB_8888);
+        Bitmap backgroundBitmap = NanogramScratchBitmap.reuseOrCreate(scratch, metaData[0], metaData[1]);
         int result;
         if (precise) {
             result = mDecoder.getFrameAtTime(ms, backgroundBitmap);
@@ -558,7 +564,9 @@ public final class AnimatedFileDrawable extends BitmapDrawable implements Animat
         if (result != 0) {
             return backgroundBitmap;
         } else {
-            backgroundBitmap.recycle();
+            if (backgroundBitmap != scratch) {
+                backgroundBitmap.recycle();
+            }
             return null;
         }
     }
