@@ -27,6 +27,7 @@ import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 
+import org.telegram.messenger.nanogram.NanogramLog;
 import org.telegram.messenger.time.FastDateFormat;
 import org.telegram.messenger.video.MediaCodecVideoConvertor;
 import org.telegram.tgnet.NativeByteBuffer;
@@ -335,6 +336,7 @@ public class FileLog {
             if (dir == null) {
                 return;
             }
+            NanogramLog.prune(dir);
             currentFile = new File(dir, date + ".txt");
             tlRequestsFile = new File(dir, date + "_mtproto.txt");
         } catch (Exception e) {
@@ -348,10 +350,12 @@ public class FileLog {
             streamWriter.write("-----start log " + date + "-----\n");
             streamWriter.flush();
 
-            FileOutputStream tlStream = new FileOutputStream(tlRequestsFile);
-            tlStreamWriter = new OutputStreamWriter(tlStream);
-            tlStreamWriter.write("-----start log " + date + "-----\n");
-            tlStreamWriter.flush();
+            if (BuildVars.LOGS_ENABLED) {
+                FileOutputStream tlStream = new FileOutputStream(tlRequestsFile);
+                tlStreamWriter = new OutputStreamWriter(tlStream);
+                tlStreamWriter.write("-----start log " + date + "-----\n");
+                tlStreamWriter.flush();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -397,7 +401,7 @@ public class FileLog {
     }
 
     public static void e(final String message, final Throwable exception) {
-        if (!BuildVars.LOGS_ENABLED) {
+        if (!NanogramLog.shouldLog()) {
             return;
         }
         ensureInitied();
@@ -405,6 +409,7 @@ public class FileLog {
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(() -> {
                 try {
+                    getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + message + "\n");
                     getInstance().streamWriter.write(exception.toString());
                     StackTraceElement[] stack = exception.getStackTrace();
@@ -419,8 +424,41 @@ public class FileLog {
         }
     }
 
+    // Key lifecycle lines (start, push, calls, connection): kept in release builds too, never in hot loops.
+    public static void i(final String message) {
+        if (!NanogramLog.shouldLog()) {
+            return;
+        }
+        ensureInitied();
+        Log.i(tag, message);
+        if (getInstance().streamWriter != null) {
+            getInstance().logQueue.postRunnable(() -> {
+                try {
+                    getInstance().rollQuietFile();
+                    getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " I/tmessages: " + message + "\n");
+                    getInstance().streamWriter.flush();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+    }
+
+    // Quiet mode keeps each file small; verbose mode is unbounded like upstream.
+    private void rollQuietFile() throws IOException {
+        if (BuildVars.LOGS_ENABLED || currentFile == null || currentFile.length() < NanogramLog.MAX_QUIET_FILE_BYTES) {
+            return;
+        }
+        streamWriter.close();
+        final String date = fileDateFormat.format(System.currentTimeMillis());
+        currentFile = new File(currentFile.getParentFile(), date + "_r.txt");
+        streamWriter = new OutputStreamWriter(new FileOutputStream(currentFile));
+        streamWriter.write("-----continued log " + date + "-----\n");
+        NanogramLog.prune(currentFile.getParentFile());
+    }
+
     public static void e(final String message) {
-        if (!BuildVars.LOGS_ENABLED) {
+        if (!NanogramLog.shouldLog()) {
             return;
         }
         ensureInitied();
@@ -428,6 +466,7 @@ public class FileLog {
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(() -> {
                 try {
+                    getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + message + "\n");
                     getInstance().streamWriter.flush();
                 } catch (Exception e) {
@@ -442,7 +481,7 @@ public class FileLog {
     }
 
     public static void e(final Throwable e, boolean logToAppCenter) {
-        if (!BuildVars.LOGS_ENABLED) {
+        if (!NanogramLog.shouldLog()) {
             return;
         }
         if (BuildVars.DEBUG_VERSION && needSent(e) && logToAppCenter) {
@@ -468,6 +507,7 @@ public class FileLog {
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(() -> {
                 try {
+                    getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + e + "\n");
                     StackTraceElement[] stack = e.getStackTrace();
                     for (int a = 0; a < stack.length; a++) {
@@ -497,6 +537,7 @@ public class FileLog {
 
     private static long dumpedHeap;
     public void dumpMemory(boolean force) {
+        if (!BuildVars.LOGS_ENABLED) return;
         if (!force && System.currentTimeMillis() - dumpedHeap < 30_000) return;
         dumpedHeap = System.currentTimeMillis();
         try {
@@ -526,7 +567,7 @@ public class FileLog {
     }
 
     public static void fatal(final Throwable e, boolean logToAppCenter) {
-        if (!BuildVars.LOGS_ENABLED) {
+        if (!NanogramLog.shouldLog()) {
             return;
         }
         if (e instanceof OutOfMemoryError) {
@@ -599,7 +640,7 @@ public class FileLog {
     }
 
     public static void w(final String message) {
-        if (!BuildVars.LOGS_ENABLED) {
+        if (!NanogramLog.shouldLog()) {
             return;
         }
         ensureInitied();
@@ -607,6 +648,7 @@ public class FileLog {
         if (getInstance().streamWriter != null) {
             getInstance().logQueue.postRunnable(() -> {
                 try {
+                    getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " W/tmessages: " + message + "\n");
                     getInstance().streamWriter.flush();
                 } catch (Exception e) {
