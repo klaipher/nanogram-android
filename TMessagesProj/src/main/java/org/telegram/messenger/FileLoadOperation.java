@@ -1518,6 +1518,14 @@ public class FileLoadOperation {
     private void cleanup() {
         try {
             if (fileOutputStream != null) {
+                if (fiv == null && filePartsStream != null) {
+                    // The queued ranges write forces this channel; closed first, it would skip the newest ranges.
+                    try {
+                        fileOutputStream.getChannel().force(false);
+                    } catch (Exception e) {
+                        FileLog.e(e);
+                    }
+                }
                 try {
                     fileOutputStream.getChannel().close();
                 } catch (Exception e) {
