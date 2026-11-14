@@ -4,6 +4,22 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Diagnostics and log collection
+- New `org.telegram.messenger.nanogram` package and `NanogramDiagnosticsActivity` (Settings > Help > Send diagnostics,
+  also Debug menu): builds `Nanogram-diagnostics-<versionCode>-<time>.zip` (device/power/network/permission/memory report,
+  process exit history with ANR traces and native tombstones, own crash records, logs, call logs) and shares it through
+  the system share sheet (FileProvider `cache-path`) or Nanogram's own chat picker (`DialogsActivity` select mode,
+  `SendMessagesHelper.prepareSendingDocuments`); verbose-log switch, clear logs, "closed unexpectedly" list.
+- Release builds keep a rolling quiet log: `FileLog.e/w/fatal` and new `FileLog.i` write without `LOGS_ENABLED`
+  (5 MB, 3 days, 30 files, 1 MB per file, 40 lines per 10 s burst cap); `FileLog.d` and heap dumps stay verbose-only;
+  the TL dump file is created only in verbose mode. Key events logged: start, foreground/background, push received,
+  call state, connection state, memory trim, and exits/crashes of the previous run on the next start.
+- Uncaught exceptions are recorded synchronously by `NanogramCrashHandler` (chained before upstream's handler).
+- Collected through `ActivityManager.getHistoricalProcessExitReasons` (API 30+), `getHistoricalProcessStartReasons`
+  (API 35+), thermal status/headroom, standby bucket, background restriction, data saver, exact-alarm and
+  full-screen-intent state, notification channel states (per-chat channels only counted), `/proc/self` memory and fds.
+- Docs: `docs/nanogram/diagnostics.md`.
+
 ### Infrastructure
 - Repository `klaipher/nanogram-android` created from a history-free import of upstream release 13.2.2 (7303),
   DrKLO/Telegram 21f7d109 (commit 406cbeb).
