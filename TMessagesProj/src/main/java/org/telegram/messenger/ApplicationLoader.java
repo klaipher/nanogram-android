@@ -333,7 +333,7 @@ public class ApplicationLoader extends Application {
             return;
         }
 
-        NanogramStrictMode.install();
+        NanogramStrictMode.install(applicationContext);
 
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();

@@ -1,5 +1,7 @@
 package org.telegram.messenger.nanogram;
 
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.os.StrictMode;
 
@@ -12,12 +14,16 @@ public final class NanogramStrictMode {
     private NanogramStrictMode() {
     }
 
-    public static boolean isEnabled() {
-        return BuildVars.DEBUG_VERSION || NanogramSystemFlags.isEnabled(NanogramSystemFlags.STRICT_MODE);
+    /** Release builds never read the flag file at startup: only debuggable builds can turn the flag on. */
+    public static boolean isEnabled(Context context) {
+        if (BuildVars.DEBUG_VERSION) {
+            return true;
+        }
+        return context != null && (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0 && NanogramSystemFlags.isEnabled(NanogramSystemFlags.STRICT_MODE);
     }
 
-    public static void install() {
-        if (!isEnabled()) {
+    public static void install(Context context) {
+        if (!isEnabled(context)) {
             return;
         }
         try {
