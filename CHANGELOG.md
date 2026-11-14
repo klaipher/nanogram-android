@@ -6,7 +6,7 @@ Newest first: version, build number, date, commit; what changed and how.
 ## Unreleased
 
 ### ANDROID-MEDIA-1: system Photo Picker for the "open in" entries (experimental, off)
-- Flag `photo_picker` (default off), API 33+ with `MediaStore.isPhotoPickerAvailable()`: the attach "open in" entry (`ChatAttachAlertPhotoLayout`) and `ChatActivity.startPhotoSelectActivity` start `ACTION_PICK_IMAGES` (image only for avatars and single-image pickers) instead of the `ACTION_PICK` chooser; the old intent stays as fallback. The result handler detects picker video URIs by MIME type (`NanogramPhotoPicker.isVideo`) because they have no "video" in the URI. Check on a device that `AndroidUtilities.getPath` copes with picker URIs before turning the flag on.
+- Flag `photo_picker` (default off), API 33+ (`ACTION_PICK_IMAGES` is always present there): the attach "open in" entry (`ChatAttachAlertPhotoLayout`) and `ChatActivity.startPhotoSelectActivity` start `ACTION_PICK_IMAGES` (image only for avatars and single-image pickers) instead of the `ACTION_PICK` chooser; the old intent stays as fallback. The result handler detects picker video URIs by MIME type (`NanogramPhotoPicker.isVideo`) because they have no "video" in the URI. Check on a device that `AndroidUtilities.getPath` copes with picker URIs before turning the flag on.
 - Not done: `READ_MEDIA_VISUAL_USER_SELECTED` and the partial-grant UI ("Select more" / "Allow all"). Android 14 compatibility mode already offers partial selection, and declaring the permission ends it, so the UI needs a device pass first.
 - Tests: `NanogramPhotoPickerTest` (JVM).
 ### ANDROID-PREFS-1: apply() instead of commit() on UI-thread callbacks
