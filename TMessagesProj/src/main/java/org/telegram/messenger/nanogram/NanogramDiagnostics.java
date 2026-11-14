@@ -111,14 +111,16 @@ public final class NanogramDiagnostics {
     }
 
     public static void onAppStart(Context context) {
-        final String label = appLabel(context);
+        // No binder or disk work on the main thread; the crash handler resolves the app label only when a crash is written.
         try {
-            NanogramCrashHandler.install(context, label);
+            NanogramCrashHandler.install(context);
         } catch (Throwable e) {
             FileLog.e(e);
         }
-        FileLog.i("start " + label + " pid " + Process.myPid() + ", " + NanogramSystemInfo.summaryLine());
-        executor.execute(() -> logPreviousExits(context));
+        executor.execute(() -> {
+            FileLog.i("start " + appLabel(context) + " pid " + Process.myPid() + ", " + NanogramSystemInfo.summaryLine());
+            logPreviousExits(context);
+        });
     }
 
     // Puts exits and crashes since the last start into the quiet log, so a log alone tells what ended the previous run.

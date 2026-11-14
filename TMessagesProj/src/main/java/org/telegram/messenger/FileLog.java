@@ -331,7 +331,14 @@ public class FileLog {
 
         dateFormat = FastDateFormat.getInstance("dd_MM_yyyy_HH_mm_ss.SSS", Locale.US);
         fileDateFormat = FastDateFormat.getInstance("dd_MM_yyyy_HH_mm_ss", Locale.US);
-        String date = fileDateFormat.format(System.currentTimeMillis());
+        final String date = fileDateFormat.format(System.currentTimeMillis());
+        logQueue = new DispatchQueue2("logQueue");
+        // Disk work (listing, pruning, opening) stays off the caller's thread; the queue is FIFO so early lines keep order.
+        logQueue.postRunnable(() -> openFiles(date));
+        initied = true;
+    }
+
+    private void openFiles(String date) {
         try {
             File dir = AndroidUtilities.getLogsDir();
             if (dir == null) {
@@ -348,7 +355,6 @@ public class FileLog {
             e.printStackTrace();
         }
         try {
-            logQueue = new DispatchQueue2("logQueue");
             currentFile.createNewFile();
             FileOutputStream stream = new FileOutputStream(currentFile, appendToCurrent);
             streamWriter = new OutputStreamWriter(stream);
@@ -364,7 +370,6 @@ public class FileLog {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        initied = true;
     }
 
     public static void ensureInitied() {
@@ -411,8 +416,11 @@ public class FileLog {
         }
         ensureInitied();
         Log.e(tag, message, exception);
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + message + "\n");
@@ -436,8 +444,11 @@ public class FileLog {
         }
         ensureInitied();
         Log.i(tag, message);
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " I/tmessages: " + message + "\n");
@@ -468,8 +479,11 @@ public class FileLog {
         }
         ensureInitied();
         Log.e(tag, message);
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + message + "\n");
@@ -509,8 +523,11 @@ public class FileLog {
         }
         ensureInitied();
         e.printStackTrace();
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " E/tmessages: " + e + "\n");
@@ -583,8 +600,11 @@ public class FileLog {
         }
         ensureInitied();
         e.printStackTrace();
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " FATAL/tmessages: " + e + "\n");
                     StackTraceElement[] stack = e.getStackTrace();
@@ -629,8 +649,11 @@ public class FileLog {
         }
         ensureInitied();
         Log.d(tag, message);
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " D/tmessages: " + message + "\n");
                     getInstance().streamWriter.flush();
@@ -650,8 +673,11 @@ public class FileLog {
         }
         ensureInitied();
         Log.w(tag, message);
-        if (getInstance().streamWriter != null) {
+        if (getInstance().logQueue != null) {
             getInstance().logQueue.postRunnable(() -> {
+                if (getInstance().streamWriter == null) {
+                    return;
+                }
                 try {
                     getInstance().rollQuietFile();
                     getInstance().streamWriter.write(getInstance().dateFormat.format(System.currentTimeMillis()) + " W/tmessages: " + message + "\n");
@@ -665,6 +691,11 @@ public class FileLog {
 
     public static void cleanupLogs() {
         ensureInitied();
+        // currentFile is set on logQueue.
+        getInstance().logQueue.postRunnable(FileLog::cleanupLogsInternal);
+    }
+
+    private static void cleanupLogsInternal() {
         File dir = AndroidUtilities.getLogsDir();
         if (dir == null) {
             return;

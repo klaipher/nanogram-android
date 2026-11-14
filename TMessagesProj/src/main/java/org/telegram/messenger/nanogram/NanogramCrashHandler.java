@@ -26,25 +26,25 @@ public final class NanogramCrashHandler implements Thread.UncaughtExceptionHandl
 
     private final Thread.UncaughtExceptionHandler previous;
     private final File dir;
-    private final String appLabel;
+    private final Context context;
     private boolean recording;
 
-    private NanogramCrashHandler(Thread.UncaughtExceptionHandler previous, File dir, String appLabel) {
+    private NanogramCrashHandler(Thread.UncaughtExceptionHandler previous, File dir, Context context) {
         this.previous = previous;
         this.dir = dir;
-        this.appLabel = appLabel;
+        this.context = context;
     }
 
     public static File directory(Context context) {
         return new File(context.getFilesDir(), "nanogram_crashes");
     }
 
-    public static void install(Context context, String appLabel) {
+    public static void install(Context context) {
         final Thread.UncaughtExceptionHandler current = Thread.getDefaultUncaughtExceptionHandler();
         if (current instanceof NanogramCrashHandler) {
             return;
         }
-        Thread.setDefaultUncaughtExceptionHandler(new NanogramCrashHandler(current, directory(context), appLabel));
+        Thread.setDefaultUncaughtExceptionHandler(new NanogramCrashHandler(current, directory(context), context));
     }
 
     @Override
@@ -68,7 +68,7 @@ public final class NanogramCrashHandler implements Thread.UncaughtExceptionHandl
         final long now = System.currentTimeMillis();
         final StringBuilder sb = new StringBuilder(4096);
         sb.append("time: ").append(NanogramDiagnostics.formatTime(now)).append('\n');
-        sb.append("app: ").append(appLabel).append('\n');
+        sb.append("app: ").append(NanogramDiagnostics.appLabel(context)).append('\n');
         sb.append("thread: ").append(thread == null ? "?" : thread.getName()).append('\n');
         sb.append("process uptime ms: ").append(SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()).append('\n');
         final Runtime runtime = Runtime.getRuntime();
