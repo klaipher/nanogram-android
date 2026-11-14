@@ -852,7 +852,15 @@ public class ConnectionsManager extends BaseController {
         }
     }
 
+    // The native loop wakes at least every second; one pass of the 1 s timer logic per 250 ms is enough (own network thread per account).
+    private static final long[] lastTimerProc = new long[UserConfig.MAX_ACCOUNT_COUNT];
+
     public static void onUpdate(final int currentAccount) {
+        final long now = SystemClock.elapsedRealtime();
+        if (now - lastTimerProc[currentAccount] < 250) {
+            return;
+        }
+        lastTimerProc[currentAccount] = now;
         Utilities.stageQueue.postRunnable(() -> AccountInstance.getInstance(currentAccount).getMessagesController().updateTimerProc());
     }
 
