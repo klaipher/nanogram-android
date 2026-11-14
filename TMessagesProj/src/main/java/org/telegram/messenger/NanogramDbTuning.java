@@ -60,14 +60,6 @@ public class NanogramDbTuning {
         return list;
     }
 
-    public static List<String> closePragmas(boolean flagOn) {
-        ArrayList<String> list = new ArrayList<>();
-        if (flagOn) {
-            list.add("PRAGMA optimize");
-        }
-        return list;
-    }
-
     private static void run(SQLiteDatabase database, List<String> pragmas) {
         for (String pragma : pragmas) {
             try {
@@ -80,11 +72,6 @@ public class NanogramDbTuning {
 
     public static void applyLight(SQLiteDatabase database) {
         run(database, lightPragmas(isEnabled()));
-    }
-
-    /** Call right before close(); no-op with the flag off. */
-    public static void beforeClose(SQLiteDatabase database) {
-        run(database, closePragmas(isEnabled()));
     }
 
     public static void apply(SQLiteDatabase database) {

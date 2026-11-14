@@ -815,7 +815,6 @@ public class MessagesStorage extends BaseController {
             clearDatabaseValues();
         }
         if (database != null) {
-            NanogramDbTuning.beforeClose(database);
             database.close();
             database = null;
         }

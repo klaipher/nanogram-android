@@ -31,12 +31,6 @@ public class NanogramDbTuningTest {
     }
 
     @Test
-    public void closePragmaOnlyWhenFlagOn() {
-        assertEquals(Arrays.asList("PRAGMA optimize"), NanogramDbTuning.closePragmas(true));
-        assertTrue(NanogramDbTuning.closePragmas(false).isEmpty());
-    }
-
-    @Test
     public void filePathDatabaseGetsSmallCacheAndOptimize() {
         assertTrue(NanogramDbTuning.lightPragmas(false).isEmpty());
         assertEquals(Arrays.asList("PRAGMA cache_size = -2048", "PRAGMA optimize=0x10002"), NanogramDbTuning.lightPragmas(true));
