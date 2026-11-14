@@ -25,6 +25,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.nanogram.NanogramDiagnostics;
 import org.telegram.messenger.nanogram.NanogramLog;
+import org.telegram.messenger.nanogram.NanogramProfiling;
 import org.telegram.messenger.nanogram.NanogramSystemInfo;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -50,6 +51,10 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
     private static final int ID_CLEAR = 4;
     private static final int ID_INFO = 5;
     private static final int ID_UPDATE = 6;
+    private static final int ID_TRACE = 7;
+    private static final int ID_TRACE_TRIGGERS = 8;
+
+    private boolean recordingTrace;
 
     private List<NanogramDiagnostics.Problem> problems = new ArrayList<>();
     private long logsSize;
@@ -136,6 +141,15 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
         items.add(UItem.asButton(ID_CHAT, R.drawable.msg_send, getString(R.string.NanogramDiagnosticsSendToChat)).accent());
         items.add(UItem.asShadow(getString(NanogramLog.verboseRecently() ? R.string.NanogramDiagnosticsShareInfoVerbose : R.string.NanogramDiagnosticsShareInfo)));
 
+        if (NanogramProfiling.isSupported()) {
+            items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsTraces)));
+            items.add(UItem.asButton(ID_TRACE, getString(R.string.NanogramDiagnosticsRecordTrace), recordingTrace ? getString(R.string.NanogramDiagnosticsRecording) : ""));
+            if (NanogramProfiling.triggersSupported()) {
+                items.add(UItem.asCheck(ID_TRACE_TRIGGERS, getString(R.string.NanogramDiagnosticsTraceTriggers)).setChecked(NanogramProfiling.isTriggersEnabled(ApplicationLoader.applicationContext)));
+            }
+            items.add(UItem.asShadow(getString(R.string.NanogramDiagnosticsTracesInfo)));
+        }
+
         items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsLogs)));
         items.add(UItem.asCheck(ID_VERBOSE, getString(R.string.NanogramDiagnosticsVerbose)).setChecked(NanogramLog.isVerbose()));
         items.add(UItem.asShadow(getString(R.string.NanogramDiagnosticsVerboseInfo)));
@@ -157,6 +171,28 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
                 if (getParentActivity() != null) {
                     Toast.makeText(getParentActivity(), getString(R.string.NanogramDiagnosticsRestartHint), Toast.LENGTH_LONG).show();
                 }
+                listView.adapter.update(true);
+                break;
+            }
+            case ID_TRACE: {
+                if (recordingTrace) {
+                    break;
+                }
+                recordingTrace = true;
+                listView.adapter.update(true);
+                NanogramProfiling.recordSystemTrace(ApplicationLoader.applicationContext, Runnable::run, (file, error) -> AndroidUtilities.runOnUIThread(() -> {
+                    recordingTrace = false;
+                    if (listView != null && listView.adapter != null) {
+                        listView.adapter.update(true);
+                    }
+                    if (getParentActivity() != null) {
+                        Toast.makeText(getParentActivity(), file != null ? getString(R.string.NanogramDiagnosticsTraceSaved) : error, Toast.LENGTH_LONG).show();
+                    }
+                }));
+                break;
+            }
+            case ID_TRACE_TRIGGERS: {
+                NanogramProfiling.setTriggersEnabled(ApplicationLoader.applicationContext, !NanogramProfiling.isTriggersEnabled(ApplicationLoader.applicationContext));
                 listView.adapter.update(true);
                 break;
             }

@@ -122,6 +122,7 @@ public final class NanogramDiagnostics {
         executor.execute(() -> {
             FileLog.i("build " + appLabel(context));
             logPreviousExits(context);
+            NanogramProfiling.onAppStart(context);
         });
     }
 
@@ -269,6 +270,7 @@ public final class NanogramDiagnostics {
             addSafely(out, "exit-history.txt", () -> NanogramExitInfo.describeAll(context));
             addCrashes(context, out);
             addTraces(context, out);
+            addProfiles(context, out);
             addLogs(context, out);
         } catch (IOException | RuntimeException e) {
             zip.delete();
@@ -300,6 +302,7 @@ public final class NanogramDiagnostics {
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  crashes/           uncaught Java exceptions recorded by Nanogram: stack traces only\n"
                 + "  traces/            system ANR traces and native crash tombstones for the latest problems (Android 11+)\n"
+                + "  profiles/          system traces recorded on request or by ANR/cold-start triggers (Android 15+); they can show thread and function names\n"
                 + "  logs/              Nanogram log files from the last " + (verbose ? VERBOSE_DAYS : QUIET_DAYS) + " days (" + (verbose ? "verbose" : "errors, warnings and key events") + ")\n"
                 + "  voip/              call logs from the last " + QUIET_DAYS + " days\n\n"
                 + (verbose
@@ -348,6 +351,28 @@ public final class NanogramDiagnostics {
                     } catch (Throwable ignore) {
                     }
                 }
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
+    // System traces are binary: whole files only, newest first, never truncated.
+    private static void addProfiles(Context context, ZipOutputStream out) {
+        try {
+            long total = 0;
+            for (File file : NanogramProfiling.list(context)) {
+                if (total + file.length() > NanogramProfiling.MAX_TOTAL_BYTES) {
+                    break;
+                }
+                total += file.length();
+                final ZipEntry entry = new ZipEntry("profiles/" + file.getName());
+                entry.setTime(file.lastModified());
+                out.putNextEntry(entry);
+                try (FileInputStream in = new FileInputStream(file)) {
+                    copyCapped(in, out, Long.MAX_VALUE);
+                }
+                out.closeEntry();
             }
         } catch (Throwable e) {
             FileLog.e(e);
@@ -430,6 +455,7 @@ public final class NanogramDiagnostics {
         deleteFiles(crashes);
         deleteFiles(new File(context.getCacheDir(), "voip_logs"));
         deleteFiles(zipDir(context));
+        NanogramProfiling.clear(context);
         final File[] hprof = AndroidUtilities.getLogsDir() == null ? null : AndroidUtilities.getLogsDir().listFiles((d, name) -> name.endsWith(".hprof"));
         if (hprof != null) {
             for (File file : hprof) {

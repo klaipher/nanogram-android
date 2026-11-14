@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-PROFILING-1: ProfilingManager system traces in diagnostics
+- Nanogram diagnostics (API 35+): "Record a system trace" calls `ProfilingManager.requestProfiling(PROFILING_TYPE_SYSTEM_TRACE)`; the result is copied to `cache/ng_profiles` (6 files, 64 MB, newest kept). On API 36 a switch "Record traces on ANR and cold start" (off by default, persisted) registers ANR and COLD_START triggers and stores their results the same way (the API 36 calls go through reflection so a signature change fails soft). Traces go into the diagnostics zip as `profiles/` (whole files, never truncated) only when shared by the user; Clear logs deletes them. Nothing is uploaded automatically.
+- Tests: `NanogramProfilingTest` (retention rule, JVM).
 ### ANDROID-DESIGN-4: StrictMode thread and VM policies in debug builds
 - `NanogramStrictMode.install()` runs first in `ApplicationLoader.onCreate` (after the widget-engine-process return) when `BuildVars.DEBUG_VERSION` or the `strictmode` experimental flag is on: ThreadPolicy `detectAll` + log; VmPolicy leaked closables, registrations, SQLite objects, activity leaks, file URI exposure, and (API 31+) unsafe intent launch and content URI without permission. Release builds are unchanged. No `penaltyListener`: it would run FileLog (disk) from inside a violation. Expect upstream log noise; triage into docs/nanogram/performance.md.
 - No JVM test: the class only wraps framework calls.
