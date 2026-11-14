@@ -174,6 +174,66 @@ Newest first: version, build number, date, commit; what changed and how.
   GET_SIGNING_CERTIFICATES on API 28+ (GET_SIGNATURES below), mirroring the legacy field: single-signer APKs use the
   oldest certificate of the signing history, which is what `PackageInfo.signatures` returned, so the value sent to the
   server is unchanged even with a v3 key-rotation lineage.
+
+### ANDROID-TELECOM-1: system call integration (experiment, off by default) [a53d7a0, review fixes 47b014e..f8a6536]
+- Debug settings > "Nanogram: system call integration (Telecom)" (`NanogramExperiments.selfManagedTelecom`, default OFF).
+  On API 34+, for 1:1 calls only, `NanogramTelecomCall` registers a transactional self-managed Telecom call with the
+  platform `TelecomManager.addCall` (no new dependency: core-telecom is a Kotlin/coroutines API, the platform call is
+  what it wraps on 34+). `VoIPService.dispatchStateChanged` drives it: ringing/requesting -> addCall, key exchange on an
+  incoming call -> answer, established -> setActive, ended/failed/busy -> disconnect with the matching cause. System
+  answer/disconnect (Bluetooth, car, watch) call acceptIncomingCall()/hangUp(). Hold is refused.
+- tgcalls keeps audio routing and the existing call notification; endpoint callbacks are ignored on purpose (one owner of
+  state). The old ConnectionService path stays off (`USE_CONNECTION_SERVICE`), and the experiment does nothing if it is
+  ever turned on. Group calls and API < 34 are unchanged.
+- Review fixes: outgoing calls now register at STATE_REQUESTING (1:1 is decided by "no group call and a user", video from
+  `videoCall`); disconnect causes are limited to LOCAL/REMOTE/MISSED/REJECTED (failed -> LOCAL, busy -> REMOTE; the
+  platform throws on ERROR/BUSY); `onDestroy` ends the system call; answer/setActive are sent once. The call address is
+  now an opaque `sip:nanogram-call`, so no Telegram user id reaches car/watch call logs.
+- Counter `telecomCalls` in the `nanogram_experiments` preferences for the beta.
+- Needs the device matrix before any default-on: Bluetooth headset, car head unit, watch, DnD with call exceptions, call
+  while another app plays media; count audio-route glitches and missed rings. Tests: `NanogramTelecomCallTest`.
+
+### ANDROID-CAMERA-1: Camera2 capture (experiment, off by default) [bc6e237, 8dedc68]
+- Debug settings > "Nanogram: Camera2 for stories and chat camera" (`NanogramExperiments.camera2Capture`, default OFF)
+  turns on the existing Camera2Session in `CameraView` (story recorder, chat camera, round video), which upstream had
+  hard-disabled (`false && ...`). The QR/barcode scanners keep Camera1 (they read NV21 preview frames). If
+  `Camera2Session.create` returns null the view falls back to Camera1 instead of a black preview.
+- Video recording on Camera2 turns on video stabilization when the camera advertises it (recording request only: on EIS
+  devices the field of view can crop when recording starts; compare preview vs recorded framing in the measure plan).
+  The old "Use Camera 2 API" debug entry is relabelled "(round video only)" and the new one "(CameraView)".
+- Counters `camera2Opened` / `camera2Unavailable` in the `nanogram_experiments` preferences for the beta.
+- Not done: 10-bit HLG output, flipping the default (needs the device matrix); Camera2 for InstantCameraView stays on
+  the old "Use Camera 2 API" switch.
+- Measure: 1 minute 1080p30 story on a Pixel and a Samsung, flag off vs on: preview latency, dropped frames
+  (`dumpsys media.camera`), battery, image quality. Tests: `NanogramCameraSupportTest`.
+
+### ANDROID-DISPLAY-1: adaptive refresh rate hints (experiment, off by default) [03df1bc, 47b014e]
+- Debug settings > "Nanogram: adaptive refresh rate hints (Android 15+)" (`NanogramExperiments.adaptiveRefreshRate`,
+  default OFF). When on, on API 35+: views and drawables invalidated by the shared 60 fps clock vote
+  `setRequestedFrameRate(60)`; overlay windows (story viewer/recorder, reactions, PiP-style windows) no longer pin
+  `preferredRefreshRate` to the panel maximum (the system decides); the RecyclerView fork reports
+  `setFrameContentVelocity` every fling frame (API 35+, like all the other hints). With the flag off nothing changes.
+- Removed the unused `RefreshRateController` (commented out in LaunchActivity since before the fork).
+- Not done: `Surface.setFrameRate` for the story video surface (needs a device to judge).
+- Measure: `adb shell dumpsys SurfaceFlinger | grep -i 'refresh\|render rate'` with a sticker pack open (idle) on an
+  LTPO phone, flag off vs on; test fling and story swipe on a 120 Hz panel. Tests: `NanogramDisplayTest`.
+
+### ANDROID-ML-1: ML Kit replaces Mobile Vision [5ed14d0, f2e37a2, 5f72732]
+- QR scan (camera scanner, QR overlay, story QR hint), document barcodes (MrzRecognizer driver licences) and face
+  detection (photo viewer, paint, story paint) use ML Kit unbundled `play-services-mlkit-barcode-scanning` and
+  `-face-detection` through one synchronous wrapper, `NanogramVision` (Tasks.await on the existing background threads).
+  `play-services-vision` and its manifest meta-data are gone; the `com.google.mlkit.vision.DEPENDENCIES` meta-data
+  pre-downloads the barcode and face models next to the subject segmentation one.
+- If a model is missing (no Play services, de-Googled device) the wrapper reports not operational after the first failure
+  and the existing ZXing path (QR) or the no-face result keeps working.
+- Review fixes: the `com.google.mlkit.vision.DEPENDENCIES` meta-data now sits under `<application>` (ML Kit ignores it
+  inside an activity). A detector that fails during a call hands the same bitmap/frame to ZXing. Transient failures
+  (UNAVAILABLE while the model downloads, timeouts) pause ML Kit for 30 s process-wide and log once instead of marking
+  the detector broken for the session. Tests: `NanogramVisionTest` (fallback decision, back-off window).
+- Face rotation is now passed in degrees (the old code passed degrees where Mobile Vision expected 0..3).
+- Test: `NanogramVisionTest` (rotation normalization). Needs a device check: scan one QR at 3 distances and in dim
+  light, avatar face hint, driver licence PDF417.
+
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

@@ -3,12 +3,10 @@ package org.telegram.ui.Components.Paint;
 import android.graphics.Bitmap;
 import android.graphics.PointF;
 
-import com.google.android.gms.vision.face.Face;
-import com.google.android.gms.vision.face.Landmark;
+import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceLandmark;
 
 import org.telegram.ui.Components.Size;
-
-import java.util.List;
 
 public class PhotoFace {
 
@@ -24,39 +22,11 @@ public class PhotoFace {
     private PointF chinPoint;
 
     public PhotoFace(Face face, Bitmap sourceBitmap, Size targetSize, boolean sideward) {
-        List<Landmark> landmarks = face.getLandmarks();
+        PointF leftEyePoint = landmarkPoint(face, FaceLandmark.LEFT_EYE, sourceBitmap, targetSize, sideward);
+        PointF rightEyePoint = landmarkPoint(face, FaceLandmark.RIGHT_EYE, sourceBitmap, targetSize, sideward);
 
-        PointF leftEyePoint = null;
-        PointF rightEyePoint = null;
-
-        PointF leftMouthPoint = null;
-        PointF rightMouthPoint = null;
-
-        for (Landmark landmark : landmarks) {
-            PointF point = landmark.getPosition();
-
-            switch (landmark.getType()) {
-                case Landmark.LEFT_EYE: {
-                    leftEyePoint = transposePoint(point, sourceBitmap, targetSize, sideward);
-                }
-                break;
-
-                case Landmark.RIGHT_EYE: {
-                    rightEyePoint = transposePoint(point, sourceBitmap, targetSize, sideward);
-                }
-                break;
-
-                case Landmark.LEFT_MOUTH: {
-                    leftMouthPoint = transposePoint(point, sourceBitmap, targetSize, sideward);
-                }
-                break;
-
-                case Landmark.RIGHT_MOUTH: {
-                    rightMouthPoint = transposePoint(point, sourceBitmap, targetSize, sideward);
-                }
-                break;
-            }
-        }
+        PointF leftMouthPoint = landmarkPoint(face, FaceLandmark.MOUTH_LEFT, sourceBitmap, targetSize, sideward);
+        PointF rightMouthPoint = landmarkPoint(face, FaceLandmark.MOUTH_RIGHT, sourceBitmap, targetSize, sideward);
 
         if (leftEyePoint != null && rightEyePoint != null) {
             if (leftEyePoint.x < rightEyePoint.x) {
@@ -95,6 +65,14 @@ public class PhotoFace {
             float y1 = mouthPoint.y + chinDepth * (float) Math.sin(downAngle);
             chinPoint = new PointF(x1, y1);
         }
+    }
+
+    private PointF landmarkPoint(Face face, int type, Bitmap sourceBitmap, Size targetSize, boolean sideward) {
+        FaceLandmark landmark = face.getLandmark(type);
+        if (landmark == null) {
+            return null;
+        }
+        return transposePoint(landmark.getPosition(), sourceBitmap, targetSize, sideward);
     }
 
     public boolean isSufficient() {

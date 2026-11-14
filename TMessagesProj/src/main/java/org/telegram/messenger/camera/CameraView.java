@@ -67,6 +67,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.NanogramExperiments;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -122,7 +123,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
     private int focusAreaSize;
     private Drawable thumbDrawable;
 
-    private final boolean useCamera2 = false && SharedConfig.isUsingCamera2(UserConfig.selectedAccount);
+    private final boolean useCamera2 = NanogramExperiments.isEnabled(NanogramExperiments.CAMERA2_CAPTURE);
     private final CameraSessionWrapper[] cameraSession = new CameraSessionWrapper[2];
     private CameraSessionWrapper cameraSessionRecording;
 
@@ -2286,12 +2287,15 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
                 return;
             }
             if (BuildVars.LOGS_ENABLED) {
-                FileLog.d("CameraView " + "create camera"+(useCamera2 ? "2" : "")+" session " + i);
+                FileLog.d("CameraView " + "create camera"+(useCamera2 && !optimizeForBarcode ? "2" : "")+" session " + i);
             }
 
-            if (useCamera2) {
-                Camera2Session session = Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight);
-                if (session == null) return;
+            final Camera2Session camera2 = useCamera2 && !optimizeForBarcode ? Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight) : null;
+            if (useCamera2 && !optimizeForBarcode) {
+                NanogramExperiments.count(camera2 != null ? "camera2Opened" : "camera2Unavailable");
+            }
+            if (camera2 != null) {
+                final Camera2Session session = camera2;
                 cameraSession[i] = CameraSessionWrapper.of(session);
                 previewSize[i] = new Size(session.getPreviewWidth(), session.getPreviewHeight());
                 cameraThread.setCurrentSession(cameraSession[i], i);

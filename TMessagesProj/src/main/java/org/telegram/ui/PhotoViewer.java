@@ -152,9 +152,6 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener;
 import androidx.media3.common.VideoSize;
 import com.google.android.gms.cast.framework.CastContext;
-import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.face.Face;
-import com.google.android.gms.vision.face.FaceDetector;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
@@ -190,6 +187,7 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.TranslateController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.NanogramVision;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.messenger.WebFile;
@@ -11885,16 +11883,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             return;
         }
         Utilities.globalQueue.postRunnable(() -> {
-            FaceDetector faceDetector = null;
+            NanogramVision.Faces faceDetector = null;
             try {
-                faceDetector = new FaceDetector.Builder(ApplicationLoader.applicationContext)
-                        .setMode(FaceDetector.FAST_MODE)
-                        .setLandmarkType(FaceDetector.NO_LANDMARKS)
-                        .setTrackingEnabled(false).build();
+                faceDetector = new NanogramVision.Faces(false, false);
                 if (faceDetector.isOperational()) {
-                    Frame frame = new Frame.Builder().setBitmap(bitmap.bitmap).setRotation(orientation).build();
-                    SparseArray<Face> faces = faceDetector.detect(frame);
-                    boolean hasFaces = faces != null && faces.size() != 0;
+                    java.util.List<?> faces = faceDetector.detect(bitmap.bitmap, orientation);
+                    boolean hasFaces = faces != null && !faces.isEmpty();
                     AndroidUtilities.runOnUIThread(() -> {
                         String imageKey = centerImage.getImageKey();
                         if (key.equals(imageKey)) {

@@ -102,6 +102,7 @@ import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramExperiments;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
@@ -4292,6 +4293,13 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			}
 			NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.appDidLogout);
 		}
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && nanogramTelecom != null) {
+			try {
+				((NanogramTelecomCall) nanogramTelecom).disconnect(android.telecom.DisconnectCause.LOCAL);
+			} catch (Throwable e) {
+				FileLog.e(e);
+			}
+		}
 		SensorManager sm = (SensorManager) getSystemService(SENSOR_SERVICE);
 		Sensor proximity = sm.getDefaultSensor(Sensor.TYPE_PROXIMITY);
 		if (proximity != null) {
@@ -4963,9 +4971,71 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (USE_CONNECTION_SERVICE && state == STATE_ESTABLISHED /*&& !wasEstablished*/ && systemCallConnection != null) {
 			systemCallConnection.setActive();
 		}
+		nanogramTelecomStateChanged(state);
 		for (int a = 0; a < stateListeners.size(); a++) {
 			StateListener l = stateListeners.get(a);
 			l.onStateChanged(state);
+		}
+	}
+
+	private Object nanogramTelecom;
+
+	private void nanogramTelecomStateChanged(int state) {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			return;
+		}
+		try {
+			NanogramTelecomCall call = (NanogramTelecomCall) nanogramTelecom;
+			if (call == null) {
+				final boolean startsIncoming = state == STATE_WAITING_INCOMING;
+				final boolean startsOutgoing = state == STATE_REQUESTING && isOutgoing;
+				if (!NanogramTelecomCall.startsCall(startsIncoming, startsOutgoing, NanogramTelecomCall.oneToOne(groupCall != null, user != null)) || !NanogramTelecomCall.shouldUse(Build.VERSION.SDK_INT, NanogramExperiments.isEnabled(NanogramExperiments.SELF_MANAGED_TELECOM), USE_CONNECTION_SERVICE, NanogramTelecomCall.oneToOne(groupCall != null, true))) {
+					return;
+				}
+				call = new NanogramTelecomCall(new NanogramTelecomCall.Host() {
+					@Override
+					public void onSystemAnswer() {
+						if (currentState == STATE_WAITING_INCOMING) {
+							acceptIncomingCall();
+						}
+					}
+
+					@Override
+					public void onSystemDisconnect() {
+						if (currentState != STATE_ENDED && currentState != STATE_HANGING_UP) {
+							hangUp();
+						}
+					}
+				}, startsIncoming, videoCall);
+				nanogramTelecom = call;
+				call.start(this, ContactsController.formatName(user.first_name, user.last_name));
+				NanogramExperiments.count("telecomCalls");
+				return;
+			}
+			switch (state) {
+				case STATE_EXCHANGING_KEYS:
+					if (!isOutgoing) {
+						call.answer();
+					}
+					break;
+				case STATE_ESTABLISHED:
+					call.setActive();
+					break;
+				case STATE_FAILED:
+					call.disconnect(NanogramTelecomCall.disconnectCode(true, false, false, false));
+					break;
+				case STATE_BUSY:
+					call.disconnect(NanogramTelecomCall.disconnectCode(false, true, false, false));
+					break;
+				case STATE_HANGING_UP:
+				case STATE_ENDED:
+					call.disconnect(NanogramTelecomCall.disconnectCode(false, false, !isOutgoing && !wasEstablished && callDiscardReason == DISCARD_REASON_MISSED, !isOutgoing && !wasEstablished && callDiscardReason == DISCARD_REASON_HANGUP));
+					break;
+				default:
+					break;
+			}
+		} catch (Throwable e) {
+			FileLog.e(e);
 		}
 	}
 
