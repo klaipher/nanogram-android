@@ -1084,6 +1084,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private SparseArray<MessageObject> voiceMessagesPlaylistMap;
 
     private static Runnable refreshGalleryRunnable;
+    // A MediaStore change while the app is in the background only sets this; checkGallery() reloads once on return.
+    private static volatile boolean galleryChangedWhilePaused;
     public static AlbumEntry allMediaAlbumEntry;
     public static AlbumEntry allPhotosAlbumEntry;
     public static AlbumEntry allVideosAlbumEntry;
@@ -1358,6 +1360,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
+            if (ApplicationLoader.mainInterfacePaused) {
+                galleryChangedWhilePaused = true;
+                return;
+            }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
@@ -1373,6 +1379,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
+            if (ApplicationLoader.mainInterfacePaused) {
+                galleryChangedWhilePaused = true;
+                return;
+            }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
@@ -1385,6 +1395,15 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
 
     public static void checkGallery() {
         if (Build.VERSION.SDK_INT < 24 || allPhotosAlbumEntry == null) {
+            return;
+        }
+        if (galleryChangedWhilePaused) {
+            galleryChangedWhilePaused = false;
+            if (refreshGalleryRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
+                refreshGalleryRunnable = null;
+            }
+            loadGalleryPhotosAlbums(0);
             return;
         }
         final int prevSize = allPhotosAlbumEntry.photos.size();
