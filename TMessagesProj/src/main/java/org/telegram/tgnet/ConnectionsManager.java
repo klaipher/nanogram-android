@@ -966,7 +966,7 @@ public class ConnectionsManager extends BaseController {
                         FileLog.d("start mozilla txt task");
                     }
                     MozillaDnsLoadTask task = new MozillaDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
+                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
                     FileLog.d("9. currentTask = mozilla");
                     currentTask = task;
                 } else {
@@ -974,7 +974,7 @@ public class ConnectionsManager extends BaseController {
                         FileLog.d("start google txt task");
                     }
                     GoogleDnsLoadTask task = new GoogleDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
+                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
                     FileLog.d("11. currentTask = dnstxt");
                     currentTask = task;
                 }
@@ -1440,7 +1440,7 @@ public class ConnectionsManager extends BaseController {
                         FileLog.d("start mozilla task");
                     }
                     MozillaDnsLoadTask task = new MozillaDnsLoadTask(currentAccount);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null, null, null);
+                    task.executeOnExecutor(DNS_THREAD_POOL_EXECUTOR, null, null, null);
                     FileLog.d("4. currentTask = mozilla");
                     currentTask = task;
                 }

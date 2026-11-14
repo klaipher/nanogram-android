@@ -5,6 +5,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### DNS lookups on the DNS executor (ANDROID-DESIGN-5, ConnectionsManager part)
+- The Google and Mozilla DNS-config tasks in ConnectionsManager run on the existing `DNS_THREAD_POOL_EXECUTOR` (named
+  threads) instead of the deprecated `AsyncTask.THREAD_POOL_EXECUTOR`. The task classes themselves still extend
+  AsyncTask. Not done: ImageLoader, WebPlayerView, ui/web and JobIntentService tasks (upstream merge conflicts, no
+  measured gain; since Android 10 the shared pool no longer rejects work).
 ### Startup: unused account slots not constructed at start, behind a flag (ANDROID-STARTUP-1)
 - `StartupSettings.lazyAccountSlots` (key `startup_lazy_account_slots`, default OFF). When on, postInitApplication
   skips slots 1..3 that have no logged-in user: no MessagesController/MessagesStorage (storage thread and empty
