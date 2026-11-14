@@ -96,6 +96,7 @@ import org.telegram.messenger.camera.Size;
 import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.video.MP4Builder;
 import org.telegram.messenger.video.Mp4Movie;
+import org.telegram.messenger.video.RoundAudioTimeline;
 import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -2274,6 +2275,10 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private boolean skippedFirst;
 
         private long desyncTime;
+        private final boolean avSyncFix = !NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_AV_SYNC_OFF);
+        private boolean videoClockOffsetKnown;
+        private long videoClockOffsetNs;
+        private long audioWaitStartUs = -1;
         private long videoFirst = -1;
         private long videoLast;
         private long videoLastDt;
@@ -2319,6 +2324,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 boolean done = false;
                 AudioTimestamp audioTimestamp = new AudioTimestamp();
                 boolean shouldUseTimestamp = true;
+                final RoundAudioTimeline.AudioClock audioClock = new RoundAudioTimeline.AudioClock(audioSampleRate);
+                long framesRead = 0;
 
                 while (!done) {
                     if ((!running || pauseRecorder) && audioRecorder.getRecordingState() != AudioRecord.RECORDSTATE_STOPPED) {
@@ -2345,7 +2352,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     buffer.lastWroteBuffer = 0;
                     buffer.results = AudioBufferInfo.MAX_SAMPLES;
                     for (int a = 0; a < AudioBufferInfo.MAX_SAMPLES; a++) {
-                        if (audioPresentationTimeUs == -1 && !shouldUseTimestamp) {
+                        if (!avSyncFix && audioPresentationTimeUs == -1 && !shouldUseTimestamp) {
                             audioPresentationTimeUs = System.nanoTime() / 1000;
                         }
 
@@ -2371,7 +2378,17 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                             break;
                         }
                         long timestamp;
-                        if (shouldUseTimestamp) {
+                        if (avSyncFix) {
+                            final int framesInBuffer = readResult / 2;
+                            boolean timestampValid = false;
+                            try {
+                                timestampValid = audioRecorder.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC) == AudioRecord.SUCCESS;
+                            } catch (Exception e) {
+                                FileLog.e(e);
+                            }
+                            timestamp = audioClock.stampUs(framesRead, framesInBuffer, timestampValid, audioTimestamp.nanoTime, audioTimestamp.framePosition, System.nanoTime());
+                            framesRead += framesInBuffer;
+                        } else if (shouldUseTimestamp) {
                             try {
                                 audioRecorder.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_MONOTONIC);
                                 timestamp = audioTimestamp.nanoTime / 1000;
@@ -2387,7 +2404,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
 
                         buffer.read[a] = readResult;
                         int bufferDurationUs = 1000000 * readResult / audioSampleRate / 2;
-                        if (!shouldUseTimestamp) {
+                        if (!avSyncFix && !shouldUseTimestamp) {
                             audioPresentationTimeUs += bufferDurationUs;
                         }
                     }
@@ -2543,7 +2560,13 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                     }
                     return;
                 }
-                while (true) {
+                if (avSyncFix) {
+                    input = alignFirstAudioBuffer();
+                    if (input == null) {
+                        return;
+                    }
+                }
+                while (!avSyncFix) {
                     boolean ok = false;
                     for (int a = 0; a < input.results; a++) {
                         if (a == 0 && Math.abs(videoFirst - input.offset[a]) > 10_000_000L) {
@@ -2586,7 +2609,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
 
             if (audioStartTime == -1) {
-                audioStartTime = input.offset[input.lastWroteBuffer];
+                audioStartTime = avSyncFix ? RoundAudioTimeline.audioStartUs(videoFirst, input.offset[input.lastWroteBuffer]) : input.offset[input.lastWroteBuffer];
             }
             if (buffersToWrite.size() > 1) {
                 input = buffersToWrite.get(0);
@@ -2607,7 +2630,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         for (int a = input.lastWroteBuffer; a <= input.results; a++) {
                             if (a < input.results) {
                                 long totalTime = input.offset[a] - audioStartTime;
-                                if (!running && (input.offset[a] >= videoLast - desyncTime || totalTime >= 60_000000)) {
+                                if (!running && ((avSyncFix ? input.offset[a] >= videoLast / 1000 : input.offset[a] >= videoLast - desyncTime) || totalTime >= 60_000000)) {
                                     if (BuildVars.LOGS_ENABLED) {
                                         if (totalTime >= 60_000000) {
                                             FileLog.d("InstantCamera stop audio encoding because recorded time more than 60s");
@@ -2658,9 +2681,62 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             }
         }
 
+        private AudioBufferInfo alignFirstAudioBuffer() {
+            int bufferIndex = -1;
+            int chunkIndex = -1;
+            for (int i = 0; i < buffersToWrite.size() && bufferIndex < 0; i++) {
+                AudioBufferInfo candidate = buffersToWrite.get(i);
+                for (int a = 0; a < candidate.results; a++) {
+                    if (candidate.offset[a] >= videoFirst) {
+                        bufferIndex = i;
+                        chunkIndex = a;
+                        break;
+                    }
+                }
+            }
+            if (bufferIndex < 0) {
+                if (!RoundAudioTimeline.alignmentTimedOut(System.nanoTime() / 1000, audioWaitStartUs) || buffersToWrite.isEmpty()) {
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("InstantCamera first audio frame not found, removing buffers " + buffersToWrite.size());
+                    }
+                    for (int i = 0; i < buffersToWrite.size(); i++) {
+                        buffers.offer(buffersToWrite.get(i));
+                    }
+                    buffersToWrite.clear();
+                    return null;
+                }
+                bufferIndex = buffersToWrite.size() - 1;
+                chunkIndex = 0;
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("InstantCamera no audio aligned with video within 500 ms, starting audio at the newest buffer");
+                }
+            }
+            for (int i = 0; i < bufferIndex; i++) {
+                buffers.offer(buffersToWrite.get(i));
+            }
+            buffersToWrite.subList(0, bufferIndex).clear();
+            AudioBufferInfo aligned = buffersToWrite.get(0);
+            aligned.lastWroteBuffer = chunkIndex;
+            audioFirst = aligned.offset[chunkIndex];
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("InstantCamera found first audio frame at " + chunkIndex + " timestamp = " + audioFirst + " video first = " + videoFirst);
+            }
+            return aligned;
+        }
+
         private void handleVideoFrameAvailable(long timestampNanos, Integer cameraId) {
             if (pauseRecorder || !cameraTextureAvailable) {
                 return;
+            }
+            if (avSyncFix) {
+                if (!videoClockOffsetKnown) {
+                    videoClockOffsetKnown = true;
+                    videoClockOffsetNs = RoundAudioTimeline.videoClockOffsetNs(timestampNanos, System.nanoTime(), SystemClock.elapsedRealtimeNanos());
+                    if (BuildVars.LOGS_ENABLED) {
+                        FileLog.d("InstantCamera video clock offset to monotonic = " + videoClockOffsetNs);
+                    }
+                }
+                timestampNanos -= videoClockOffsetNs;
             }
             try {
                 drainEncoder(false);
@@ -2712,9 +2788,12 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 }
                 skippedFirst = true;
             }
-            currentTimestamp += dt;
+            if (!(avSyncFix && videoFirst == -1 && prevVideoLast < 0)) {
+                currentTimestamp += dt;
+            }
             if (videoFirst == -1) {
                 videoFirst = timestampNanos / 1000;
+                audioWaitStartUs = System.nanoTime() / 1000;
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("InstantCamera first video frame was at " + videoFirst);
                 }
