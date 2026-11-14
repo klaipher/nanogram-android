@@ -1086,6 +1086,20 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     private static Runnable refreshGalleryRunnable;
     // A MediaStore change while the app is in the background only sets this; checkGallery() reloads once on return.
     private static volatile boolean galleryChangedWhilePaused;
+    private static volatile boolean galleryDirty;
+    private static volatile boolean galleryPickerVisible;
+    private static volatile long lastGalleryLoadTime;
+
+    public static void setGalleryPickerVisible(boolean visible) {
+        galleryPickerVisible = visible;
+        if (visible && allPhotosAlbumEntry != null && NanogramGalleryReload.shouldReloadOnOpen(galleryDirty, lastGalleryLoadTime, SystemClock.elapsedRealtime())) {
+            if (refreshGalleryRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
+                refreshGalleryRunnable = null;
+            }
+            loadGalleryPhotosAlbums(0);
+        }
+    }
     public static AlbumEntry allMediaAlbumEntry;
     public static AlbumEntry allPhotosAlbumEntry;
     public static AlbumEntry allVideosAlbumEntry;
@@ -1346,28 +1360,30 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             super(null);
         }
 
-        private void scheduleReloadRunnable() {
+        private void scheduleReloadRunnable(long delay) {
             AndroidUtilities.runOnUIThread(refreshGalleryRunnable = () -> {
                 if (PhotoViewer.getInstance().isVisible()) {
-                    scheduleReloadRunnable();
+                    scheduleReloadRunnable(delay);
                     return;
                 }
                 refreshGalleryRunnable = null;
                 loadGalleryPhotosAlbums(0);
-            }, 2000);
+            }, delay);
         }
 
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
-            if (ApplicationLoader.mainInterfacePaused) {
+            galleryDirty = true;
+            long delay = NanogramGalleryReload.observerDelayMs(ApplicationLoader.mainInterfacePaused, galleryPickerVisible);
+            if (delay == NanogramGalleryReload.DELAY_NO_RELOAD) {
                 galleryChangedWhilePaused = true;
                 return;
             }
             if (refreshGalleryRunnable != null) {
                 AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
             }
-            scheduleReloadRunnable();
+            scheduleReloadRunnable(delay);
         }
     }
 
@@ -1379,7 +1395,9 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
-            if (ApplicationLoader.mainInterfacePaused) {
+            galleryDirty = true;
+            long delay = NanogramGalleryReload.observerDelayMs(ApplicationLoader.mainInterfacePaused, galleryPickerVisible);
+            if (delay == NanogramGalleryReload.DELAY_NO_RELOAD) {
                 galleryChangedWhilePaused = true;
                 return;
             }
@@ -1389,7 +1407,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             AndroidUtilities.runOnUIThread(refreshGalleryRunnable = () -> {
                 refreshGalleryRunnable = null;
                 loadGalleryPhotosAlbums(0);
-            }, 2000);
+            }, delay);
         }
     }
 
@@ -1406,9 +1424,11 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             loadGalleryPhotosAlbums(0);
             return;
         }
-        final int prevSize = allPhotosAlbumEntry.photos.size();
+        final int prevImages = allPhotosAlbumEntry.photos.size();
+        final int prevVideos = allVideosAlbumEntry != null ? allVideosAlbumEntry.photos.size() : -1;
         Utilities.globalQueue.postRunnable(() -> {
-            int count = 0;
+            int imageCount = 0;
+            int videoCount = 0;
             Cursor cursor = null;
             try {
                 final Context context = ApplicationLoader.applicationContext;
@@ -1423,7 +1443,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor = MediaStore.Images.Media.query(context.getContentResolver(), MediaStore.Images.Media.EXTERNAL_CONTENT_URI, new String[]{"COUNT(_id)"}, null, null, null);
                     if (cursor != null) {
                         if (cursor.moveToNext()) {
-                            count += cursor.getInt(0);
+                            imageCount += cursor.getInt(0);
                         }
                     }
                 }
@@ -1447,7 +1467,7 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor = MediaStore.Images.Media.query(context.getContentResolver(), MediaStore.Video.Media.EXTERNAL_CONTENT_URI, new String[]{"COUNT(_id)"}, null, null, null);
                     if (cursor != null) {
                         if (cursor.moveToNext()) {
-                            count += cursor.getInt(0);
+                            videoCount += cursor.getInt(0);
                         }
                     }
                 }
@@ -1458,14 +1478,14 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
                     cursor.close();
                 }
             }
-            if (prevSize != count) {
+            if (NanogramGalleryReload.countsChanged(prevImages, imageCount, prevVideos, videoCount)) {
                 if (refreshGalleryRunnable != null) {
                     AndroidUtilities.cancelRunOnUIThread(refreshGalleryRunnable);
                     refreshGalleryRunnable = null;
                 }
                 loadGalleryPhotosAlbums(0);
             }
-        }, 2000);
+        }, 0);
     }
 
 
@@ -6758,6 +6778,8 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
     }
 
     public static void loadGalleryPhotosAlbums(final int guid) {
+        galleryDirty = false;
+        lastGalleryLoadTime = SystemClock.elapsedRealtime();
         Thread thread = new Thread(() -> {
             final ArrayList<AlbumEntry> mediaAlbumsSorted = new ArrayList<>();
             final ArrayList<AlbumEntry> photoAlbumsSorted = new ArrayList<>();
