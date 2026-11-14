@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.telegram.build-app-plugin'
+apply plugin: 'androidx.baselineprofile'
 
 repositories {
     mavenCentral()
@@ -15,6 +16,19 @@ dependencies {
     implementation project(':TMessagesProj')
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+    // Installs the profile shipped in the APK (assets/dexopt) on first launch: sideloaded apps get no Play cloud profile.
+    implementation 'androidx.profileinstaller:profileinstaller:1.4.1'
+    if (rootProject.findProject(':baselineprofile') != null) {
+        baselineProfile project(':baselineprofile')
+    }
+}
+
+baselineProfile {
+    // Generated profiles are committed (src/main/generated/baselineProfiles); Tools/dev/ng profile regenerates them.
+    mergeIntoMain = true
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+    dexLayoutOptimization = true
 }
 
 android {
@@ -122,6 +136,14 @@ android {
         manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
     }
 
+    // Build types the baselineprofile plugin adds (nonMinifiedRelease, benchmarkRelease) are release builds and need
+    // release's manifest (the afat flavor sets release to the SDK23 file).
+    sourceSets.configureEach { sourceSet ->
+        if (sourceSet.name == 'nonMinifiedRelease' || sourceSet.name == 'benchmarkRelease') {
+            sourceSet.manifest.srcFile '../TMessagesProj/config/release/AndroidManifest_SDK23.xml'
+        }
+    }
+
     flavorDimensions = ["minApi"]
 
     productFlavors {
@@ -180,10 +202,22 @@ def nanogramVersionBase = { ->
     return (int) java.time.Duration.between(java.time.LocalDateTime.of(2020, 1, 1, 0, 0), t).toMinutes()
 }
 
+// -Pnanogram.baselineProfile=true (Tools/dev/ng profile): only the afat release family exists, so
+// generateBaselineProfile builds and runs exactly one variant.
+def nanogramProfileGeneration = providers.gradleProperty('nanogram.baselineProfile').getOrElse('false').toBoolean()
+def nanogramProfileBuildTypes = ['release', 'nonMinifiedRelease', 'benchmarkRelease']
+
 androidComponents {
     beforeVariants(selector().all()) { variant ->
         def flavor = variant.productFlavors.find { it.first == 'minApi' }?.second
         if (variant.buildType != 'release' && flavor != 'afat') {
+            variant.enable = false
+        }
+        // The profile plugin also derives nonMinified/benchmark types from 'standalone'; only the Release ones are used.
+        if (variant.buildType != null && variant.buildType.matches('(nonMinified|benchmark).+') && !variant.buildType.endsWith('Release')) {
+            variant.enable = false
+        }
+        if (nanogramProfileGeneration && (flavor != 'afat' || !(variant.buildType in nanogramProfileBuildTypes))) {
             variant.enable = false
         }
     }
