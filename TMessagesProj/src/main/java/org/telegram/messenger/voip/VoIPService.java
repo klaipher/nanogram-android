@@ -95,6 +95,7 @@ import androidx.annotation.Nullable;
 import org.json.JSONObject;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.nanogram.NanogramCallNotification;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
@@ -4153,18 +4154,15 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			builder.setSmallIcon(R.drawable.call);
             builder.setOngoing(true);
 		}
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-			Intent endIntent = new Intent(this, VoIPActionsReceiver.class);
-			endIntent.setAction(getPackageName() + ".END_CALL");
-			if (isConference()) {
-				builder.addAction(R.drawable.ic_call_end_white_24dp, LocaleController.getString(R.string.VoipConferenceLeave), PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-			} else if (groupCall != null) {
-				builder.addAction(R.drawable.ic_call_end_white_24dp, ChatObject.isChannelOrGiga(chat) ? LocaleController.getString(R.string.VoipChannelLeaveAlertTitle) : LocaleController.getString(R.string.VoipGroupLeaveAlertTitle), PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-			} else {
-				builder.addAction(R.drawable.ic_call_end_white_24dp, LocaleController.getString(R.string.VoipEndCall), PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-			}
-			builder.setPriority(Notification.PRIORITY_MAX);
+		Intent endIntent = new Intent(this, VoIPActionsReceiver.class);
+		endIntent.setAction(getPackageName() + ".END_CALL");
+		final PendingIntent endPendingIntent = PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+		final Person.Builder person = new Person.Builder().setName(NanogramCallNotification.personName(name));
+		if (photo != null && !isConference()) {
+			person.setIcon(Icon.createWithAdaptiveBitmap(photo));
 		}
+		builder.setStyle(Notification.CallStyle.forOngoingCall(person.build(), endPendingIntent));
+		builder.setPriority(Notification.PRIORITY_MAX);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
 			builder.setShowWhen(false);
 		}
