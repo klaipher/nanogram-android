@@ -278,6 +278,7 @@ PREBUILD_INPUTS = [
     "TMessagesProj/jni/third_party/ffmpeg",
     "TMessagesProj/jni/tlottie",
     "TMessagesProj/jni/wallet-engine",
+    "TMessagesProj/jni/gram-wallet",
     "TMessagesProj/jni/td",
     "TMessagesProj/jni/third_party/wamr",
 ]
