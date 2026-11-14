@@ -459,7 +459,6 @@ final class FloatingHost {
         windowLayoutParams.y = (int) pipY;
 
         try {
-            AndroidUtilities.setPreferredMaxRefreshRate(windowManager, contentView, windowLayoutParams);
             windowManager.addView(contentView, windowLayoutParams);
             isWindowAdded = true;
             PipCoordinator.log("floating window added, overlay=" + isOverlay);

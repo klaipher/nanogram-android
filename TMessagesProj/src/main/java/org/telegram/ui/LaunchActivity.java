@@ -7375,7 +7375,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     public void onConfigurationChanged(Configuration newConfig) {
         AndroidUtilities.checkDisplaySize(this, newConfig);
         orientationController.update();
-        AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
         super.onConfigurationChanged(newConfig);
         PipCoordinator.getInstance().onConfigurationChanged(newConfig);
         AndroidUtilities.resetTabletFlag();
