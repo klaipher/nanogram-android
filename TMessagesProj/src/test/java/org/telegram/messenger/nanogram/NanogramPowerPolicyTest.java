@@ -60,4 +60,49 @@ public class NanogramPowerPolicyTest {
         assertFalse(NanogramPowerPolicy.systemSignal(false, true, 5));
         assertFalse(NanogramPowerPolicy.systemSignal(true, false, 2));
     }
+
+    @Test
+    public void hotForecastAppliesOnlyWhenFollowingSystem() {
+        assertTrue(NanogramPowerPolicy.systemSignal(true, false, 2, true));
+        assertFalse(NanogramPowerPolicy.systemSignal(false, false, 2, true));
+        assertFalse(NanogramPowerPolicy.systemSignal(true, false, 2, false));
+    }
+
+    @Test
+    public void forecastEntersAtNinetyPercent() {
+        final NanogramPowerPolicy.ThermalForecast f = new NanogramPowerPolicy.ThermalForecast();
+        assertFalse(f.update(0.89f, true, 0));
+        assertTrue(f.update(0.9f, true, 1));
+    }
+
+    @Test
+    public void forecastIgnoresReadingsWithoutActiveWork() {
+        final NanogramPowerPolicy.ThermalForecast f = new NanogramPowerPolicy.ThermalForecast();
+        assertFalse(f.update(1.2f, false, 0));
+    }
+
+    @Test
+    public void forecastIgnoresNaN() {
+        final NanogramPowerPolicy.ThermalForecast f = new NanogramPowerPolicy.ThermalForecast();
+        assertFalse(f.update(Float.NaN, true, 0));
+        f.update(0.95f, true, 1);
+        assertTrue(f.update(Float.NaN, true, 100_000));
+    }
+
+    @Test
+    public void forecastHoldsThenReleasesWithHysteresis() {
+        final NanogramPowerPolicy.ThermalForecast f = new NanogramPowerPolicy.ThermalForecast();
+        f.update(0.95f, true, 0);
+        assertTrue(f.update(0.5f, true, 10_000));
+        assertTrue(f.update(0.8f, true, 40_000));
+        assertFalse(f.update(0.7f, true, 41_000));
+    }
+
+    @Test
+    public void forecastReleasesAfterHoldWhenWorkEnds() {
+        final NanogramPowerPolicy.ThermalForecast f = new NanogramPowerPolicy.ThermalForecast();
+        f.update(0.95f, true, 0);
+        assertTrue(f.update(0.95f, false, 10_000));
+        assertFalse(f.update(0.95f, false, 30_000));
+    }
 }

@@ -11,6 +11,11 @@ public final class NanogramPowerPolicy {
     private NanogramPowerPolicy() {
     }
 
+    /** True when the forecast is hot as well; the forecast is ignored when the user opted out of following the system. */
+    public static boolean systemSignal(boolean followSystem, boolean systemSaver, int thermalStatus, boolean forecastHot) {
+        return systemSignal(followSystem, systemSaver, thermalStatus) || followSystem && forecastHot;
+    }
+
     /** True when system Battery Saver or severe heat should force the power saver; false whenever the user opted out. */
     public static boolean systemSignal(boolean followSystem, boolean systemSaver, int thermalStatus) {
         return followSystem && (systemSaver || thermalStatus >= THERMAL_STATUS_SEVERE);
@@ -39,5 +44,44 @@ public final class NanogramPowerPolicy {
             return false;
         }
         return batteryLevel >= 0 && batteryLevel <= saverLevel;
+    }
+
+    /**
+     * Turns PowerManager.getThermalHeadroom(10) readings into an on/off "getting hot" signal with hysteresis.
+     * Headroom 1.0 means throttling; NaN means the device cannot forecast. Not thread safe: use from one thread.
+     */
+    public static final class ThermalForecast {
+
+        public static final float ENTER = 0.9f;
+        public static final float LEAVE = 0.7f;
+        public static final long MIN_HOLD_MS = 30_000L;
+        /** The system allows about one headroom query per 10 seconds. */
+        public static final long POLL_INTERVAL_MS = 11_000L;
+
+        private boolean hot;
+        private long hotSince;
+
+        public boolean isHot() {
+            return hot;
+        }
+
+        /** Returns the new state. A NaN reading changes nothing while work is active; without active work the signal is released after the hold time. */
+        public boolean update(float headroom, boolean workActive, long nowMs) {
+            if (!hot) {
+                if (workActive && !Float.isNaN(headroom) && headroom >= ENTER) {
+                    hot = true;
+                    hotSince = nowMs;
+                }
+            } else if (nowMs - hotSince >= MIN_HOLD_MS) {
+                if (!workActive || !Float.isNaN(headroom) && headroom <= LEAVE) {
+                    hot = false;
+                }
+            }
+            return hot;
+        }
+
+        public void reset() {
+            hot = false;
+        }
     }
 }

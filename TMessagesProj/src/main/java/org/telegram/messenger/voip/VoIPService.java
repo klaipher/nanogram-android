@@ -106,6 +106,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NanogramExperiments;
 import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.ImageLoader;
+import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
@@ -919,6 +920,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			return START_NOT_STICKY;
 		}
 		sharedInstance = this;
+		LiteMode.setHeavyWorkActive(true);
 		FileLog.e("(4) set sharedInstance = this");
 		synchronized (sync) {
 			if (setModeRunnable != null) {
@@ -4325,6 +4327,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		}
 		super.onDestroy();
 		sharedInstance = null;
+		LiteMode.setHeavyWorkActive(false);
 		FileLog.e("(5) set sharedInstance = null");
 		Arrays.fill(mySource, 0);
 		cancelGroupCheckShortPoll();

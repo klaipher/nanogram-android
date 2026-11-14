@@ -135,10 +135,15 @@ public class LiteMode {
 
     private static volatile boolean systemPowerSaver;
     private static volatile int thermalStatus;
+    private static volatile boolean thermalForecastHot;
+    private static final NanogramPowerPolicy.ThermalForecast thermalForecast = new NanogramPowerPolicy.ThermalForecast();
+    private static boolean thermalPollScheduled;
+    private static volatile boolean heavyWorkActive;
+    private static PowerManager systemPowerManager;
     private static volatile boolean charging;
 
     private static boolean isPowerSaverConditionMet() {
-        if (NanogramPowerPolicy.systemSignal(followSystemPowerSaver, systemPowerSaver, thermalStatus)) {
+        if (NanogramPowerPolicy.systemSignal(followSystemPowerSaver, systemPowerSaver, thermalStatus, thermalForecastHot)) {
             return true;
         }
         if (powerSaverLevel <= 0) {
@@ -148,6 +153,48 @@ public class LiteMode {
             return true;
         }
         return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), charging, skipPercentWhileCharging, false, false, 0);
+    }
+
+    // Heavy work (a call) lets the forecast lower the presets before the system reports severe heat.
+    public static void setHeavyWorkActive(boolean active) {
+        heavyWorkActive = active;
+        if (active) {
+            scheduleThermalPoll();
+        }
+    }
+
+    private static void scheduleThermalPoll() {
+        synchronized (thermalForecast) {
+            if (thermalPollScheduled || systemPowerManager == null) {
+                return;
+            }
+            thermalPollScheduled = true;
+        }
+        Utilities.globalQueue.postRunnable(LiteMode::pollThermalForecast, NanogramPowerPolicy.ThermalForecast.POLL_INTERVAL_MS);
+    }
+
+    private static void pollThermalForecast() {
+        final boolean active = heavyWorkActive;
+        float headroom = Float.NaN;
+        try {
+            if (active) {
+                headroom = systemPowerManager.getThermalHeadroom(10);
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+        final boolean wasHot = thermalForecastHot;
+        final boolean hot = thermalForecast.update(headroom, active, SystemClock.elapsedRealtime());
+        synchronized (thermalForecast) {
+            thermalPollScheduled = false;
+        }
+        if (hot != wasHot) {
+            thermalForecastHot = hot;
+            onSystemPowerSignalChanged();
+        }
+        if (active || hot) {
+            scheduleThermalPoll();
+        }
     }
 
     private static void onSystemPowerSignalChanged() {
@@ -160,6 +207,7 @@ public class LiteMode {
             if (powerManager == null) {
                 return;
             }
+            systemPowerManager = powerManager;
             systemPowerSaver = powerManager.isPowerSaveMode();
             final BroadcastReceiver receiver = new BroadcastReceiver() {
                 @Override
