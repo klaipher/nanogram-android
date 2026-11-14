@@ -193,6 +193,7 @@ import org.telegram.messenger.SvgHelper;
 import org.telegram.messenger.Timer;
 import org.telegram.messenger.TranslateController;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.nanogram.NanogramPhotoPicker;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.VideoEditedInfo;
@@ -14507,6 +14508,11 @@ public class ChatActivity extends BaseFragment implements
                         videoPickerIntent.setAction(Intent.ACTION_GET_CONTENT);
                         videoPickerIntent.putExtra(MediaStore.EXTRA_SIZE_LIMIT, FileLoader.DEFAULT_MAX_FILE_SIZE);
 
+                        final Intent systemPicker = NanogramPhotoPicker.createIntent(getParentActivity(), true, true);
+                        if (systemPicker != null) {
+                            startActivityForResult(systemPicker, 1);
+                            return;
+                        }
                         Intent photoPickerIntent = new Intent(Intent.ACTION_PICK);
                         photoPickerIntent.setType("image/*");
                         Intent chooserIntent = Intent.createChooser(photoPickerIntent, null);
@@ -21159,7 +21165,7 @@ public class ChatActivity extends BaseFragment implements
                     return;
                 }
                 Uri uri = data.getData();
-                if (uri.toString().contains("video")) {
+                if (NanogramPhotoPicker.isVideo(getParentActivity(), uri)) {
                     String videoPath = null;
                     try {
                         videoPath = AndroidUtilities.getPath(uri);
