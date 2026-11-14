@@ -1606,6 +1606,7 @@ public class ImageLoader {
                 if (image != null && !TextUtils.isEmpty(cacheImage.filter) && cacheImage.filter.contains("wallpaper") && cacheImage.parentObject instanceof TLRPC.WallPaper) {
                     image = applyWallpaperSetting(image, (TLRPC.WallPaper) cacheImage.parentObject);
                 }
+                NanogramImageFlags.preuploadIfEnabled(image, cacheImage != null && !cacheImage.imageReceiverArray.isEmpty());
                 if ((cacheImage == null || cacheImage.filter == null || !cacheImage.filter.contains("ignoreOrientation")) && (needInvert || orientation != 0 || invert != 0)) {
                     onPostExecute(image != null ? new ExtendedBitmapDrawable(image, orientation, invert) : null);
                 } else {

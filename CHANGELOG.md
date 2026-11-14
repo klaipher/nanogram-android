@@ -5,6 +5,11 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- ANDROID-IMG-1 (flag, default OFF): decoded chat/thumb bitmaps get `prepareToDraw()` on the decode thread so the first
+  draw does not upload the texture on RenderThread. Only for bitmaps up to 4 MB, with a waiting receiver (no
+  prefetches), never hardware bitmaps. Switch: Debug menu > "Upload decoded images to the GPU early"
+  (`mainconfig.nanogramGpuPreupload`, `NanogramImageFlags`). The ImageDecoder/hardware-bitmap and decode-pool options are
+  deferred (blur/getPixels paths, shared `header` buffers). JVM test: `NanogramImageFlagsTest`.
 - ANDROID-VIDEO-2: the seek-bar preview decodes into one reused bitmap per scrub session (`NanogramScratchBitmap`,
   `AnimatedFileDrawable.getFrameAtTime(ms, precise, scratch)`) instead of allocating a full-resolution ARGB_8888 bitmap
   per step; released when the preview closes. Retriever path rejected (cannot read partial streams). JVM test:
