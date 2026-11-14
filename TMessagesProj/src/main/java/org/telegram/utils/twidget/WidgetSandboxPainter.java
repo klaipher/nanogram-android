@@ -278,6 +278,7 @@ final class WidgetSandboxPainter {
         final Matrix current = new Matrix();
         final ArrayList<Matrix> saved = new ArrayList<>();
         final ArrayList<FilterFrame> filters = new ArrayList<>();
+        int filtered;
 
         State(Canvas canvas) {
             this.canvas = canvas;
@@ -315,12 +316,19 @@ final class WidgetSandboxPainter {
      * twidget's CPU pass filters (WidgetClientNative#filterPixels). Under a rotation or skew, or past
      * 4096² px, the content draws unfiltered.
      */
+    /** Nested filters past this draw unfiltered: each level is a RenderNode or a bitmap, and 2,000 overflowed hwui's RenderThread stack (widget-sandbox 0.6.5, paint-filter-depth). */
+    static final int MAX_NESTED_FILTERS = 16;
+
+    static boolean canNestFilter(int openFiltered) {
+        return openFiltered < MAX_NESTED_FILTERS;
+    }
+
     private void pushFilter(State s, Filters functions, float density) {
         FilterFrame frame = new FilterFrame();
         frame.outer = s.canvas;
         frame.depth = s.depth;
         s.filters.add(frame);
-        if (functions.size() == 0) return;
+        if (functions.size() == 0 || !canNestFilter(s.filtered)) return;
         box.set(cmdRect);
         if (box.isEmpty()) return;
         // The rect is the content's ink: blurs and shadows paint past it.
@@ -330,6 +338,7 @@ final class WidgetSandboxPainter {
             if (inner != null) {
                 s.canvas = inner;
                 s.depth = 0;
+                s.filtered++;
             }
             return;
         }
@@ -351,11 +360,13 @@ final class WidgetSandboxPainter {
         inner.concat(frame.device);
         s.canvas = inner;
         s.depth = 0;
+        s.filtered++;
     }
 
     private void popFilter(State s, float density) {
         FilterFrame frame = s.filters.remove(s.filters.size() - 1);
         while (s.depth > (frame.node != null || frame.bitmap != null ? 0 : frame.depth)) s.pop();
+        if (frame.node != null || frame.bitmap != null) s.filtered--;
         if (frame.node != null) {
             Effects.endFilter(frame, density);
             s.canvas = frame.outer;
