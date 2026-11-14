@@ -212,6 +212,7 @@ public final class NanogramBranding {
         private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         private final int width;
         private final int height;
+        private final float baselineOffset;
 
         Wordmark() {
             paint.setColor(0xFFFFFFFF);
@@ -219,13 +220,14 @@ public final class NanogramBranding {
             paint.setTextSize(AndroidUtilities.dp(21));
             width = (int) Math.ceil(paint.measureText(APP_NAME));
             height = AndroidUtilities.dp(22);
+            final Paint.FontMetrics fm = paint.getFontMetrics();
+            baselineOffset = -(fm.ascent + fm.descent) / 2f;
         }
 
         @Override
         public void draw(Canvas canvas) {
             Rect bounds = getBounds();
-            Paint.FontMetrics fm = paint.getFontMetrics();
-            float baseline = bounds.exactCenterY() - (fm.ascent + fm.descent) / 2f;
+            float baseline = bounds.exactCenterY() + baselineOffset;
             float x = bounds.left + Math.max(0, (bounds.width() - width) / 2f);
             canvas.drawText(APP_NAME, x, baseline, paint);
         }
