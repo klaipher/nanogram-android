@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- `.gitmodules`: `jni/third_party/boringssl` now points at klaipher/boringssl `nanogram` (shallow), gitlink 1c764cec = official 0.20261105.0 (3dc4b638, the old pin) plus two commits: the upstream Bazel files are removed (iOS builds the same tree under Bazel) and the records. Source files are byte-identical, so the prebuilt libs do not change. `prebuild/build_boringssl.sh` and `build_tdlib.sh` use only `CMakeLists.txt` and `include/`, no deleted file. Shared pin: iOS uses the same commit.
+
 ### Review fixes for the shared-source swaps
 - `TMessagesProj/build.gradle`: `java.exclude '**/org/webrtc/EglThread.java'`. The fork's `sdk/android/api` holds upstream
   `EglThread.java` (73323d59), which the app never carried and which needs `EglBase.EglConnection`; the fork's Telegram `EglBase.java`
