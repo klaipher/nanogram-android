@@ -5337,19 +5337,33 @@ public class AndroidUtilities {
         return new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE), "sharing/");
     }
 
+    private static volatile String certificateSHA256Fingerprint;
+
     public static String getCertificateSHA256Fingerprint() {
+        String cached = certificateSHA256Fingerprint;
+        if (cached != null) {
+            return cached;
+        }
         PackageManager pm = ApplicationLoader.applicationContext.getPackageManager();
         String packageName = ApplicationLoader.applicationContext.getPackageName();
         try {
-            PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES);
-            Signature[] signatures = packageInfo.signatures;
+            Signature[] signatures;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES);
+                signatures = packageInfo.signingInfo.getApkContentsSigners();
+            } else {
+                PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES);
+                signatures = packageInfo.signatures;
+            }
             byte[] cert = signatures[0].toByteArray();
             InputStream input = new ByteArrayInputStream(cert);
             CertificateFactory cf = CertificateFactory.getInstance("X509");
             X509Certificate c = (X509Certificate) cf.generateCertificate(input);
-            return Utilities.bytesToHex(Utilities.computeSHA256(c.getEncoded()));
-        } catch (Throwable ignore) {
-
+            cached = Utilities.bytesToHex(Utilities.computeSHA256(c.getEncoded()));
+            certificateSHA256Fingerprint = cached;
+            return cached;
+        } catch (Throwable e) {
+            FileLog.e(e, false);
         }
         return "";
     }

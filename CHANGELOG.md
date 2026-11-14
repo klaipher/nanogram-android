@@ -5,6 +5,14 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Startup: per-account constants computed once (ANDROID-STARTUP-2)
+- ConnectionsManager keeps the app version string, install source, package id and the measured device performance
+  class in static fields instead of recomputing them for each of the 4 account slots (the sysfs scan of
+  cpuinfo_max_freq and the two PackageManager calls ran 4x per start and on every push wake). The measured class is
+  cached separately from SharedConfig.getDevicePerformanceClass(), which applies the user override.
+- AndroidUtilities.getCertificateSHA256Fingerprint() caches its result and reads signers through
+  GET_SIGNING_CERTIFICATES on API 28+ (GET_SIGNATURES below). The hash is the same value, so the server-side
+  fingerprint does not change.
 ### Native speed flags (-O2 for hot code, ARMv8.2 kernels in libvpx, FFmpeg/opus for speed)
 - `-Oz` -> `-O2` for tgnet (MTProto, per-message/per-chunk AES-IGE glue), sqlite (message database, every chat load),
   and the main library sources (image/blur, gifvideo, lottie glue, ffmpeg_jni, opusfile/ogg, audio), which were -Os, not

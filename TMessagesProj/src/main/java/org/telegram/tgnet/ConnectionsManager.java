@@ -229,8 +229,7 @@ public class ConnectionsManager extends BaseController {
             systemLangCode = LocaleController.getSystemLocaleStringIso639().toLowerCase();
             langCode = LocaleController.getLocaleStringIso639().toLowerCase();
             deviceModel = Build.MANUFACTURER + Build.MODEL;
-            PackageInfo pInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
-            appVersion = pInfo.versionName + " (" + pInfo.versionCode + ")";
+            appVersion = getBaseAppVersion();
             if (BuildVars.DEBUG_PRIVATE_VERSION) {
                 appVersion += " pbeta";
             } else if (BuildVars.DEBUG_VERSION) {
@@ -273,6 +272,77 @@ public class ConnectionsManager extends BaseController {
             userPremium = getUserConfig().getCurrentUser().premium;
         }
         init(SharedConfig.buildVersion(), TLRPC.LAYER, BuildVars.APP_ID, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, FileLog.getNetworkLogPath(), pushString, fingerprint, timezoneOffset, getUserConfig().getClientUserId(), userPremium, enablePushConnection);
+    }
+
+    private static volatile String cachedBaseAppVersion;
+    private static volatile String cachedInstaller;
+    private static volatile String cachedPackageId;
+    private static volatile int cachedMeasuredPerformanceClass = -1;
+
+    private static String getBaseAppVersion() throws Exception {
+        String cached = cachedBaseAppVersion;
+        if (cached == null) {
+            PackageInfo pInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
+            cached = pInfo.versionName + " (" + pInfo.versionCode + ")";
+            cachedBaseAppVersion = cached;
+        }
+        return cached;
+    }
+
+    private static String getInstaller() {
+        String cached = cachedInstaller;
+        if (cached != null) {
+            return cached;
+        }
+        String installer = "";
+        try {
+            Context context = ApplicationLoader.applicationContext;
+            if (Build.VERSION.SDK_INT >= 30) {
+                InstallSourceInfo installSourceInfo = context.getPackageManager().getInstallSourceInfo(context.getPackageName());
+                if (installSourceInfo != null) {
+                    installer = installSourceInfo.getInitiatingPackageName();
+                    if (installer == null) {
+                        installer = installSourceInfo.getInstallingPackageName();
+                    }
+                }
+            } else {
+                installer = context.getPackageManager().getInstallerPackageName(context.getPackageName());
+            }
+        } catch (Throwable e) {
+            FileLog.e(e, false);
+        }
+        if (installer == null) {
+            installer = "";
+        }
+        cachedInstaller = installer;
+        return installer;
+    }
+
+    private static String getPackageId() {
+        String cached = cachedPackageId;
+        if (cached != null) {
+            return cached;
+        }
+        String packageId = "";
+        try {
+            packageId = ApplicationLoader.applicationContext.getPackageName();
+        } catch (Throwable e) {
+            FileLog.e(e, false);
+        }
+        if (packageId == null) {
+            packageId = "";
+        }
+        cachedPackageId = packageId;
+        return packageId;
+    }
+
+    private static int getMeasuredPerformanceClass() {
+        int cached = cachedMeasuredPerformanceClass;
+        if (cached == -1) {
+            cached = SharedConfig.measureDevicePerformanceClass();
+            cachedMeasuredPerformanceClass = cached;
+        }
+        return cached;
     }
 
     private String getRegId() {
@@ -682,37 +752,10 @@ public class ConnectionsManager extends BaseController {
                         proxySettings.getUser(), proxySettings.getPassword(), proxySettings.getSecret());
             }
         }
-        String installer = "";
-        try {
-            Context context = ApplicationLoader.applicationContext;
-            if (Build.VERSION.SDK_INT >= 30) {
-                InstallSourceInfo installSourceInfo = context.getPackageManager().getInstallSourceInfo(context.getPackageName());
-                if (installSourceInfo != null) {
-                    installer = installSourceInfo.getInitiatingPackageName();
-                    if (installer == null) {
-                        installer = installSourceInfo.getInstallingPackageName();
-                    }
-                }
-            } else {
-                installer = context.getPackageManager().getInstallerPackageName(context.getPackageName());
-            }
-        } catch (Throwable ignore) {
+        String installer = getInstaller();
+        String packageId = getPackageId();
 
-        }
-        if (installer == null) {
-            installer = "";
-        }
-        String packageId = "";
-        try {
-            packageId = ApplicationLoader.applicationContext.getPackageName();
-        } catch (Throwable ignore) {
-
-        }
-        if (packageId == null) {
-            packageId = "";
-        }
-
-        native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, userPremium, enablePushConnection, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), SharedConfig.measureDevicePerformanceClass());
+        native_init(currentAccount, version, layer, apiId, deviceModel, systemVersion, appVersion, langCode, systemLangCode, configPath, logPath, regId, cFingerprint, installer, packageId, timezoneOffset, userId, userPremium, enablePushConnection, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), getMeasuredPerformanceClass());
         checkConnection();
     }
 
