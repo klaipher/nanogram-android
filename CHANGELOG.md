@@ -5,38 +5,43 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Android media, database and search (modernization review, branch nanogram/mod-media)
 - ANDROID-SEARCH-1: local dialog search (`MessagesStorage.localSearch`) tracks already-collected users, chats and secret
   chats in hash sets instead of `ArrayList.contains` (up to 600x600/2 boxed compares), and transliterates every user and
   chat name through a 4096-entry LRU (`NanogramTranslitCache`; transliteration is a pure function of the string, so no
-  invalidation). Result order is unchanged (list order still drives it). Deferred: narrowing from the previous
+  invalidation). The cache is cleared on storage cleanup (logout/account removal). Result order is unchanged (list order still drives it). Deferred: narrowing from the previous
   query and fixed-size IN-list chunking (pairs with ANDROID-DB-2). JVM test: `NanogramTranslitCacheTest`.
 - ANDROID-DB-2 (same flag as ANDROID-DB-1, default OFF): per-connection prepared-statement LRU (64, `NanogramStatementCache`)
   behind a new `SQLiteDatabase.queryCached()`. A cached statement is reset (not finalized) on `dispose()`, a statement
   still in use is never handed out twice (nested or concurrent callers get a fresh uncached one), cursor `dispose()`
   is idempotent, and `close()` finalizes the cache before `sqlite3_close`. First users: `messages_v2 WHERE uid = ? AND
-  mid = ?` and `dialogs WHERE did = ?` folder lookups. IN-list chunking and the debug prepare counter are deferred.
+  mid = ?` and `dialogs WHERE did = ?` folder lookups. IN-list chunking and the debug prepare counter are deferred. Slow-query log lines time each use of a cached
+  statement, not the time since its creation.
   JVM test: `NanogramStatementCacheTest`.
 - ANDROID-DB-1 (flag, default OFF): optional cache4.db tuning after the existing PRAGMAs, also on the recovery re-open:
   `cache_size = -8192` (average/high class), `mmap_size = 64 MB` (high class, 64-bit only), explicit
-  `wal_autocheckpoint = 1000`. Switch: Debug menu > "Larger database cache and mmap (restart)" (`NanogramDbTuning`, JVM
+  `wal_autocheckpoint = 1000`. Switch: Debug menu > "Database tuning: cache, mmap, statements (restart)" (`NanogramDbTuning`, JVM
   test `NanogramDbTuningTest`). Deferred: SQLite 3.39.3 -> current amalgamation and the compile options
   (`SQLITE_DEFAULT_MEMSTATUS=0`, `SQLITE_OMIT_*`, ...) live in `jni/CMakeLists.txt`/`jni/sqlite`, owned by the build
   stream; `SQLITE_DQS=0` needs a SQL audit first.
 - ANDROID-IMG-2: the in-memory image cache scales with the device instead of a fixed 30 MB cap: performance class HIGH
   with memoryClass >= 256 and >= 6 GB RAM gets 48 MB, other AVERAGE/HIGH devices with memoryClass >= 192 and >= 4 GB get
   32 MB (both capped at memoryClass/5); low class, `isLowRamDevice()`, small RAM and memoryClass < 192 keep upstream's
-  size. Deliberately below the review's 64/40 MB until the low-memory kill rate is measured (`NanogramImageCacheSize`,
+  size. Thresholds compare against the RAM Android reports (3.5 GiB and 5.5 GiB), since a "4 GB" phone reports about
+  3.7 GiB and a "6 GB" phone about 5.6 GiB. Deliberately below the review's 64/40 MB until the low-memory kill rate is measured (`NanogramImageCacheSize`,
   JVM test `NanogramImageCacheSizeTest`). onTrimMemory handling unchanged.
 - ANDROID-IMG-1 (flag, default OFF): decoded chat/thumb bitmaps get `prepareToDraw()` on the decode thread so the first
   draw does not upload the texture on RenderThread. Only for bitmaps up to 4 MB, with a waiting receiver (no
   prefetches), never hardware bitmaps. Switch: Debug menu > "Upload decoded images to the GPU early"
-  (`mainconfig.nanogramGpuPreupload`, `NanogramImageFlags`). The ImageDecoder/hardware-bitmap and decode-pool options are
+  (`mainconfig.nanogramGpuPreupload`, `NanogramImageFlags`). Every ImageLoader display path (stripped, SVG, file, cache decode) ends in `CacheOutTask.run`, which is
+  the one hand-off covered; `ThumbGenerateTask` bitmaps (file thumbnails, ~812) are not preuploaded because they are
+  compressed to disk and shown once, and the Lottie/animated frame paths (~1110) use their own bitmaps (status: not
+  needed). The ImageDecoder/hardware-bitmap and decode-pool options are
   deferred (blur/getPixels paths, shared `header` buffers). JVM test: `NanogramImageFlagsTest`.
 - ANDROID-VIDEO-2: the seek-bar preview decodes into one reused bitmap per scrub session (`NanogramScratchBitmap`,
   `AnimatedFileDrawable.getFrameAtTime(ms, precise, scratch)`) instead of allocating a full-resolution ARGB_8888 bitmap
-  per step; released when the preview closes. Retriever path rejected (cannot read partial streams). JVM test:
+  per step; released when the preview hides and again on close. Retriever path rejected (cannot read partial streams). JVM test:
   `NanogramScratchBitmapTest`.
-### Android media, database and search (modernization review, branch nanogram/mod-media)
 - ANDROID-IO-1: "Save to gallery/Downloads" copies in 4 MB `FileChannel.transferTo` chunks (`NanogramFileCopy`) instead
   of 4 KB `transferFrom` calls (about 256k map/unmap round trips per GB); cancel and the 500 ms progress throttle kept.
   JVM test: `NanogramFileCopyTest`.
