@@ -65,4 +65,29 @@ public class NanogramSafeRunnerTest {
         assertFalse(NanogramSafeRunner.shouldRunInline(1001));
         assertEquals(1000, NanogramSafeRunner.INLINE_MAX_LENGTH);
     }
+
+    @Test
+    public void stuckWorkersDoNotBlockNewCalls() throws Exception {
+        final CountDownLatch release = new CountDownLatch(1);
+        for (int i = 0; i < 6; i++) {
+            NanogramSafeRunner.run(() -> {
+                boolean done = false;
+                while (!done) {
+                    try {
+                        release.await();
+                        done = true;
+                    } catch (InterruptedException ignore) {
+                    }
+                }
+                return true;
+            }, 20);
+        }
+        try {
+            final long start = System.nanoTime();
+            assertTrue(NanogramSafeRunner.run(() -> true, 1000));
+            assertTrue((System.nanoTime() - start) / 1_000_000 < 900);
+        } finally {
+            release.countDown();
+        }
+    }
 }

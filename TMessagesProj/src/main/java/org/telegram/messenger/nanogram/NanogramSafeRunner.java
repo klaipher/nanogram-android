@@ -2,14 +2,15 @@ package org.telegram.messenger.nanogram;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Runs a task with a time limit on a shared, bounded, daemon pool instead of a new executor per call.
+ * Runs a task with a time limit on a shared daemon pool (no queue) instead of a new executor per call.
+ * Linkify ignores interrupts, so a timed-out task can keep its thread: when all pool threads are busy a call gets a one-off daemon thread, never waits behind them.
  * Short inputs skip the pool: see {@link #INLINE_MAX_LENGTH}.
  */
 public final class NanogramSafeRunner {
@@ -17,19 +18,21 @@ public final class NanogramSafeRunner {
     /** Linkify cannot backtrack catastrophically on text this short, so it runs on the calling thread. */
     public static final int INLINE_MAX_LENGTH = 1000;
 
+    private static final int MAX_POOL_THREADS = 4;
     private static final AtomicInteger counter = new AtomicInteger();
     private static final ThreadPoolExecutor pool = createPool();
 
     private NanogramSafeRunner() {
     }
 
+    private static Thread newThread(Runnable runnable) {
+        final Thread thread = new Thread(runnable, "ng-safe-" + counter.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    }
+
     private static ThreadPoolExecutor createPool() {
-        final ThreadPoolExecutor executor = new ThreadPoolExecutor(2, 4, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), runnable -> {
-            final Thread thread = new Thread(runnable, "ng-safe-" + counter.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-        });
-        executor.allowCoreThreadTimeOut(true);
+        final ThreadPoolExecutor executor = new ThreadPoolExecutor(0, MAX_POOL_THREADS, 30, TimeUnit.SECONDS, new SynchronousQueue<>(), NanogramSafeRunner::newThread, (runnable, self) -> newThread(runnable).start());
         return executor;
     }
 
