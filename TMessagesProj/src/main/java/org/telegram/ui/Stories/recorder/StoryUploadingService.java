@@ -16,6 +16,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.nanogram.NanogramProgressNotification;
 
 public class StoryUploadingService extends Service implements NotificationCenter.NotificationCenterDelegate {
 
@@ -56,7 +57,7 @@ public class StoryUploadingService extends Service implements NotificationCenter
                 currentProgress = (float) args[1];
                 builder.setProgress(100, Math.round(100 * currentProgress), currentProgress <= 0);
                 try {
-                    NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(33, builder.build());
+                    NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(33, NanogramProgressNotification.promote(ApplicationLoader.applicationContext, builder.build(), Math.round(100 * currentProgress), currentProgress <= 0));
                 } catch (Throwable e) {
                     FileLog.e(e);
                 }
@@ -95,7 +96,7 @@ public class StoryUploadingService extends Service implements NotificationCenter
         if (builder == null) {
             NotificationsController.checkOtherNotificationsChannel();
             builder = new NotificationCompat.Builder(ApplicationLoader.applicationContext);
-            builder.setSmallIcon(android.R.drawable.stat_sys_upload);
+            builder.setSmallIcon(NanogramProgressNotification.smallIcon(android.R.drawable.stat_sys_upload));
             builder.setWhen(System.currentTimeMillis());
             builder.setChannelId(NotificationsController.OTHER_NOTIFICATIONS_CHANNEL);
             builder.setContentTitle(LocaleController.getString(R.string.AppName));
@@ -105,13 +106,13 @@ public class StoryUploadingService extends Service implements NotificationCenter
         currentProgress = 0;
         builder.setProgress(100, Math.round(100 * currentProgress), false);
         try {
-            startForeground(33, builder.build());
+            startForeground(33, NanogramProgressNotification.promote(ApplicationLoader.applicationContext, builder.build(), 0, true));
         } catch (Throwable e) {
             // ForegroundServiceStartNotAllowedException, e.g. when the dataSync time limit is exhausted
             FileLog.e(e);
         }
         try {
-            NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(33, builder.build());
+            NotificationManagerCompat.from(ApplicationLoader.applicationContext).notify(33, NanogramProgressNotification.promote(ApplicationLoader.applicationContext, builder.build(), Math.round(100 * currentProgress), currentProgress <= 0));
         } catch (Throwable e) {
             FileLog.e(e);
         }

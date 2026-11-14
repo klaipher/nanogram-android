@@ -5,6 +5,9 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### ANDROID-NOTIF-1: progress-centric notifications for story upload and video conversion (experimental, off)
+- Flag `progress_notifications` (default off), API 36 only: `NanogramProgressNotification.promote` rebuilds the existing compat notification with `Notification.ProgressStyle` (one 0-100 segment, progress, indeterminate at 0), `setRequestPromotedOngoing(true)` and a short critical text ("42%"), and uses the app's `R.drawable.notification` instead of `stat_sys_upload`. Applied in `StoryUploadingService` (id 33) and `VideoEncodingService` (id 4); with the flag off or below API 36 the notifications are byte-for-byte what they were. Manifest: `POST_PROMOTED_NOTIFICATIONS` (normal permission, ignored below API 36).
+- Tests: `NanogramProgressNotificationTest` (percent helpers, JVM). Check on an Android 16 device: upload a story, see the status-bar chip and lock-screen progress.
 ### ANDROID-MANIFEST-1: drop dead permissions and legacy storage flags (cleartext kept)
 - `READ_EXTERNAL_STORAGE` now `maxSdkVersion=32` (Android 13+ uses READ_MEDIA_*). Removed `MANAGE_ACCOUNTS`, `READ_PROFILE`, `AUTHENTICATE_ACCOUNTS` (no-ops at minSdk 24), `USE_FINGERPRINT` (BiometricPrompt + `USE_BIOMETRIC` stay; no FingerprintManager use left), `requestLegacyExternalStorage` and `preserveLegacyExternalStorage` (ignored at targetSdk 30+). `GET_ACCOUNTS` stays for the sync adapter.
 - Owner decision: global `usesCleartextTraffic` stays as upstream (in-app http links); no network_security_config. `INSTALL_SHORTCUT` stays (not in the verified change list).
