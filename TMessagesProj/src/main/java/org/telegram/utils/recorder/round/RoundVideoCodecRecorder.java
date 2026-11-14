@@ -1,5 +1,6 @@
 package org.telegram.utils.recorder.round;
 
+import org.telegram.messenger.FileLog;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.AudioTimestamp;
@@ -788,7 +789,11 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
 
     private static void releaseCodec(MediaCodec codec) {
         if (codec == null) return;
-        try { codec.stop(); } catch (IllegalStateException ignore) {}
+        try {
+            codec.stop();
+        } catch (IllegalStateException e) {
+            FileLog.d("codec stop skipped: " + e.getMessage());
+        }
         codec.release();
     }
 

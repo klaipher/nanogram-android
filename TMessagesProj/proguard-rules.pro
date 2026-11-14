@@ -75,6 +75,7 @@
 
 -keep class io.nano.tex.** {*;}
 
+# Narrower alternative, not applied by default (ANDROID-R8-1): proguard-rules-tgnet-narrow.pro
 -keep class org.telegram.tgnet.** { *; }
 
 # JLatexMath: macro/atom classes are loaded reflectively by Class.forName

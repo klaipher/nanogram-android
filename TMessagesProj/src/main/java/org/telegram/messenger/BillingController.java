@@ -155,6 +155,13 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
         }
     }
 
+    private boolean connectionDeferred;
+
+    public void deferConnection() {
+        connectionDeferred = true;
+        switchToInvoice();
+    }
+
     private void switchToInvoice() {
         if (billingClientEmpty) {
             return;
@@ -487,6 +494,11 @@ public class BillingController implements PurchasesUpdatedListener, BillingClien
     private ArrayList<Runnable> setupListeners = new ArrayList<>();
     public void whenSetuped(Runnable listener) {
         setupListeners.add(listener);
+        if (connectionDeferred && !isReady()) {
+            connectionDeferred = false;
+            switchBackFromInvoice();
+            startConnection();
+        }
     }
 
     private int triesLeft = 0;

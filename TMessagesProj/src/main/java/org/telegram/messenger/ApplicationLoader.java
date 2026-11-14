@@ -44,6 +44,7 @@ import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.utils.settings.StartupSettings;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Components.ForegroundDetector;
 import org.telegram.ui.Components.ItemOptions;
@@ -258,8 +259,12 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
+        final boolean lazySlots = StartupSettings.lazyAccountSlots.get();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
             UserConfig.getInstance(a).loadConfig();
+            if (lazySlots && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             MessagesController.getInstance(a);
             if (a == 0) {
                 SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
@@ -281,10 +286,17 @@ public class ApplicationLoader extends Application {
 
         MediaController.getInstance();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
+            if (lazySlots && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        BillingController.getInstance().startConnection();
+        if (BuildVars.IS_BILLING_UNAVAILABLE && StartupSettings.skipPlayBillingAtStartup.get()) {
+            BillingController.getInstance().deferConnection();
+        } else {
+            BillingController.getInstance().startConnection();
+        }
         // HTML widgets: the isolated engine's process up front, after the app's own start, so that a widget's first
         // frame does not wait for it.
         AndroidUtilities.runOnUIThread(() -> Utilities.globalQueue.postRunnable(
@@ -512,7 +524,11 @@ public class ApplicationLoader extends Application {
     // one place for both network paths (broadcast and callback), so account-slot rules apply to both
     private static void checkConnectionForAccounts() {
         final boolean isSlow = isConnectionSlow();
+        final boolean lazy = StartupSettings.lazyAccountSlots.get();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (lazy && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
+                continue;
+            }
             ConnectionsManager.getInstance(a).checkConnection();
             FileLoader.getInstance(a).onNetworkChanged(isSlow);
         }
