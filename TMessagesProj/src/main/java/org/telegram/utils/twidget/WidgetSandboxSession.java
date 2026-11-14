@@ -295,7 +295,7 @@ public final class WidgetSandboxSession {
         } catch (Exception e) {
             org.telegram.messenger.FileLog.e(e);
         }
-        // An engine that died while the app was in the background is bound again when it comes back.
+        // The hold is given up in the background and taken again here, also after an engine that died meanwhile.
         if (!foregroundWatched) {
             org.telegram.ui.Components.ForegroundDetector detector = org.telegram.ui.Components.ForegroundDetector.getInstance();
             if (detector != null) {
@@ -308,6 +308,7 @@ public final class WidgetSandboxSession {
 
                     @Override
                     public void onBecameBackground() {
+                        org.telegram.messenger.Utilities.globalQueue.postRunnable(WidgetRemoteEngine.INSTANCE::release);
                     }
                 });
             }
