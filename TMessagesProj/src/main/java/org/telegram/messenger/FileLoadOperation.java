@@ -23,6 +23,7 @@ import org.telegram.ui.Storage.CacheModel;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.RandomAccessFile;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -623,6 +624,8 @@ public class FileLoadOperation {
         if (save) {
             if (modified) {
                 ArrayList<FileLoadOperation.Range> rangesFinal = new ArrayList<>(ranges);
+                final RandomAccessFile dataFile = fileOutputStream;
+                final FileChannel dataChannel = dataFile != null && fiv == null ? dataFile.getChannel() : null;
                 if (fileWriteRunnable != null) {
                     filesQueue.cancelRunnable(fileWriteRunnable);
                 }
@@ -648,12 +651,24 @@ public class FileLoadOperation {
                             filesQueueByteBuffer.writeLong(rangeFinal.start);
                             filesQueueByteBuffer.writeLong(rangeFinal.end);
                         }
+                        // The data file is not opened with O_SYNC (that stalled stageQueue per chunk): a range is only
+                        // recorded once its data is durable.
+                        boolean durable = true;
+                        if (dataChannel != null) {
+                            try {
+                                dataChannel.force(false);
+                            } catch (ClosedChannelException closed) {
+                                durable = false;
+                            }
+                        }
                         synchronized (FileLoadOperation.this) {
                             if (filePartsStream == null) {
                                 return;
                             }
-                            filePartsStream.seek(0);
-                            filePartsStream.write(filesQueueByteBuffer.buf, 0, bufferSize);
+                            if (durable) {
+                                filePartsStream.seek(0);
+                                filePartsStream.write(filesQueueByteBuffer.buf, 0, bufferSize);
+                            }
                             writingToFilePartsStream = false;
                             if (closeFilePartsStreamOnWriteEnd) {
                                 try {
@@ -1279,7 +1294,7 @@ public class FileLoadOperation {
             }
             updateProgress();
             try {
-                fileOutputStream = new RandomAccessFile(cacheFileTemp, "rws");
+                fileOutputStream = new RandomAccessFile(cacheFileTemp, fileNameIv != null ? "rws" : "rw");
                 if (downloadedBytes != 0) {
                     fileOutputStream.seek(downloadedBytes);
                 }
@@ -1629,6 +1644,13 @@ public class FileLoadOperation {
                 }
                 File cacheFileTempLocal = cacheFileTempFinal;
                 if (cacheFileTempLocal != null) {
+                    if (cacheIvTempFinal == null && cacheFileTempLocal.exists()) {
+                        // One sync per file instead of one per chunk, before the temp file becomes the final one.
+                        try (RandomAccessFile synced = new RandomAccessFile(cacheFileTempLocal, "rw")) {
+                            synced.getFD().sync();
+                        } catch (Exception ignore) {
+                        }
+                    }
                     if (ungzip) {
                         try {
                             GZIPInputStream gzipInputStream = new GZIPInputStream(new FileInputStream(cacheFileTempLocal));
