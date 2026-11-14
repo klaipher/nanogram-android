@@ -367,6 +367,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     private RadialProgressView radialProgressView;
 
     private ImageView proxyButtonView;
+    private ImageView diagnosticsButtonView;
     private ProxyDrawable proxyDrawable;
 
     // Open animation stuff
@@ -604,6 +605,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 marginLayoutParams = (MarginLayoutParams) proxyButtonView.getLayoutParams();
                 marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
 
+                marginLayoutParams = (MarginLayoutParams) diagnosticsButtonView.getLayoutParams();
+                marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
+
                 marginLayoutParams = (MarginLayoutParams) radialProgressView.getLayoutParams();
                 marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
 
@@ -792,6 +796,14 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         proxyButtonView.setVisibility(View.GONE);
         sizeNotifierFrameLayout.addView(proxyButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 16, 16));
         updateProxyButton(false, true);
+
+        // Nanogram: diagnostics before login, for testers who cannot sign in.
+        diagnosticsButtonView = new ImageView(context);
+        diagnosticsButtonView.setImageResource(R.drawable.msg_log);
+        diagnosticsButtonView.setScaleType(ImageView.ScaleType.CENTER);
+        diagnosticsButtonView.setContentDescription(getString(R.string.NanogramSendDiagnostics));
+        diagnosticsButtonView.setOnClickListener(v -> presentFragment(new NanogramDiagnosticsActivity()));
+        sizeNotifierFrameLayout.addView(diagnosticsButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
 
         radialProgressView = new RadialProgressView(context);
         radialProgressView.setSize(AndroidUtilities.dp(20));
@@ -8710,6 +8722,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             proxyDrawableColor = proxyColor;
         }
         proxyButtonSelectorColor = applySelectorBackground(proxyButtonView, Theme.getColor(Theme.key_listSelector), proxyButtonSelectorColor, Theme.RIPPLE_MASK_CIRCLE_20DP);
+        diagnosticsButtonFilterColor = applyColorFilter(diagnosticsButtonView, Theme.getColor(Theme.key_windowBackgroundWhiteGrayIcon), diagnosticsButtonFilterColor, PorterDuff.Mode.SRC_IN);
+        diagnosticsButtonSelectorColor = applySelectorBackground(diagnosticsButtonView, Theme.getColor(Theme.key_listSelector), diagnosticsButtonSelectorColor, Theme.RIPPLE_MASK_CIRCLE_20DP);
 
         radialProgressView.setProgressColor(Theme.getColor(Theme.key_chats_actionBackground));
 
@@ -8727,7 +8741,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         }
     }
 
-    private int backButtonFilterColor, backButtonSelectorColor, proxyDrawableColor, proxyButtonSelectorColor;
+    private int backButtonFilterColor, backButtonSelectorColor, proxyDrawableColor, proxyButtonSelectorColor, diagnosticsButtonFilterColor, diagnosticsButtonSelectorColor;
 
     /** {@code view.setColorFilter(new PorterDuffColorFilter(color, mode))} only when the color changed; returns the applied color */
     private static int applyColorFilter(ImageView view, int color, int lastColor, PorterDuff.Mode mode) {

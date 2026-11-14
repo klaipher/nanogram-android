@@ -189,7 +189,8 @@ public final class NanogramExitInfo {
                     description = description.substring(0, 400) + "...";
                 }
                 r.description = description;
-                r.problem = isProblem(r);
+                // Only the main process counts: the isolated widget engine and other helpers are reclaimed routinely.
+                r.problem = context.getPackageName().equals(r.processName) && isProblem(r);
                 r.raw = info;
                 out.add(r);
             }

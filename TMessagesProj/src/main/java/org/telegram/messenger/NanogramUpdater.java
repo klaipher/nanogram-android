@@ -592,4 +592,26 @@ public class NanogramUpdater {
     private void notifyLoading() {
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateLoading);
     }
+
+    /** One-line status for the "Check for updates" rows (Settings and the diagnostics screen); null before any check. */
+    public String statusText() {
+        if (isInstalling()) {
+            return LocaleController.getString(R.string.NgUpdateInstalling);
+        } else if (isDownloading()) {
+            return LocaleController.formatString(R.string.AppUpdateDownloading, (int) (getDownloadingProgress() * 100));
+        } else if (isChecking()) {
+            return LocaleController.getString(R.string.NgUpdateChecking);
+        } else if (getError() != null) {
+            return LocaleController.formatString(R.string.NgUpdateDownloadFailed, getError());
+        } else if (getDownloadedFile() != null) {
+            return LocaleController.formatString(R.string.NgUpdateReady, getVersionName(), getBuildNumber());
+        } else if (getUpdate() != null) {
+            return LocaleController.formatString(R.string.NgUpdateAvailable, getVersionName(), getBuildNumber());
+        } else if (hasCheckFailed()) {
+            return LocaleController.getString(R.string.NgUpdateFailed);
+        } else if (getLastCheckTime() > 0) {
+            return LocaleController.getString(R.string.NgUpdateUpToDate);
+        }
+        return null;
+    }
 }

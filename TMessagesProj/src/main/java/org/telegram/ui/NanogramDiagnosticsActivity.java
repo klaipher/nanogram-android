@@ -20,6 +20,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.NanogramUpdater;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.nanogram.NanogramDiagnostics;
@@ -27,6 +28,7 @@ import org.telegram.messenger.nanogram.NanogramLog;
 import org.telegram.messenger.nanogram.NanogramSystemInfo;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -47,6 +49,7 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
     private static final int ID_VERBOSE = 3;
     private static final int ID_CLEAR = 4;
     private static final int ID_INFO = 5;
+    private static final int ID_UPDATE = 6;
 
     private List<NanogramDiagnostics.Problem> problems = new ArrayList<>();
     private long logsSize;
@@ -108,6 +111,10 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
         items.add(UItem.asButton(ID_INFO, getString(R.string.NanogramDiagnosticsDevice), NanogramSystemInfo.summaryLine()));
         items.add(UItem.asButton(ID_INFO, getString(R.string.NanogramDiagnosticsApp), NanogramDiagnostics.appLabel(context)));
         items.add(UItem.asButton(ID_INFO, getString(R.string.NanogramDiagnosticsLogSize), AndroidUtilities.formatFileSize(logsSize)));
+        if (ApplicationLoader.applicationLoaderInstance.isCustomUpdate()) {
+            final String status = NanogramUpdater.getInstance().statusText();
+            items.add(UItem.asButton(ID_UPDATE, getString(R.string.NgUpdateCheck), status == null ? "" : status));
+        }
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader(getString(R.string.NanogramDiagnosticsProblems)));
@@ -151,6 +158,30 @@ public class NanogramDiagnosticsActivity extends UniversalFragment {
                     Toast.makeText(getParentActivity(), getString(R.string.NanogramDiagnosticsRestartHint), Toast.LENGTH_LONG).show();
                 }
                 listView.adapter.update(true);
+                break;
+            }
+            case ID_UPDATE: {
+                final NanogramUpdater updater = NanogramUpdater.getInstance();
+                if (updater.isDownloading() || updater.isChecking() || updater.isInstalling()) {
+                    break;
+                }
+                if (updater.getDownloadedFile() != null) {
+                    updater.install(getParentActivity());
+                } else if (updater.getUpdate() != null) {
+                    ApplicationLoader.applicationLoaderInstance.showCustomUpdateAppPopup(getParentActivity(), updater.getUpdate(), currentAccount);
+                } else {
+                    updater.checkForUpdate(true, () -> {
+                        if (listView != null && listView.adapter != null) {
+                            listView.adapter.update(true);
+                        }
+                        if (updater.getUpdate() == null && !updater.hasCheckFailed()) {
+                            BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, getString(R.string.YourVersionIsLatest)).show();
+                        }
+                    });
+                }
+                if (listView != null && listView.adapter != null) {
+                    listView.adapter.update(true);
+                }
                 break;
             }
             case ID_CLEAR: {

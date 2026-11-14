@@ -110,5 +110,13 @@ Newest first: version, build number, date, commit; what changed and how.
   (NanogramGoogleSignIn, googleid 1.2.1); same e-mail + ID token to the server.
 - Emulator: launches, MTProto handshakes complete.
 
+### Integration fixes (main session)
+- Login screen: a diagnostics button (top right) opens Nanogram diagnostics before sign-in; the diagnostics screen has
+  "Check for updates" too, so testers who cannot sign in can still send logs and update.
+- Exit history counts problems only for the main process (the isolated widget engine is reclaimed routinely and was
+  reported as "closed unexpectedly").
+- Settings: diagnostics (id 28) and update check (id 29) rows no longer share an id; update status text lives in
+  NanogramUpdater.statusText().
+
 ### Measurements
 - Release arm64: 57.5 MB APK (R8 full mode, full LTO), 182 s; debug 98.7 MB. Details in docs/nanogram/build.md.

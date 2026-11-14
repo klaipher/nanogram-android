@@ -1079,25 +1079,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     private String getNanogramUpdateStatus() {
-        final NanogramUpdater updater = NanogramUpdater.getInstance();
-        if (updater.isInstalling()) {
-            return getString(R.string.NgUpdateInstalling);
-        } else if (updater.isDownloading()) {
-            return formatString(R.string.AppUpdateDownloading, (int) (updater.getDownloadingProgress() * 100));
-        } else if (updater.isChecking()) {
-            return getString(R.string.NgUpdateChecking);
-        } else if (updater.getError() != null) {
-            return formatString(R.string.NgUpdateDownloadFailed, updater.getError());
-        } else if (updater.getDownloadedFile() != null) {
-            return formatString(R.string.NgUpdateReady, updater.getVersionName(), updater.getBuildNumber());
-        } else if (updater.getUpdate() != null) {
-            return formatString(R.string.NgUpdateAvailable, updater.getVersionName(), updater.getBuildNumber());
-        } else if (updater.hasCheckFailed()) {
-            return getString(R.string.NgUpdateFailed);
-        } else if (updater.getLastCheckTime() > 0) {
-            return getString(R.string.NgUpdateUpToDate);
-        }
-        return null;
+        return NanogramUpdater.getInstance().statusText();
     }
 
     public String getVersionName() {
