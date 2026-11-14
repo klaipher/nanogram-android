@@ -5,6 +5,12 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### Explicit main Looper for Handlers (ANDROID-DESIGN-10)
+- CastSync's volume ContentObserver, the two PixelCopy callbacks in BottomSheetTabsOverlay and LocationSharingService
+  use `new Handler(Looper.getMainLooper())` instead of the deprecated implicit-looper constructor (same thread as
+  before). CastSync keeps the broad Settings.System observer: the music volume key differs per output device
+  (speaker, headset, A2DP), so narrowing it to one key would miss changes. unregisterContentObserver was already in the
+  stop path. WebRTC camera sessions untouched (shared upstream fork).
 ### DNS lookups on the DNS executor (ANDROID-DESIGN-5, ConnectionsManager part)
 - The Google and Mozilla DNS-config tasks in ConnectionsManager run on the existing `DNS_THREAD_POOL_EXECUTOR` (named
   threads) instead of the deprecated `AsyncTask.THREAD_POOL_EXECUTOR`. The task classes themselves still extend

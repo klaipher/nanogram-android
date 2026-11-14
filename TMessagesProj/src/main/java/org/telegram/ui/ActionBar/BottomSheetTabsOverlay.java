@@ -27,6 +27,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.PixelCopy;
@@ -1325,7 +1326,7 @@ public class BottomSheetTabsOverlay extends View {
             }
             surface.release();
             surfaceTexture.release();
-        }, new Handler());
+        }, new Handler(Looper.getMainLooper()));
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -1356,7 +1357,7 @@ public class BottomSheetTabsOverlay extends View {
             }
             surface.release();
             surfaceTexture.release();
-        }, new Handler());
+        }, new Handler(Looper.getMainLooper()));
     }
 
 }

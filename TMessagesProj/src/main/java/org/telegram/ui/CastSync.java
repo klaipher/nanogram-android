@@ -4,6 +4,7 @@ import android.content.Context;
 import android.database.ContentObserver;
 import android.media.AudioManager;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 
 import androidx.annotation.NonNull;
@@ -280,7 +281,7 @@ public class CastSync {
 
                 savedVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
 
-                context.getContentResolver().registerContentObserver(Settings.System.CONTENT_URI, true, syncingVolume = new ContentObserver(new Handler()) {
+                context.getContentResolver().registerContentObserver(Settings.System.CONTENT_URI, true, syncingVolume = new ContentObserver(new Handler(Looper.getMainLooper())) {
                     @Override
                     public void onChange(boolean selfChange) {
                         setVolume(getDeviceVolume());
