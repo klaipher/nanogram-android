@@ -41,9 +41,11 @@
 	path = TMessagesProj_Modules/media
 	url = https://github.com/klaipher/media.git
 	branch = nanogram-android
-[submodule "TMessagesProj/jni/third_party/absl"]
-	path = TMessagesProj/jni/third_party/absl
-	url = https://github.com/abseil/abseil-cpp.git
+[submodule "TMessagesProj/jni/voip/webrtc"]
+	path = TMessagesProj/jni/voip/webrtc
+	url = https://github.com/klaipher/webrtc.git
+	branch = nanogram
+	shallow = true
 [submodule "TMessagesProj/jni/third_party/wamr"]
 	path = TMessagesProj/jni/third_party/wamr
 	url = https://github.com/bytecodealliance/wasm-micro-runtime.git

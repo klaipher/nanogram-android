@@ -35,7 +35,7 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 ## Native speed flags
 
 Hot code (tgnet, sqlite, image/gif/lottie glue, opus, FFmpeg, libvpx) is built for speed (-O2, no `--enable-small`);
-cold code (tgcalls_tp/usrsctp) stays -Os. libvpx arm64 adds dotprod/i8mm kernels chosen at run time. Compare before and
+cold code (tgcalls_tp: libsrtp, pffft) stays -Os. libvpx arm64 adds dotprod/i8mm kernels chosen at run time. Compare before and
 after with `ng build release` on both commits: `ls -l` of `libtmessages.49.so` and APK size, and
 `unzip -l` for per-library sizes. Quick speed check on a device or emulator: `adb shell am start -W` cold start and
 `dumpsys gfxinfo` jank on a long chat list (sqlite), voice-message playback CPU (`top -H`), a VP9 .webm sticker

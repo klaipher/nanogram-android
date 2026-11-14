@@ -5,6 +5,49 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+### WebRTC C++: klaipher/webrtc nanogram (fa0b3c5f) replaces the in-tree copy and its dependencies (W5.5)
+- Deleted `TMessagesProj/jni/voip/webrtc` (4,267 files), `jni/voip/third_party/{crc32c,jni_zero}` (libevent went in the step
+  above), `jni/third_party/{libsrtp,usrsctplib,pffft,rnnoise}` and the `jni/third_party/absl` submodule. Added the submodule
+  `jni/voip/webrtc` = klaipher/webrtc branch `nanogram` at fa0b3c5f69209ab4eb1b1976bc31b5818bbae687 (shallow; same commit
+  as iOS and macOS). Its nested submodules arrive with `git submodule update --init --recursive`, which `ng setup` already runs:
+  abseil 2065f4de (20260817.0, the commit Android pinned itself), libsrtp a566a9cf (v2.5.0), crc32c 21fc8ef3.
+- Nothing lost (blob proofs against the fork head): of the 4,267 in-tree files 4,090 are identical, 92 generated JNI headers
+  live in the fork under `nanogram/android-generated` (identical), 7 are not carried (the generated
+  `registered_field_trials.h`, now produced at build time, and six protobuf outputs no compiled source needs), and 78 differ
+  row by row in the fork ledger (ledger-webrtc-fork.md section 5): about 30 files where Android takes the fork or Mac
+  version (older Android form, security and crash fixes it lacked), about 35 where the fork's newer or include-prefix form is
+  kept, 6 AVX2-dispatch edits that become compiler flags, 2 folded into the fork's Android commits and 4 FileLog
+  debug-counter files dropped by design (tgnet cannot be called from a shared fork). The
+  fork also carries the Android-only trees (`modules/audio_device/android`, iSAC, `common_types.h`). pffft (11), rnnoise-vad
+  (7) and jni_zero (30 files) are blob-identical to the fork's `third_party/` copies.
+- `voip/CMakeLists.txt`: every `voip/webrtc/...` source keeps its path (the submodule is mounted where the copy was), so only
+  the dependency entries moved. `gen_build_lists.py android` against the new file differs from the fork's committed Android list
+  only by the libevent to stdlib swap, the eight x86 AVX2 files and pffft/rnnoise-vad now being tracked paths.
+  - libsrtp: v2.5.0 file list (adds `cipher_test_cases.c`, `auth_test_cases.c`; no `ekt.c`, `stat.c`, `ut_sim.c`), the fork's one
+    `third_party/libsrtp_config/config.h` (`GCM`, `OPENSSL`, `CPU_CISC`, `PACKAGE_VERSION`) first on the include path with
+    `-DHAVE_CONFIG_H`. Behaviour: SRTP 2.2.0 to 2.5.0, GCM ciphers now compiled in (the old Android config never defined `GCM`).
+  - crc32c: `src/src/crc32c.cc` and `crc32c_portable.cc` from the nested submodule; the app owns `voip/crc32c_config/crc32c/
+    crc32c_config.h` (same content as before: portable code only, no SSE4.2 or ARMv8 intrinsics).
+  - usrsctp is gone and `WEBRTC_HAVE_USRSCTP`, `__Userspace__`, `SCTP_*` are no longer defined (nothing included usrsctp).
+  - `WEBRTC_USE_H264_DECODER` is defined next to `WEBRTC_USE_H264` (the fork gates the FFmpeg H.264 decoder on it).
+  - Include shims in the build tree (`<build>/nanogram_shims`, symlinks): `third_party/openh264/src` to the openh264
+    submodule and `third_party/opus/src` to `third_party/xiph/opus`, because the fork's sources use the Bazel/GN prefixes.
+    `voip/webrtc/nanogram/android-generated` is an include root for the generated JNI headers.
+  - `experiments/registered_field_trials.h` is generated at build time with `python3 voip/webrtc/experiments/field_trials.py
+    header` into `<build>/nanogram_gen` (custom command attached to the `tgcalls` target).
+  - x86 and x86_64: eight `*_avx2.cc` files compile with `-mavx2 -mfma` (the app had commented the AVX2 dispatch out of six
+    sources); arm64-v8a and armeabi-v7a are unaffected.
+  - `tgcalls` include path: `voip/rnnoise/include` (deleted earlier with the 2018 copy, leftover) became
+    `third_party/xiph/rnnoise/include`, where `GroupAudioCapturePostProcessor.cpp` finds `rnnoise.h`.
+  - `jni/CMakeLists.txt`: `add_subdirectory` for abseil and the abseil include path point at `voip/webrtc/third_party/abseil-cpp`.
+- C++ standard stays `-std=c++17` (see the tgcalls entry).
+- Build steps (main session): `git submodule sync --recursive && git submodule update --init --recursive --depth 1`, then
+  `Tools/dev/ng check` (arm64, NDK r30). Things only a build can show: BoringSSL accepts libsrtp v2.5.0's `aes_gcm_ossl.c`
+  and `hmac_ossl.c`; BoringSSL builds `openssl_stream_adapter.cc` with permute extensions on (guard it if not); `-Wundef`
+  style warnings from `WEBRTC_ENABLE_PROTOBUF`; `field_trials.py` runs on the build host (python3 required); every
+  `third_party/...` include in the fork resolves (openh264, opus, ffmpeg, libyuv, vpx). Emulator: 1:1 call (SRTP, with an
+  iOS or Mac peer), group call, screen-share audio, video call H.264 and VP8 fallback.
+
 ### WebRTC task queue: stdlib instead of libevent (W5.5, step 1)
 - `voip/CMakeLists.txt` compiles `api/task_queue/default_task_queue_factory_stdlib.cc` instead of
   `default_task_queue_factory_libevent.cc` and no longer compiles `rtc_base/task_queue_libevent.cc` or any libevent file;

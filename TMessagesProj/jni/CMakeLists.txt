@@ -47,12 +47,13 @@ add_subdirectory(
         ${CMAKE_CURRENT_BINARY_DIR}/libyuv
         EXCLUDE_FROM_ALL)
 
-# Abseil
+# Abseil: official LTS 20260817.0, the fork's nested submodule (voip/webrtc/third_party/abseil-cpp), the same commit
+# iOS and macOS build.
 set(ABSL_PROPAGATE_CXX_STD ON)
 set(ABSL_BUILD_TESTING OFF)
 set(ABSL_ENABLE_INSTALL OFF)
 add_subdirectory(
-        third_party/absl
+        voip/webrtc/third_party/abseil-cpp
         ${CMAKE_CURRENT_BINARY_DIR}/absl
         EXCLUDE_FROM_ALL)
 
@@ -321,7 +322,7 @@ target_include_directories(${NATIVE_LIB} PUBLIC
         third_party/xiph/opusfile/include
         third_party/xiph/ogg/include
         third_party/libyuv/include
-        third_party/absl
+        voip/webrtc/third_party/abseil-cpp
         third_party/boringssl/include
         openssl/include
         ${NANOGRAM_PREBUILD_DIR}/include/${ANDROID_ABI}
