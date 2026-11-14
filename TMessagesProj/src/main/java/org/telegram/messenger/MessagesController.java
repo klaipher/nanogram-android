@@ -3610,7 +3610,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         TLRPC.TL_jsonNumber number = (TLRPC.TL_jsonNumber) value.value;
                         if (number.value != publicLinksLimitDefault) {
                             publicLinksLimitDefault = (int) number.value;
-                            editor.putInt("publicLinksLimit", publicLinksLimitDefault);
+                            editor.putInt("publicLinksLimitDefault", publicLinksLimitDefault);
                             changed = true;
                         }
                     }
@@ -4099,7 +4099,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         TLRPC.TL_jsonNumber num = (TLRPC.TL_jsonNumber) value.value;
                         if (authorizationAutoconfirmPeriod != num.value) {
                             authorizationAutoconfirmPeriod = (int) num.value;
-                            editor.putInt("authorizationAutoconfirmPeriod", authorizationAutoconfirmPeriod);
+                            editor.putInt("authorization_autoconfirm_period", authorizationAutoconfirmPeriod);
                             changed = true;
                         }
                     }
@@ -4957,7 +4957,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
                         if (!Arrays.equals(values, tonStakediceStakeSuggestedAmounts)) {
-                            editor.putString("tonStakeddiceStakeSuggestedAmounts", Arrays.stream(tonStakediceStakeSuggestedAmounts = values).mapToObj(String::valueOf).collect(Collectors.joining(",")));
+                            editor.putString("tonStakediceStakeSuggestedAmounts", Arrays.stream(tonStakediceStakeSuggestedAmounts = values).mapToObj(String::valueOf).collect(Collectors.joining(",")));
                             changed = true;
                         }
                     }
