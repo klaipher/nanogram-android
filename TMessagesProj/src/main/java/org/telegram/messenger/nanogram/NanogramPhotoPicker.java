@@ -13,8 +13,8 @@ public final class NanogramPhotoPicker {
     private NanogramPhotoPicker() {
     }
 
-    public static boolean canUse(boolean flagEnabled, int sdk, boolean pickerAvailable) {
-        return flagEnabled && sdk >= Build.VERSION_CODES.TIRAMISU && pickerAvailable;
+    public static boolean canUse(boolean flagEnabled, int sdk) {
+        return flagEnabled && sdk >= Build.VERSION_CODES.TIRAMISU;
     }
 
     public static boolean isVideoType(String mimeType) {
@@ -23,7 +23,7 @@ public final class NanogramPhotoPicker {
 
     public static Intent createIntent(Context context, boolean images, boolean video) {
         try {
-            if (context == null || !canUse(NanogramSystemFlags.isEnabled(NanogramSystemFlags.SYSTEM_PHOTO_PICKER), Build.VERSION.SDK_INT, MediaStore.isPhotoPickerAvailable())) {
+            if (context == null || !canUse(NanogramSystemFlags.isEnabled(NanogramSystemFlags.SYSTEM_PHOTO_PICKER), Build.VERSION.SDK_INT)) {
                 return null;
             }
             final Intent intent = new Intent(MediaStore.ACTION_PICK_IMAGES);

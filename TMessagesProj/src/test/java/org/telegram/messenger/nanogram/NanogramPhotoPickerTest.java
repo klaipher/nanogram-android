@@ -8,11 +8,10 @@ import org.junit.Test;
 public class NanogramPhotoPickerTest {
 
     @Test
-    public void usesPickerOnlyWhenFlagSdkAndAvailabilityAllow() {
-        assertTrue(NanogramPhotoPicker.canUse(true, 33, true));
-        assertFalse(NanogramPhotoPicker.canUse(false, 34, true));
-        assertFalse(NanogramPhotoPicker.canUse(true, 32, true));
-        assertFalse(NanogramPhotoPicker.canUse(true, 34, false));
+    public void usesPickerOnlyWhenFlagAndSdkAllow() {
+        assertTrue(NanogramPhotoPicker.canUse(true, 33));
+        assertFalse(NanogramPhotoPicker.canUse(false, 34));
+        assertFalse(NanogramPhotoPicker.canUse(true, 32));
     }
 
     @Test
