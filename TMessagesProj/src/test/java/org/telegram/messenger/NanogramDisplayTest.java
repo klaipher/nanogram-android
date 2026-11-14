@@ -15,9 +15,9 @@ public class NanogramDisplayTest {
     }
 
     @Test
-    public void velocityHintNeedsAndroid14() {
-        assertFalse(NanogramDisplay.supportsVelocityHint(33));
-        assertTrue(NanogramDisplay.supportsVelocityHint(34));
+    public void velocityHintNeedsAndroid15() {
+        assertFalse(NanogramDisplay.supportsVelocityHint(34));
+        assertTrue(NanogramDisplay.supportsVelocityHint(35));
     }
 
     @Test

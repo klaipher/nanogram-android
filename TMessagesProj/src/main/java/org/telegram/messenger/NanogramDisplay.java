@@ -22,7 +22,7 @@ public final class NanogramDisplay {
     }
 
     public static boolean supportsVelocityHint(int sdkInt) {
-        return sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
+        return supportsHints(sdkInt);
     }
 
     /** The window-level rate for overlays: the panel maximum by default, no preference when the experiment lets the system decide. */
@@ -46,7 +46,7 @@ public final class NanogramDisplay {
     }
 
     public static void onFling(View view, float velocityPxPerSecond) {
-        if (view == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || !NanogramExperiments.isEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE)) {
+        if (view == null || !supportsVelocityHint(Build.VERSION.SDK_INT) || !NanogramExperiments.isEnabled(NanogramExperiments.ADAPTIVE_REFRESH_RATE)) {
             return;
         }
         view.setFrameContentVelocity(Math.abs(velocityPxPerSecond));
