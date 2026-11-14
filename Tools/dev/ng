@@ -363,7 +363,8 @@ def cmd_build(a: argparse.Namespace) -> None:
         record(f"build-{a.variant}-FAILED", secs, {"build": bn})
         die(f"build failed (exit {rc}); log {log}")
     variant_dir = "afat/release" if release else "afat/debug"
-    apks = sorted((ROOT / "TMessagesProj_App/build/outputs/apk").rglob("*.apk"), key=lambda p: p.stat().st_mtime)
+    # Only this variant's directory: the profiling run leaves an unminified nonMinifiedRelease APK in the same tree.
+    apks = sorted((ROOT / "TMessagesProj_App/build/outputs/apk" / variant_dir).glob("*.apk"), key=lambda p: p.stat().st_mtime)
     if not apks:
         die("build succeeded but no APK found")
     apk = apks[-1]
@@ -372,10 +373,8 @@ def cmd_build(a: argparse.Namespace) -> None:
     final = dest / f"Nanogram-{TC.get('versionName', 'dev')}-{bn}-{a.variant}-{a.abis}.apk"
     shutil.copy2(apk, final)
     mapping = ROOT / "TMessagesProj_App/build/outputs/mapping" / variant_dir.replace("/", "") / "mapping.txt"
-    for cand in [mapping, *(ROOT / "TMessagesProj_App/build/outputs/mapping").rglob("mapping.txt")]:
-        if cand.exists():
-            shutil.copy2(cand, dest / "mapping.txt")
-            break
+    if mapping.exists():
+        shutil.copy2(mapping, dest / "mapping.txt")
     # Keep unstripped native libraries for symbolication (like dSYMs on iOS).
     syms = (ROOT / "TMessagesProj/build/intermediates/cxx").rglob("obj/*/*.so")
     if a.variant == "release":
@@ -575,6 +574,8 @@ def cmd_profile(a: argparse.Namespace) -> None:
     online = [d.split()[0] for d in devices if d.strip().endswith("device")]
     if not online:
         die("no running emulator/device; start the AVD (nanogram-api36-16k) first")
+    if a.serial and a.serial not in online:
+        die(f"{a.serial} is not an online device ({', '.join(online) or 'none'})")
     if len(online) > 1 and not a.serial:
         die(f"several devices ({', '.join(online)}); pass --serial")
     env["ORG_GRADLE_PROJECT_nanogramBuildNumber"] = build_number(None)
@@ -596,6 +597,8 @@ def cmd_profile(a: argparse.Namespace) -> None:
             die("generation finished but no baseline-prof.txt was produced")
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(found[-1], PROFILE_DIR / "baseline-prof.txt")
+        if (found[-1].parent / "startup-prof.txt").exists():
+            shutil.copy2(found[-1].parent / "startup-prof.txt", PROFILE_DIR / "startup-prof.txt")
     gen = line_count(PROFILE_DIR / "baseline-prof.txt")
     startup = line_count(PROFILE_DIR / "startup-prof.txt")
     hand = line_count(PROFILE_HAND)
