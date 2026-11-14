@@ -2,6 +2,22 @@
 
 Newest first: version, build number, date, commit; what changed and how.
 
+
+## Unreleased
+
+### Native LTO for all code (ThinLTO)
+- voip/CMakeLists.txt replaced CMAKE_CXX_FLAGS instead of appending. It is included into the main directory, whose
+  final flags apply to every C++ target there, so upstream builds all C++ (tgnet, tgcalls, WebRTC, the main library)
+  without LTO, -ffunction-sections and hidden visibility; only the 417 C files had them. Now it appends.
+- Release native code uses ThinLTO (`-flto=thin`, cache in the build dir, 2 GB cap) instead of full LTO, now on all
+  1867 files; debug keeps no LTO. Exported symbols unchanged (403 JNI functions + JNI_OnLoad/OnUnload).
+- Measured (release arm64): libtmessages 22.24 -> 20.90 MB (-6%), libtwidget 5.31 -> 4.95 MB (-7%), APK 56.9 -> 55.2 MB;
+  release build 389 s cold. Emulator: launches, login screen, MTProto connection to DC 149.154.167.41:443.
+
+### isoparser 1.0.6 -> 1.1.22
+- The last release of com.googlecode.mp4parser (2017); 1.1 renamed NalUnitTypes to H265NalUnitTypes (same constants)
+  and no longer brings aspectj. HevcDecoderConfigurationRecord uses the new name; two unused imports removed.
+
 ## 13.2.2 (202611141530) — 2026-11-14 — first Android release (source 672347f)
 
 ### Biometrics on the modern API

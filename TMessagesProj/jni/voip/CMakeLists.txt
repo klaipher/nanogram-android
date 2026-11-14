@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.6.0)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -DANDROID -g")
+# Nanogram: append instead of replacing the main flags. This file is included into the main directory, whose final
+# CMAKE_CXX_FLAGS apply to every C++ target there; replacing them dropped LTO, -ffunction-sections and hidden
+# visibility for all C++ code (tgnet, tgcalls, WebRTC, the main library).
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -DANDROID -g")
 
 #openh264 (prebuilt static library)
 add_library(openh264 STATIC IMPORTED)

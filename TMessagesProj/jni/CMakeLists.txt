@@ -7,15 +7,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS "-DANDROID -g")
 set(CMAKE_C_FLAGS "-w -std=c11 -DANDROID -D_LARGEFILE_SOURCE=1 -g -Wno-error=implicit-function-declaration")
 set(CMAKE_ASM_FLAGS "${CFLAGS} -x assembler-with-cpp")
-# Nanogram: release keeps upstream's full LTO; debug skips LTO so native rebuilds and links stay fast.
+# Nanogram: release uses ThinLTO for all C and C++ code (parallel, cached between builds, close to full LTO in
+# speed and size); debug skips LTO so native rebuilds and links stay fast.
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(NANOGRAM_LTO "")
+    set(NANOGRAM_LTO_LINK "")
 else()
-    set(NANOGRAM_LTO "-flto=full")
+    set(NANOGRAM_LTO "-flto=thin")
+    set(NANOGRAM_LTO_LINK "-flto=thin -Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache -Wl,--thinlto-cache-policy=cache_size_bytes=2g")
 endif()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden ${NANOGRAM_LTO}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections -fvisibility=hidden -fvisibility-inlines-hidden ${NANOGRAM_LTO}")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NANOGRAM_LTO} -Wl,--gc-sections -Wl,--icf=safe -Wl,-Bsymbolic")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NANOGRAM_LTO_LINK} -Wl,--gc-sections -Wl,--icf=safe -Wl,-Bsymbolic")
 
 # Nanogram: compiler cache (Tools/dev/ng passes it) and prebuilt libraries from the content-addressed cache.
 if (NANOGRAM_CCACHE)
