@@ -808,6 +808,7 @@ public class MessagesStorage extends BaseController {
     }
 
     private void cleanupInternal(boolean deleteFiles) {
+        NanogramTranslitCache.clearShared();
         if (deleteFiles) {
             reset();
         } else {

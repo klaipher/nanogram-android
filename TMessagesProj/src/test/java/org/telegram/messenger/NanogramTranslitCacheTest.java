@@ -48,4 +48,12 @@ public class NanogramTranslitCacheTest {
         assertNull(cache.get(null, s -> "x"));
         assertNull(cache.get("a", s -> null));
     }
+
+    @Test
+    public void clearForgetsEntries() {
+        NanogramTranslitCache cache = new NanogramTranslitCache(4);
+        cache.get("a", s -> "A");
+        cache.clear();
+        assertEquals("B", cache.get("a", s -> "B"));
+    }
 }

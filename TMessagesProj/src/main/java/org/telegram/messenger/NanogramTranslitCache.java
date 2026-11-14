@@ -24,6 +24,14 @@ public class NanogramTranslitCache {
         return shared.get(src, s -> LocaleController.getInstance().getTranslitString(s));
     }
 
+    public static void clearShared() {
+        shared.clear();
+    }
+
+    public synchronized void clear() {
+        map.clear();
+    }
+
     public String get(String src, Function<String, String> compute) {
         if (src == null) {
             return null;
