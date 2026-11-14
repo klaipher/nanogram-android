@@ -57,6 +57,33 @@ public final class NanogramPerfExperiments {
         return false;
     }
 
+    public static boolean hasAuto(Experiment experiment) {
+        return experiment == Experiment.ADAPTIVE_REFRESH || experiment == Experiment.GPU_PREUPLOAD;
+    }
+
+    /** True while the switch follows the phone's own signal (media performance class, API level) instead of a tester choice. */
+    public static boolean isAutomatic(Experiment experiment) {
+        switch (experiment) {
+            case ADAPTIVE_REFRESH:
+                return !NanogramExperiments.isOverridden(NanogramExperiments.ADAPTIVE_REFRESH_RATE);
+            case GPU_PREUPLOAD:
+                return !NanogramImageFlags.isGpuPreuploadOverridden();
+        }
+        return false;
+    }
+
+    public static void resetToAuto(Experiment experiment) {
+        NanogramPerfStats.reset(experiment.statKeys);
+        switch (experiment) {
+            case ADAPTIVE_REFRESH:
+                NanogramExperiments.clearOverride(NanogramExperiments.ADAPTIVE_REFRESH_RATE);
+                break;
+            case GPU_PREUPLOAD:
+                NanogramImageFlags.clearGpuPreuploadOverride();
+                break;
+        }
+    }
+
     public static void setEnabled(Experiment experiment, boolean enabled) {
         NanogramPerfStats.reset(experiment.statKeys);
         switch (experiment) {
@@ -122,7 +149,7 @@ public final class NanogramPerfExperiments {
             boolean supported = experiment.isSupported(sdkInt);
             Boolean state = states.get(experiment);
             sb.append('\n').append(experiment.title).append(": ")
-                    .append(!supported ? "not available (needs API " + experiment.minSdk + ")" : state != null && state ? "ON" : "off").append('\n');
+                    .append(!supported ? "not available (needs API " + experiment.minSdk + ")" : (state != null && state ? "ON" : "off") + (hasAuto(experiment) ? (isAutomatic(experiment) ? " (automatic)" : " (set by tester)") : "")).append('\n');
             for (String line : statsText(experiment, snapshot).split("\n")) {
                 sb.append("  ").append(line).append('\n');
             }

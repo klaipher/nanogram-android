@@ -3383,7 +3383,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                 audioEncoder.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                 audioEncoder.start();
 
-                videoEncoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
+                videoEncoder = org.telegram.messenger.NanogramMediaCapabilities.createEncoder(VIDEO_MIME_TYPE, videoWidth, videoHeight, FRAME_RATE);
                 firstEncode = true;
 
                 MediaFormat format = MediaFormat.createVideoFormat(VIDEO_MIME_TYPE, videoWidth, videoHeight);

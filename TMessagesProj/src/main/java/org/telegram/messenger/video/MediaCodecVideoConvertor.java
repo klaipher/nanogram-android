@@ -167,7 +167,7 @@ public class MediaCodecVideoConvertor {
                     }
 
                     if (encoder == null) {
-                        encoder = createEncoderForMimeType();
+                        encoder = createEncoderForMimeType(resultWidth, resultHeight);
                     }
 
                     MediaFormat outputFormat = MediaFormat.createVideoFormat(outputMimeType, resultWidth, resultHeight);
@@ -459,7 +459,7 @@ public class MediaCodecVideoConvertor {
                             }
 
                             if (encoder == null) {
-                                encoder = createEncoderForMimeType();
+                                encoder = createEncoderForMimeType(w, h);
                             }
 
                             if (BuildVars.LOGS_ENABLED) {
@@ -1023,7 +1023,7 @@ public class MediaCodecVideoConvertor {
         }
     }
 
-    private MediaCodec createEncoderForMimeType() throws IOException {
+    private MediaCodec createEncoderForMimeType(int width, int height) throws IOException {
         MediaCodec encoder = null;//MediaCodec.createEncoderByType(outputMimeType);
         if (outputMimeType.equals("video/hevc") && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             String encoderName = SharedConfig.findGoodHevcEncoder();
@@ -1034,7 +1034,7 @@ public class MediaCodecVideoConvertor {
             if (outputMimeType.equals("video/hevc")) {
                 outputMimeType = "video/avc";
             }
-            encoder = MediaCodec.createEncoderByType(outputMimeType);
+            encoder = org.telegram.messenger.NanogramMediaCapabilities.createEncoder(outputMimeType, width, height, 0);
         }
 //        if (encoder != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && "c2.qti.avc.encoder".equals(encoder.getName())) {
 //            FileLog.d("searching another encoder to replace c2.qti.avc.encoder");

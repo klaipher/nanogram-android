@@ -16,11 +16,27 @@ public class NanogramImageFlags {
         if (value == -1) {
             boolean on = false;
             try {
-                on = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).getBoolean(KEY_GPU_PREUPLOAD, false);
+                SharedPreferences prefs = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
+                on = NanogramExperiments.resolve(prefs.contains(KEY_GPU_PREUPLOAD) ? prefs.getBoolean(KEY_GPU_PREUPLOAD, false) : null, NanogramMediaCapabilities.autoGpuPreupload(NanogramMediaCapabilities.performanceClass(), NanogramMediaCapabilities.isLowRam()));
             } catch (Throwable ignore) {}
             gpuPreupload = value = on ? 1 : 0;
         }
         return value == 1;
+    }
+
+    public static boolean isGpuPreuploadOverridden() {
+        try {
+            return ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).contains(KEY_GPU_PREUPLOAD);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    public static void clearGpuPreuploadOverride() {
+        gpuPreupload = -1;
+        try {
+            ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit().remove(KEY_GPU_PREUPLOAD).apply();
+        } catch (Throwable ignore) {}
     }
 
     public static void setGpuPreuploadEnabled(boolean on) {

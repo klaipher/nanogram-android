@@ -306,7 +306,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
 
     private void createVideoEncoder() throws IOException {
         MediaFormat format = createVideoEncoderFormat(outputSize, videoBitrate, videoFrameRate);
-        videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+        videoCodec = org.telegram.messenger.NanogramMediaCapabilities.createEncoder(MediaFormat.MIMETYPE_VIDEO_AVC, outputSize, outputSize, videoFrameRate);
         MediaCodecInfo.VideoCapabilities capabilities = videoCodec.getCodecInfo()
                 .getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
                 .getVideoCapabilities();

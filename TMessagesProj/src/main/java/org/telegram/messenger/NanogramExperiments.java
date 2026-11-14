@@ -2,10 +2,11 @@ package org.telegram.messenger;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Device-dependent or behaviour-changing experiments; every flag is off until switched on in Debug settings. */
+/** Device-dependent or behaviour-changing experiments. A flag with a solid device signal is automatic until a tester sets it either way; the rest are off until switched on in Debug settings. */
 public final class NanogramExperiments {
 
     public static final String ADAPTIVE_REFRESH_RATE = "adaptiveRefreshRate";
@@ -27,13 +28,39 @@ public final class NanogramExperiments {
         try {
             Context context = ApplicationLoader.applicationContext;
             if (context != null) {
-                value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(key, false);
+                SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                value = resolve(prefs.contains(key) ? prefs.getBoolean(key, false) : null, autoDefault(key));
                 cache.put(key, value);
             }
         } catch (Throwable e) {
             FileLog.e(e);
         }
         return value;
+    }
+
+    public static boolean resolve(Boolean stored, boolean auto) {
+        return stored != null ? stored : auto;
+    }
+
+    public static boolean autoDefault(String key) {
+        return ADAPTIVE_REFRESH_RATE.equals(key) && NanogramMediaCapabilities.autoAdaptiveRefresh(Build.VERSION.SDK_INT);
+    }
+
+    public static boolean isOverridden(String key) {
+        try {
+            return ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(key);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    public static void clearOverride(String key) {
+        cache.remove(key);
+        try {
+            ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).apply();
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     public static void setEnabled(String key, boolean enabled) {

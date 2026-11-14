@@ -255,7 +255,7 @@ public class DebugSettingsActivity extends UniversalFragment {
             LaunchActivity.instance.attachNanogramFrameStats();
         }
         items.add(UItem.asHeader("Performance experiments"));
-        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nAll switches start off. Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
+        items.add(UItem.asShadow("Device: " + NanogramPerfExperiments.deviceLine() + "\nSwitches start off, except the ones marked automatic (they follow this phone). Change one at a time, as the test guide says. Numbers start again whenever you flip that switch; reopen this screen to refresh. Send them with Nanogram diagnostics."));
         final java.util.Map<String, NanogramPerfStats.Snapshot> snapshot = NanogramPerfStats.snapshot();
         for (NanogramPerfExperiments.Experiment experiment : NanogramPerfExperiments.Experiment.values()) {
             if (!experiment.isSupported(Build.VERSION.SDK_INT)) {
@@ -263,7 +263,9 @@ public class DebugSettingsActivity extends UniversalFragment {
                 continue;
             }
             items.add(UItem.asCheck(ID_PERF_EXPERIMENT_BASE + experiment.ordinal(), experiment.title).setChecked(NanogramPerfExperiments.isEnabled(experiment)));
-            items.add(UItem.asShadow(experiment.description + " " + experiment.applyHint + "\n" + NanogramPerfExperiments.statsText(experiment, snapshot)));
+            if (NanogramPerfExperiments.hasAuto(experiment) && !NanogramPerfExperiments.isAutomatic(experiment)) {
+                items.add(UItem.asButton(ID_PERF_EXPERIMENT_BASE + 20 + experiment.ordinal(), "Back to automatic: " + experiment.title));
+            }
         }
         items.add(UItem.asShadow(null));
     }
@@ -488,6 +490,11 @@ public class DebugSettingsActivity extends UniversalFragment {
                 SharedConfig.toggleWidgetStaticLayers();
                 break;
             default:
+                if (item.id >= ID_PERF_EXPERIMENT_BASE + 20 && item.id < ID_PERF_EXPERIMENT_BASE + 20 + NanogramPerfExperiments.Experiment.values().length) {
+                    NanogramPerfExperiments.resetToAuto(NanogramPerfExperiments.Experiment.values()[item.id - ID_PERF_EXPERIMENT_BASE - 20]);
+                    listView.adapter.update(true);
+                    break;
+                }
                 if (item.id >= ID_PERF_EXPERIMENT_BASE && item.id < ID_PERF_EXPERIMENT_BASE + NanogramPerfExperiments.Experiment.values().length) {
                     NanogramPerfExperiments.Experiment experiment = NanogramPerfExperiments.Experiment.values()[item.id - ID_PERF_EXPERIMENT_BASE];
                     NanogramPerfExperiments.setEnabled(experiment, !NanogramPerfExperiments.isEnabled(experiment));
