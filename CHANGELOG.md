@@ -6,6 +6,16 @@ Newest first: version, build number, date, commit; what changed and how.
 ## Unreleased
 
 ### Android media, database and search (modernization review, branch nanogram/mod-media)
+- SHARED-SQLITE-2 (same flag as ANDROID-DB-1, default OFF): the DB tuning flag now also runs `PRAGMA optimize=0x10002` on
+  cache4.db open, `PRAGMA optimize` before the database closes on cleanup, and gives `file_paths.db` a 2 MB page cache plus
+  the same optimize. PRAGMAs are engine-agnostic (valid on plain SQLite and SQLCipher) and sit after the existing
+  `synchronous = NORMAL` in WAL. `cache_size`/`mmap_size` are the ANDROID-DB-1 settings. Deferred: opening with
+  `SQLITE_OPEN_NOMUTEX` (getDatabase() has ~25 callers; needs a thread audit; `jni/sqlite` is owned by the shared-codebase
+  migration). JVM test: `NanogramDbTuningTest`.
+- SHARED-FFMPEG-ANDROID-GIF-1 (flag, default OFF): H.264 clips up to 320 px (GIFs, round videos) decode with the loop
+  filter skipped (`skip_loop_filter = AVDISCARD_ALL`, same policy as iOS); larger clips are untouched. The dead
+  `refcounted_frames` option is dropped and `thread_count` is explicitly 1 (many tiles decode at once). Switch: Debug menu >
+  "Lighter decoding for small GIFs and round videos". MediaCodec route deferred. JVM test: `NanogramGifDecodeFlagsTest`.
 - ANDROID-SEARCH-1: local dialog search (`MessagesStorage.localSearch`) tracks already-collected users, chats and secret
   chats in hash sets instead of `ArrayList.contains` (up to 600x600/2 boxed compares), and transliterates every user and
   chat name through a 4096-entry LRU (`NanogramTranslitCache`; transliteration is a pure function of the string, so no
