@@ -665,6 +665,11 @@ public final class AudioInputPreference {
      * returns null. Release the result in a finally block.
      */
     public static AudioRouteSession acquireRoute() {
+        return acquireRoute(AudioRouteSession.ACQUIRE_TIMEOUT_MS, null);
+    }
+
+    /** As {@link #acquireRoute()} with its own wait and a cancel check; a cancelled wait returns a FALLBACK session that holds nothing. */
+    public static AudioRouteSession acquireRoute(long timeoutMs, java.util.function.BooleanSupplier cancelled) {
         int choice = AUTOMATIC;
         try {
             choice = resolvedChoice();
@@ -676,8 +681,8 @@ public final class AudioInputPreference {
                 return AudioRouteSession.none(choice);
             }
             AudioRouteSession session = new AudioRouteSession(AudioRouteSession.systemPlatform(am), choice);
-            AudioRouteSession.Outcome outcome = session.acquire(choice, AudioRouteSession.ACQUIRE_TIMEOUT_MS, !AudioRouteSession.onMainThread());
-            if (outcome == AudioRouteSession.Outcome.FALLBACK && choice == AudioDeviceInfo.TYPE_BLE_HEADSET
+            AudioRouteSession.Outcome outcome = session.acquire(choice, timeoutMs, !AudioRouteSession.onMainThread(), cancelled);
+            if (outcome == AudioRouteSession.Outcome.FALLBACK && (cancelled == null || !cancelled.getAsBoolean()) && choice == AudioDeviceInfo.TYPE_BLE_HEADSET
                     && SharedConfig.recordInputDevice == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
                     && contains(connectedInputTypes(), AudioDeviceInfo.TYPE_BLUETOOTH_SCO)) {
                 // LE Audio was preferred but not usable as the communication device: the call-quality link still works.
@@ -685,7 +690,7 @@ public final class AudioInputPreference {
                 FileLog.i("AudioInputPreference LE Audio route failed, falling back to the Bluetooth SCO link");
                 choice = AudioDeviceInfo.TYPE_BLUETOOTH_SCO;
                 session = new AudioRouteSession(AudioRouteSession.systemPlatform(am), choice);
-                outcome = session.acquire(choice, AudioRouteSession.ACQUIRE_TIMEOUT_MS, !AudioRouteSession.onMainThread());
+                outcome = session.acquire(choice, timeoutMs, !AudioRouteSession.onMainThread(), cancelled);
             }
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("AudioInputPreference route type " + choice + " " + outcome + " in " + session.acquireMs() + " ms");

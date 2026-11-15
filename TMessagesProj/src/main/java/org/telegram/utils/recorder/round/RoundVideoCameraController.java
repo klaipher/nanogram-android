@@ -144,7 +144,7 @@ final class RoundVideoCameraController {
     private static final long FRAME_GAP_SEVERE_NS = 100_000_000L;
     private static final int TORCH_VERIFICATION_RETRY_FRAME = 3;
     private static final int TORCH_VERIFICATION_FAILURE_FRAME = 6;
-    private static final long COMMON_START_TIMEOUT_MS = 3_000L;
+    static final long COMMON_START_TIMEOUT_MS = 5_000L;
 
     private final Context context;
     private final CameraManager cameraManager;

@@ -1673,7 +1673,8 @@ add_library(voipandroid STATIC
         voip/webrtc/sdk/android/src/jni/timestamp_aligner.cc
         voip/webrtc/sdk/android/src/jni/nv12_buffer.cc
         voip/org_telegram_messenger_voip_Instance.cpp
-        voice_enhance.cc
+        voice_enhance_jni.cc
+        tgcalls/voice_enhance/voice_enhance.cc
 )
 target_compile_options(voipandroid PUBLIC
         -Wall -finline-functions -ffast-math -fexceptions)

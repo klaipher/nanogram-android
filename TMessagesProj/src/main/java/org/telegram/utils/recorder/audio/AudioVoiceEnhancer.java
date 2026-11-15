@@ -8,7 +8,7 @@ import androidx.annotation.Nullable;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Owns one native voice enhancement chain (jni/voice_enhance.cc): 48 kHz mono 16-bit PCM in, PCM out. */
+/** Owns one native voice enhancement chain (tgcalls fork voice_enhance/, JNI glue jni/voice_enhance_jni.cc): 48 kHz mono 16-bit PCM in, PCM out. */
 public final class AudioVoiceEnhancer {
 
     public static final int PROFILE_NONE = 0;

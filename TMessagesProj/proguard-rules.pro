@@ -12,7 +12,7 @@
 -keep class org.webrtc.audio.* { *; }
 -keep class org.webrtc.voiceengine.* { *; }
 # org.telegram.messenger: only the names that native code and reflection resolve at runtime.
-# Before changing these rules see TMessagesProj/proguard-checklist.md and run Tools/r8_keep_check.py.
+# Before changing these rules run NanogramR8KeepRulesTest (checks the theme-description-fields block).
 # Static JNI exports Java_org_telegram_messenger_<Class>_<method> (Utilities, Intro, MediaController, MrzRecognizer).
 -keepclasseswithmembers,includedescriptorclasses class org.telegram.messenger.* {
     native <methods>;
@@ -46,6 +46,140 @@
 -keepclassmembernames,allowoptimization class org.telegram.ui.** {
     <fields>;
 }
+# ThemeDescription.applyReflectedFieldColor reads and writes those fields by name (getDeclaredField), and a
+# field only used by reflection is removed or inlined by R8 even when its name is kept. One exact rule per
+# (class, field) pair that a `new ThemeDescription(..., new Class[]{X.class}, new String[]{"field"}, ...)` names.
+# NanogramR8KeepRulesTest fails when a new pair is added without a rule here. The failure message lists the missing Class.field pairs; add one -keepclassmembers rule per pair.
+# BEGIN theme-description-fields
+-keepclassmembers class org.telegram.ui.Cells.ArchivedStickerSetCell {
+    *** addButton;
+}
+-keepclassmembers class org.telegram.ui.Components.ChatActivityEnterView {
+    *** cancelBotButton;
+    *** messageEditText;
+    *** paint;
+    *** sendButton;
+}
+-keepclassmembers class org.telegram.ui.Cells.ChatUnreadCell {
+    *** backgroundLayout;
+}
+-keepclassmembers class org.telegram.ui.Cells.ContextLinkCell {
+    *** backgroundPaint;
+}
+-keepclassmembers class org.telegram.ui.Cells.CreationTextCell {
+    *** imageView;
+}
+-keepclassmembers class org.telegram.ui.Cells.DialogRadioCell {
+    *** textView;
+}
+-keepclassmembers class org.telegram.ui.Cells.FeaturedStickerSetCell {
+    *** addButton;
+}
+-keepclassmembers class org.telegram.ui.FiltersSetupActivity$FilterCell {
+    *** optionsImageView;
+}
+-keepclassmembers class org.telegram.ui.Components.FilterTabsView {
+    *** selectorDrawable;
+}
+-keepclassmembers class org.telegram.ui.Components.FragmentContextView {
+    *** frameLayout;
+    *** titleTextView;
+}
+-keepclassmembers class org.telegram.ui.Cells.GroupCreateUserCell {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.Cells.HeaderCell {
+    *** textView2;
+}
+-keepclassmembers class org.telegram.ui.Cells.InviteUserCell {
+    *** checkBox;
+    *** statusTextView;
+}
+-keepclassmembers class org.telegram.ui.Cells.LoadingCell {
+    *** progressBar;
+}
+-keepclassmembers class org.telegram.ui.Cells.LocationDirectionCell {
+    *** frameLayout;
+}
+-keepclassmembers class org.telegram.ui.Cells.ManageChatUserCell {
+    *** statusColor;
+    *** statusOnlineColor;
+}
+-keepclassmembers class org.telegram.ui.Cells.NotificationsCheckCell {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.Cells.PollEditTextCell {
+    *** checkBox;
+    *** deleteImageView;
+    *** moveImageView;
+    *** textView2;
+}
+-keepclassmembers class org.telegram.ui.Components.ScrollSlidingTextTabStrip {
+    *** selectorDrawable;
+}
+-keepclassmembers class org.telegram.ui.Cells.SendLocationCell {
+    *** imageView;
+}
+-keepclassmembers class org.telegram.ui.Cells.SessionCell {
+    *** onlineTextView;
+}
+-keepclassmembers class org.telegram.ui.Cells.SettingsSuggestionCell {
+    *** detailTextView;
+    *** noButton;
+    *** yesButton;
+}
+-keepclassmembers class org.telegram.ui.Cells.SharedAudioCell {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.Cells.SharedDocumentCell {
+    *** checkBox;
+    *** dateTextView;
+    *** extTextView;
+    *** nameTextView;
+    *** thumbImageView;
+}
+-keepclassmembers class org.telegram.ui.Cells.SharedLinkCell {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.Cells.StickerSetCell {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.Cells.StickerSetNameCell {
+    *** buttonView;
+    *** textView;
+    *** urlTextView;
+}
+-keepclassmembers class org.telegram.ui.Components.StorageUsageView {
+    *** paintFill;
+}
+-keepclassmembers class org.telegram.ui.Cells.TextCell {
+    *** imageView;
+    *** textView;
+}
+-keepclassmembers class org.telegram.ui.Cells.TextCheckCell {
+    *** checkBox;
+    *** textView;
+}
+-keepclassmembers class org.telegram.ui.Cells.TextCheckCell2 {
+    *** checkBox;
+}
+-keepclassmembers class org.telegram.ui.ProxyListActivity$TextDetailProxyCell {
+    *** valueTextView;
+}
+-keepclassmembers class org.telegram.ui.Cells.TextSettingsCell {
+    *** textView;
+}
+-keepclassmembers class org.telegram.ui.Components.UndoView {
+    *** undoImageView;
+}
+-keepclassmembers class org.telegram.ui.Cells.UserCell {
+    *** nameTextView;
+    *** statusOnlineColor;
+}
+-keepclassmembers class org.telegram.ui.Cells.UserCell2 {
+    *** statusColor;
+    *** statusOnlineColor;
+}# END theme-description-fields
 -keep class androidx.mediarouter.app.MediaRouteButton { *; }
 -keepclassmembers class ** {
     @android.webkit.JavascriptInterface <methods>;
@@ -57,6 +191,11 @@
 
 # https://developers.google.com/ml-kit/known-issues#android_issues
 -keep class com.google.mlkit.nl.languageid.internal.LanguageIdentificationJni { *; }
+# Same for translation (com.google.mlkit:translate): libtranslate_jni.so exports static
+# Java_com_google_mlkit_nl_translate_internal_TranslateJni_native{Init,Destroy,Translate} and calls back the
+# static newLoadingException/newTranslateException by name. The AAR's own rules only keep native method names
+# and @UsedByNative members, nothing keeps the class itself or the callbacks if R8 optimizes them.
+-keep class com.google.mlkit.nl.translate.internal.TranslateJni { *; }
 
 # WidgetSandbox: JNI_OnLoad uses RegisterNatives; backend methods are called by native workers.
 -keep class org.telegram.utils.twidget.WidgetSandboxNative { *; }

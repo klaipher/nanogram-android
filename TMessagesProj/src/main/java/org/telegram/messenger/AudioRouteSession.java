@@ -70,6 +70,14 @@ public final class AudioRouteSession {
      * makes the request. Safe to call again after release.
      */
     public Outcome acquire(int type, long timeoutMs, boolean mayBlock) {
+        return acquire(type, timeoutMs, mayBlock, null);
+    }
+
+    /**
+     * As above, but a true result of cancelled (checked every wait slice, 50 ms at most) ends the wait: the request
+     * is withdrawn and the outcome is FALLBACK, so a recorder that was stopped meanwhile does not hold the route.
+     */
+    public Outcome acquire(int type, long timeoutMs, boolean mayBlock, java.util.function.BooleanSupplier cancelled) {
         if (platform == null || type == NO_ROUTE) {
             outcome = Outcome.NOT_NEEDED;
             return outcome;
@@ -87,13 +95,16 @@ public final class AudioRouteSession {
                 if (attempt == 1) {
                     clearPendingRequest();
                 }
+                if (cancelled != null && cancelled.getAsBoolean()) {
+                    break;
+                }
                 if (platform.request(type)) {
                     synchronized (lock) {
                         owned = true;
                     }
                     // Without a thread to block (main thread) the request is all there is: report it as routed and
                     // let the post-start check verify it.
-                    if (!mayBlock || waitUntilActive(type, attempt == 0 ? timeoutMs : timeoutMs / 2)) {
+                    if (!mayBlock || waitUntilActive(type, attempt == 0 ? timeoutMs : timeoutMs / 2, cancelled)) {
                         outcome = Outcome.ROUTED;
                         return outcome;
                     }
@@ -113,12 +124,12 @@ public final class AudioRouteSession {
         }
     }
 
-    private boolean waitUntilActive(int type, long timeoutMs) {
+    private boolean waitUntilActive(int type, long timeoutMs, java.util.function.BooleanSupplier cancelled) {
         final long end = System.nanoTime() + timeoutMs * 1_000_000L;
         synchronized (lock) {
             while (platform.activeType() != type) {
                 final long remainingMs = (end - System.nanoTime()) / 1_000_000L;
-                if (remainingMs <= 0) {
+                if (remainingMs <= 0 || (cancelled != null && cancelled.getAsBoolean())) {
                     return false;
                 }
                 try {

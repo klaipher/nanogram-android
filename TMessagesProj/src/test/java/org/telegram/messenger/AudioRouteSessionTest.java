@@ -171,4 +171,41 @@ public class AudioRouteSessionTest {
         assertEquals(1, platform.requests);
         assertTrue(session.isOwned());
     }
+
+    @Test
+    public void cancelDuringTheWaitReturnsQuicklyAndWithdrawsTheRequest() throws Exception {
+        final FakePlatform platform = new FakePlatform();
+        platform.activateOnRequest = -1;
+        final AudioRouteSession session = new AudioRouteSession(platform, SCO);
+        final java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        final java.util.concurrent.atomic.AtomicReference<AudioRouteSession.Outcome> result = new java.util.concurrent.atomic.AtomicReference<>();
+        final Thread worker = new Thread(() -> result.set(session.acquire(SCO, 10_000, true, cancelled::get)));
+        worker.start();
+        Thread.sleep(120);
+        cancelled.set(true);
+        worker.join(2000);
+        assertFalse(worker.isAlive());
+        assertEquals(AudioRouteSession.Outcome.FALLBACK, result.get());
+        assertEquals(1, platform.requests);
+        assertEquals(1, platform.clears);
+        assertFalse(session.isOwned());
+        assertEquals(1, platform.removedListeners);
+    }
+
+    @Test
+    public void cancelBeforeTheFirstRequestMakesNoRequest() {
+        final FakePlatform platform = new FakePlatform();
+        final AudioRouteSession session = new AudioRouteSession(platform, SCO);
+        assertEquals(AudioRouteSession.Outcome.FALLBACK, session.acquire(SCO, 2000, true, () -> true));
+        assertEquals(0, platform.requests);
+        assertFalse(session.isOwned());
+    }
+
+    @Test
+    public void neverCancelledBehavesAsBefore() {
+        final FakePlatform platform = new FakePlatform();
+        final AudioRouteSession session = new AudioRouteSession(platform, SCO);
+        assertEquals(AudioRouteSession.Outcome.ROUTED, session.acquire(SCO, 2000, true, () -> false));
+        assertTrue(session.isOwned());
+    }
 }

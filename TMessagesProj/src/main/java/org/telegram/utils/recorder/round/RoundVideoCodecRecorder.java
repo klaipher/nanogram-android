@@ -15,7 +15,6 @@ import android.media.AudioTimestamp;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
-import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Process;
 import android.os.SystemClock;
@@ -73,6 +72,9 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
     private Runnable audioReadyListener;
     private Runnable videoReadyListener;
     private volatile boolean stopping;
+    /** Deadline (System.nanoTime) of the initial route wait plus open; a reopen before the first read shares it. */
+    private volatile long initialOpenDeadlineNs;
+    private volatile boolean audioReadSeen;
     private volatile boolean workersAbandoned;
     private volatile boolean segmentRejected;
     private boolean stopFinalizationStarted;
@@ -82,7 +84,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
     private volatile long submittedSequence;
     private boolean prepared;
     private boolean started;
-    private long timeOriginNs;
+    private volatile long timeOriginNs;
     private long videoBytes;
     private long audioBytes;
     private int videoBuffers;
@@ -164,20 +166,11 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
         if (!prepared) throw new IllegalStateException("Recorder is not prepared");
         try {
             audioCodec.start();
-            audioRecord.startRecording();
-            if (audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
-                throw new IllegalStateException("Unable to start AudioRecord");
-            }
-            lastAudioReadNs = System.nanoTime();
-            AudioInputPreference.registerReopener(inputReopener);
-            audioRouteMonitor = AudioRouteMonitor.start("round-v2", audioRecord, audioRouteSession, AUDIO_SAMPLE_RATE, diagnostics::log);
-            timeOriginNs = SystemClock.elapsedRealtimeNanos();
             this.audioReadyListener = audioReadyListener;
             this.videoReadyListener = videoReadyListener;
             started = true;
-            diagnostics.log("audio and video recording started: timeOriginNs=" + timeOriginNs
-                    + ", timelineOffsetUs=" + timelineOffsetUs
-                    + ", audioSessionId=" + audioRecord.getAudioSessionId());
+            diagnostics.log("recording started; the audio input opens on the audio thread: timelineOffsetUs="
+                    + timelineOffsetUs);
             videoDrainThread = new Thread(this::drainVideo, "RoundVideoVideoEncoder");
             audioThread = new Thread(this::captureAndEncodeAudio, "RoundVideoAudioEncoder");
             runningWorkers = 2;
@@ -251,8 +244,10 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
             if (!prepared || !started) return Long.MAX_VALUE;
             if (stopping) return stopPresentationTimeUs;
             stopping = true;
-            cutoffUs = Math.max(0,
-                    (SystemClock.elapsedRealtimeNanos() - timeOriginNs) / 1000L);
+            long originNs = timeOriginNs;
+            // Zero until the audio input is open: a stop during the Bluetooth wait ends an empty segment.
+            cutoffUs = originNs == 0 ? 0 : Math.max(0,
+                    (SystemClock.elapsedRealtimeNanos() - originNs) / 1000L);
             stopPresentationTimeUs = cutoffUs;
             record = audioRecord;
         }
@@ -270,6 +265,8 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
 
     private void resetStats() {
         stopping = false;
+        audioReadSeen = false;
+        initialOpenDeadlineNs = 0;
         workersAbandoned = false;
         segmentRejected = false;
         stopFinalizationStarted = false;
@@ -365,13 +362,66 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
                 + ", minBufferSize=" + minBufferSize
                 + ", audioBufferSize=" + audioBufferSize);
         audioCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        // Waits up to ~3 s for a Bluetooth route while prepare() holds the recorder's lock, so stop() and a reopen request
-        // queue behind it; accepted: the camera is still starting at this point and the wait only happens with a Bluetooth choice.
-        audioRouteSession = AudioInputPreference.acquireRoute();
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.CAMCORDER, AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioBufferSize);
-        if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) throw new IllegalStateException("Unable to initialize AudioRecord");
-        AudioInputPreference.applyTo(audioRecord);
+    }
+
+    /**
+     * Audio thread. Acquires the Bluetooth route (cancelled by stop) and opens the AudioRecord; the recorder's lock is
+     * not held during the wait. The time origin is set once the input records, and the common A/V start waits for the
+     * first audio read, so video starts when audio does. Returns false when stop came first.
+     */
+    private boolean openInitialAudioInput() {
+        AudioInputPreference.registerReopener(inputReopener);
+        long acquireStartedNs = System.nanoTime();
+        final long deadlineNs = acquireStartedNs + RoundAudioSource.OPEN_BUDGET_MS * 1_000_000L;
+        initialOpenDeadlineNs = deadlineNs;
+        AudioRouteSession session = AudioInputPreference.acquireRoute(RoundAudioSource.ROUTE_WAIT_MS,
+                () -> stopping || System.nanoTime() > deadlineNs);
+        synchronized (this) {
+            audioRouteSession = session;
+        }
+        diagnostics.log("audio route acquired: outcome=" + session.outcome() + ", waitMs=" + elapsedMs(acquireStartedNs));
+        if (stopping) return false;
+        int source = RoundAudioSource.forSession(session);
+        AudioRecord record = new AudioRecord(source, AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioRecordBufferBytes);
+        try {
+            if (record.getState() != AudioRecord.STATE_INITIALIZED) throw new IllegalStateException("Unable to initialize AudioRecord");
+            AudioInputPreference.applyTo(record);
+            record.startRecording();
+            if (record.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                throw new IllegalStateException("Unable to start AudioRecord");
+            }
+        } catch (RuntimeException e) {
+            AudioInputPreference.unregister(record);
+            record.release();
+            throw e;
+        }
+        AudioRouteMonitor monitor = AudioRouteMonitor.start("round-v2", record, session, AUDIO_SAMPLE_RATE, diagnostics::log);
+        boolean lateStop;
+        synchronized (this) {
+            lateStop = stopping;
+            if (!lateStop) {
+                audioRecord = record;
+                audioRouteMonitor = monitor;
+            }
+        }
+        if (lateStop) {
+            // requestStop() ran before the recorder was published and could not stop it.
+            monitor.stop();
+            try {
+                record.stop();
+            } catch (IllegalStateException ignored) {
+            }
+            AudioInputPreference.unregister(record);
+            record.release();
+            return false;
+        }
+        lastAudioReadNs = System.nanoTime();
+        timeOriginNs = SystemClock.elapsedRealtimeNanos();
+        diagnostics.log("audio input recording: timeOriginNs=" + timeOriginNs
+                + ", source=" + source
+                + ", audioSessionId=" + record.getAudioSessionId());
+        return true;
     }
 
     private void drainVideo() {
@@ -418,6 +468,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
         boolean inputEnded = false;
         boolean outputEnded = false;
         try {
+            openInitialAudioInput();
             while (!outputEnded && !workersAbandoned) {
                 outputEnded = drainAudioOutput(info, inputEnded ? CODEC_TIMEOUT_US : 0);
                 if (outputEnded) break;
@@ -586,25 +637,46 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
             old.release();
         }
         if (oldSession != null) oldSession.release();
-        AudioRouteSession session = AudioInputPreference.acquireRoute();
-        AudioRecord next = new AudioRecord(MediaRecorder.AudioSource.CAMCORDER, AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioRecordBufferBytes);
+        // Before the first audio read the common A/V start timeout is running: share the initial open's deadline.
+        final long deadlineNs = audioReadSeen
+                ? System.nanoTime() + RoundAudioSource.OPEN_BUDGET_MS * 1_000_000L
+                : initialOpenDeadlineNs;
+        AudioRouteSession session = AudioInputPreference.acquireRoute(RoundAudioSource.ROUTE_WAIT_MS,
+                () -> stopping || System.nanoTime() > deadlineNs);
+        if (stopping) {
+            session.release();
+            return 0;
+        }
+        AudioRecord next = null;
         try {
+            next = new AudioRecord(RoundAudioSource.forSession(session), AUDIO_SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, audioRecordBufferBytes);
             if (next.getState() != AudioRecord.STATE_INITIALIZED) throw new IllegalStateException("Unable to initialize AudioRecord");
             AudioInputPreference.applyTo(next);
             next.startRecording();
             if (next.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) throw new IllegalStateException("Unable to start AudioRecord");
         } catch (RuntimeException e) {
-            AudioInputPreference.unregister(next);
-            next.release();
+            if (next != null) {
+                AudioInputPreference.unregister(next);
+                next.release();
+            }
             session.release();
             throw e;
         }
         AudioRouteMonitor monitor = AudioRouteMonitor.start("round-v2", next, session, AUDIO_SAMPLE_RATE, diagnostics::log);
+        boolean lateStop;
         synchronized (this) {
+            lateStop = stopping;
             audioRecord = next;
             audioRouteSession = session;
             audioRouteMonitor = monitor;
+        }
+        if (lateStop) {
+            // Published, so release() frees everything; only the live capture must end now.
+            try {
+                next.stop();
+            } catch (IllegalStateException ignored) {
+            }
         }
         long lastReadNs = lastAudioReadNs;
         lastAudioReadNs = System.nanoTime();
@@ -620,6 +692,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
             listener = audioReadyListener;
             audioReadyListener = null;
         }
+        audioReadSeen = true;
         diagnostics.log("audio capture ready; waiting for common A/V start frame");
         listener.run();
     }
