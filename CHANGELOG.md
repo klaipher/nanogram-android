@@ -3,7 +3,11 @@
 Newest first: version, build number, date, commit; what changed and how.
 
 
-## Unreleased
+## 13.2.2 (202611151830) — 2026-11-15 — source 9471adb (since 202611150919 / d1321b0)
+
+- **Release check**: `ng check` passed at 9471adb (arm64 debug build + all JVM tests, including the new `NanogramOpusSkipTest`, `NanogramOpusEnhancementTest` and `NanogramLinkHygieneTest`); this release build (R8) is the first build of the cleanup and the voice-enhancement switch. Device checks pending: voice playback with the switch on and off, Bluetooth-recorded voice messages, link cleaning.
+- **Round video**: `InstantCameraView` lost the legacy `while (!avSyncFix)` audio-start search loop (9471adb); `avSyncFix` is a constant `true` since the cleanup, and javac rejected the loop as unreachable.
+
 
 - **Unneeded-code cleanup** (2026-11-15, from `wt/notes/unneeded-code-audit-2026-11-15.md`; nothing built or run, JVM tests changed but not run; the combined build must validate it):
   - **System flags**: `NanogramSystemFlags` keeps only the developer-only `strictmode` key. Removed: `net_callback` (`NanogramNetworkState` + test, the `NetworkCallback` path in `ApplicationLoader`; the upstream CONNECTIVITY_ACTION receiver is back as upstream wrote it) and `power_skip_charging` (`LiteMode.charging` tracking, the `charging`/`skipWhileCharging` parameters of `NanogramPowerPolicy.shouldApply` and their test). `progress_notifications` and `photo_picker` became Debug experiments "Progress notifications" (API 36) and "System photo picker" (API 33), stored in `NanogramExperiments` (`progressNotifications`, `systemPhotoPicker`; the old `nanogram_experimental` values are not carried over, both were off for everyone), listed in `NanogramPerfExperiments` so they show in Settings > Debug and in Send Report. `round_quality_off` / `round_av_sync_off` are constants (`boosted(true, ..)`, `avSyncFix = true`); the dead non-fix branches in `InstantCameraView` stay (upstream-shaped code).
