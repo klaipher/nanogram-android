@@ -20,6 +20,7 @@ public final class NanogramFeatures {
     private static final String ROUND_WIDE_ANGLE = "round_wide_angle";
     private static final String RECORDER_MIC_SWITCH = "recorder_mic_switch";
     private static final String HEADSET_VOICE_ENHANCEMENT = "headset_voice_enhancement";
+    private static final String ENHANCE_VOICE_MESSAGES = "enhance_voice_messages";
     private static final String PHOTO_ENHANCED = "photo_enhanced";
     private static final String PHOTO_ENHANCED_MODE = "photo_enhanced_mode";
 
@@ -119,6 +120,15 @@ public final class NanogramFeatures {
 
     public static void setHeadsetVoiceEnhancement(boolean value) {
         write(HEADSET_VOICE_ENHANCEMENT, value);
+    }
+
+    /** Plays voice messages through our Opus 1.6 decoder with speech enhancement. Off by default (the platform decoder plays). */
+    public static boolean enhanceVoiceMessages() {
+        return read(ENHANCE_VOICE_MESSAGES, false);
+    }
+
+    public static void setEnhanceVoiceMessages(boolean value) {
+        write(ENHANCE_VOICE_MESSAGES, value);
     }
 
     public static boolean enhancedPhotos() {

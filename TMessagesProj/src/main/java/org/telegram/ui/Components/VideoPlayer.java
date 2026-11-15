@@ -54,7 +54,11 @@ import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.common.Tracks;
 import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.common.AudioAttributes;
+import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.audio.AudioRendererEventListener;
 import androidx.media3.exoplayer.audio.AudioSink;
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
+import org.telegram.messenger.nanogram.NanogramOpusAudioRenderer;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.audio.TeeAudioProcessor;
 import androidx.media3.exoplayer.dash.DashMediaSource;
@@ -153,6 +157,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
     public ExoPlayer player;
     private ExoPlayer audioPlayer;
+    // Voice message with "Enhance voice messages" on: our Opus decoder goes in front of the platform one. Set before the
+    // first preparePlayer(); with it off (the default) the renderers are exactly the ones this class always built.
+    private boolean enhanceVoice;
     private DefaultBandwidthMeter bandwidthMeter;
     private MappingTrackSelector trackSelector;
     private ExtendedDefaultDataSourceFactory mediaDataSourceFactory;
@@ -249,7 +256,7 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
 
         if (player == null) {
             DefaultRenderersFactory factory;
-            if (audioVisualizerDelegate != null) {
+            if (audioVisualizerDelegate != null || enhanceVoice) {
                 factory = new AudioVisualizerRenderersFactory(ApplicationLoader.applicationContext);
             } else {
                 factory = new DefaultRenderersFactory(ApplicationLoader.applicationContext);
@@ -1800,10 +1807,33 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
         return repeatCount;
     }
 
+    /** Plays this player's Opus audio through NanogramOpusDecoder (libopus speech enhancement). Call before preparePlayer(). */
+    public void setEnhanceVoice(boolean enhance) {
+        this.enhanceVoice = enhance;
+    }
+
     private class AudioVisualizerRenderersFactory extends DefaultRenderersFactory {
 
         public AudioVisualizerRenderersFactory(Context context) {
             super(context);
+        }
+
+        @Override
+        protected void buildAudioRenderers(
+                Context context,
+                int extensionRendererMode,
+                MediaCodecSelector mediaCodecSelector,
+                boolean enableDecoderFallback,
+                AudioSink audioSink,
+                Handler eventHandler,
+                AudioRendererEventListener eventListener,
+                ArrayList<Renderer> out) {
+            if (enhanceVoice) {
+                // First, so that it wins the tie with the MediaCodec renderer for audio/opus; any other format is left to the others.
+                out.add(new NanogramOpusAudioRenderer(eventHandler, eventListener, audioSink));
+            }
+            super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink,
+                    eventHandler, eventListener, out);
         }
 
         @Nullable
@@ -1812,6 +1842,9 @@ public class VideoPlayer implements Player.Listener, VideoListener, AnalyticsLis
                 @NonNull Context context,
                 boolean enableFloatOutput,
                 boolean enableAudioTrackPlaybackParams) {
+            if (audioVisualizerDelegate == null) {
+                return super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams);
+            }
             return new DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)

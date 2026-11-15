@@ -42,6 +42,10 @@
 -keep class org.telegram.tgnet.RequestTimeDelegate { *; }
 -keep class org.telegram.tgnet.RequestDelegate { *; }
 -keep class org.telegram.ui.Stories.recorder.FfmpegAudioWaveformLoader { *; }
+# NanogramOpusDecoder: ffmpeg_jni.cc registers its natives with RegisterNatives by name (voice-message enhancement).
+-keepclasseswithmembers,includedescriptorclasses class org.telegram.messenger.nanogram.NanogramOpusDecoder {
+    native <methods>;
+}
 # ThemeDescription finds the fields it recolours by name with getDeclaredField
 -keepclassmembernames,allowoptimization class org.telegram.ui.** {
     <fields>;
