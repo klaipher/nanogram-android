@@ -5,6 +5,8 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ## Unreleased
 
+- **twidget 96c4bbb** (from 477b0133; nanogram-deps 31392ab): Telegram's hostile-markup fixes, which were on twidget `main` but not on the `nanogram` branch (3e25003, 7249ce7, merged in 96c4bbb): `font-weight: bolder`/`lighter` on the root no longer reads a null parent (a crash in the widget engine, widget-sandbox `attacks/render-root-font-weight-bolder.html`); SVG path data after a closepath that is no command, or not starting with a moveto, ends the path (it looped forever until the engine ran out of memory, `attacks/render-svg-path-closepath.html`); core's CPU filter pass caps an infinite blur radius, draws no blur for NaN and clamps shadow offsets. Also in the range: e6c5922, ffbc4ba, 5ee1438, 43eab93 (fixes found by the iOS widget tests: collapsed table borders and the bidi fallback became opt-in hooks, which core opts into, so the core renderer Android uses keeps its behaviour; unresolved `var()` unsets the declaration; `dir=auto` yields to a declared direction; patch style-byte accounting; Apple-layer drawing fixes that Android does not build). Fork ctest 8/8.
+
 ## 13.2.2 (202611150027) — 2026-11-15 — source 16d7f62 (since 202611142257 / 59c6213)
 
 - **Recording audio: Bluetooth route fixes, Opus complexity 10, Headset voice enhancement and in-recorder microphone switch** (2026-11-15, not built or run; the route state machine, read policy, silence trimmer, route formatting and the toggle/pair logic have JVM tests, the rest was checked with javac against stubs and clang `-fsyntax-only` for the native code, and reviewed by reading in three passes). The two new switches are off by default; the bug fixes are always on.
