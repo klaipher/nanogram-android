@@ -300,12 +300,8 @@ public final class NanogramHealth {
             }
             PowerManager power = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
             if (power != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    thermalStatus = power.getCurrentThermalStatus();
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    headroom = power.getThermalHeadroom(10);
-                }
+                thermalStatus = power.getCurrentThermalStatus();
+                headroom = power.getThermalHeadroom(10);
             }
         } catch (Throwable e) {
             FileLog.e(e);

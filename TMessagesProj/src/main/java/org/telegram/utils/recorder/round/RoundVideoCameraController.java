@@ -2245,10 +2245,8 @@ final class RoundVideoCameraController {
 
     private float readMinimumZoomRatio(@NonNull CameraCharacteristics cameraCharacteristics) {
         Float lower = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Range<Float> range = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
-            if (range != null) lower = range.getLower();
-        }
+        Range<Float> range = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+        if (range != null) lower = range.getLower();
         float minimum = RoundVideoZoomPlan.minimumRatio(lower, wideAngle);
         if (wideAngle) {
             diagnostics.log("wide zoom: id=" + cameraId

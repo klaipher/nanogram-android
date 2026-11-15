@@ -800,8 +800,7 @@ final class RoundVideoCodecRecorder implements RoundVideoGlProcessor.FrameTiming
     }
 
     private long audioGapFrames(long basePtsUs, long submittedFrames, long readFrames) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N
-                || audioRecord.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_BOOTTIME) != AudioRecord.SUCCESS) {
+        if (audioRecord.getTimestamp(audioTimestamp, AudioTimestamp.TIMEBASE_BOOTTIME) != AudioRecord.SUCCESS) {
             return 0;
         }
         long actualUs = (audioTimestamp.nanoTime - timeOriginNs) / 1000L

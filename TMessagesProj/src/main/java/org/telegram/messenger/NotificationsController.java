@@ -5789,7 +5789,7 @@ public class NotificationsController extends BaseController implements Notificat
             if (BuildVars.LOGS_ENABLED) {
                 FileLog.d("show summary with id " + notificationId);
             }
-            if (Build.VERSION.SDK_INT >= 26 && anyChildAlerts) {
+            if (anyChildAlerts) {
                 notificationBuilder.setChannelId(OTHER_NOTIFICATIONS_CHANNEL);
                 notificationBuilder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN);
                 mainNotification = notificationBuilder.build();

@@ -217,15 +217,13 @@ public class LiteMode {
                 }
             };
             context.registerReceiver(receiver, new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                thermalStatus = powerManager.getCurrentThermalStatus();
-                powerManager.addThermalStatusListener(Runnable::run, status -> {
-                    if (status != thermalStatus) {
-                        thermalStatus = status;
-                        onSystemPowerSignalChanged();
-                    }
-                });
-            }
+            thermalStatus = powerManager.getCurrentThermalStatus();
+            powerManager.addThermalStatusListener(Runnable::run, status -> {
+                if (status != thermalStatus) {
+                    thermalStatus = status;
+                    onSystemPowerSignalChanged();
+                }
+            });
         } catch (Throwable e) {
             FileLog.e(e);
         }

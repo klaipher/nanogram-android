@@ -73,7 +73,7 @@ public final class NanogramOnDeviceTranscription {
 
     private static boolean available(Context context) {
         try {
-            return Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context);
+            return SpeechRecognizer.isOnDeviceRecognitionAvailable(context);
         } catch (Throwable t) {
             return false;
         }

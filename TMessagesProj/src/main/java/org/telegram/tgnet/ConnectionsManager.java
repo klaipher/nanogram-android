@@ -297,16 +297,12 @@ public class ConnectionsManager extends BaseController {
         String installer = "";
         try {
             Context context = ApplicationLoader.applicationContext;
-            if (Build.VERSION.SDK_INT >= 30) {
-                InstallSourceInfo installSourceInfo = context.getPackageManager().getInstallSourceInfo(context.getPackageName());
-                if (installSourceInfo != null) {
-                    installer = installSourceInfo.getInitiatingPackageName();
-                    if (installer == null) {
-                        installer = installSourceInfo.getInstallingPackageName();
-                    }
+            InstallSourceInfo installSourceInfo = context.getPackageManager().getInstallSourceInfo(context.getPackageName());
+            if (installSourceInfo != null) {
+                installer = installSourceInfo.getInitiatingPackageName();
+                if (installer == null) {
+                    installer = installSourceInfo.getInstallingPackageName();
                 }
-            } else {
-                installer = context.getPackageManager().getInstallerPackageName(context.getPackageName());
             }
         } catch (Throwable e) {
             FileLog.e(e, false);

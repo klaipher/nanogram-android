@@ -1579,10 +1579,8 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
             if (high != null) {
                 format.setInteger(MediaFormat.KEY_PROFILE, high[0]);
                 format.setInteger(MediaFormat.KEY_LEVEL, high[1]);
-                if (Build.VERSION.SDK_INT >= 29) {
-                    // No B-frames: keeps timestamps monotonic for upload-while-recording and every client
-                    format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
-                }
+                // No B-frames: keeps timestamps monotonic for upload-while-recording and every client
+                format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
             }
             if (capabilities.getEncoderCapabilities() != null && capabilities.getEncoderCapabilities().isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
                 format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);

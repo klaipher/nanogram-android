@@ -5350,15 +5350,9 @@ public class AndroidUtilities {
         PackageManager pm = ApplicationLoader.applicationContext.getPackageManager();
         String packageName = ApplicationLoader.applicationContext.getPackageName();
         try {
-            Signature[] signatures;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES);
-                android.content.pm.SigningInfo signingInfo = packageInfo.signingInfo;
-                signatures = signingInfo.hasMultipleSigners() ? signingInfo.getApkContentsSigners() : signingInfo.getSigningCertificateHistory();
-            } else {
-                PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES);
-                signatures = packageInfo.signatures;
-            }
+            PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES);
+            android.content.pm.SigningInfo signingInfo = packageInfo.signingInfo;
+            Signature[] signatures = signingInfo.hasMultipleSigners() ? signingInfo.getApkContentsSigners() : signingInfo.getSigningCertificateHistory();
             byte[] cert = signatures[0].toByteArray();
             InputStream input = new ByteArrayInputStream(cert);
             CertificateFactory cf = CertificateFactory.getInstance("X509");
