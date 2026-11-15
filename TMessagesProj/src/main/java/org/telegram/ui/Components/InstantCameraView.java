@@ -2602,46 +2602,6 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
                         return;
                     }
                 }
-                while (!avSyncFix) {
-                    boolean ok = false;
-                    for (int a = 0; a < input.results; a++) {
-                        if (a == 0 && Math.abs(videoFirst - input.offset[a]) > 10_000_000L) {
-                            desyncTime = videoFirst - input.offset[a];
-                            audioFirst = input.offset[a];
-                            ok = true;
-                            if (BuildVars.LOGS_ENABLED) {
-                                FileLog.d("InstantCamera detected desync between audio and video " + desyncTime);
-                            }
-                            break;
-                        }
-                        if (input.offset[a] >= videoFirst) {
-                            input.lastWroteBuffer = a;
-                            audioFirst = input.offset[a];
-                            ok = true;
-                            if (BuildVars.LOGS_ENABLED) {
-                                FileLog.d("InstantCamera found first audio frame at " + a + " timestamp = " + input.offset[a]);
-                            }
-                            break;
-                        } else {
-                            if (BuildVars.LOGS_ENABLED) {
-                                FileLog.d("InstantCamera ignore first audio frame at " + a + " timestamp = " + input.offset[a]);
-                            }
-                        }
-                    }
-                    if (!ok) {
-                        if (BuildVars.LOGS_ENABLED) {
-                            FileLog.d("InstantCamera first audio frame not found, removing buffers " + input.results);
-                        }
-                        buffersToWrite.remove(input);
-                    } else {
-                        break;
-                    }
-                    if (!buffersToWrite.isEmpty()) {
-                        input = buffersToWrite.get(0);
-                    } else {
-                        return;
-                    }
-                }
             }
 
             if (audioStartTime == -1) {
