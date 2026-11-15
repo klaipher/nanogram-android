@@ -716,19 +716,6 @@ public class EditTextBoldCursor extends EditTextEffects {
             FileLog.e(e);
         }
         checkHeaderVisibility(true);
-        updateLegacyBlink();
-    }
-
-    // Below Q the custom cursor blinks by invalidating, and it is drawn only while focused.
-    private void updateLegacyBlink() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            return;
-        }
-        if (attachedToWindow != null && isFocused()) {
-            Choreographer60FpsContent.getInstance().addFrameCallback(invalidateCallback, 2);
-        } else {
-            Choreographer60FpsContent.getInstance().removeFrameCallback(invalidateCallback);
-        }
     }
 
     private void checkHeaderVisibility(boolean animated) {
@@ -1200,7 +1187,9 @@ public class EditTextBoldCursor extends EditTextEffects {
             FileLog.e(e);
         }
         attachedToWindow = getRootView();
-        updateLegacyBlink();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            Choreographer60FpsContent.getInstance().addFrameCallback(invalidateCallback, 2);
+        }
     }
 
     @Override

@@ -49,7 +49,7 @@ Everything goes through `Tools/dev/ng` (`ng --help`): `setup`, `doctor`, `prebui
 - `TMessagesProj_Modules/media` — androidx/media fork (submodule).
 - `buildSrc/` — Gradle plugins that generate strings, TL schema code and assets.
 - Upstream's Huawei, HockeyApp, Standalone and instrumentation-test modules stay in the tree but are not part of the
-  default build (`-Pnanogram.allModules=true` includes them, but they keep minSdk 23/26 and no longer build against the minSdk 31 library without `tools:overrideLibrary`).
+  default build (they keep minSdk 23/26 and no longer build against the minSdk 31 library without `tools:overrideLibrary`, so `settings.gradle` does not include them).
 
 ## Code style
 
