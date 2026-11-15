@@ -416,7 +416,7 @@ Newest first: version, build number, date, commit; what changed and how.
 ### Cleanup after the tgcalls and WebRTC swaps (W6)
 - Dead-name grep over the repository (tg_owt, nanogram-security-fixes, nanogram-mac, telegram-ios-dev, tgcalls-port,
   usrsctp, libevent, jni_zero, `voip/rnnoise`, `voip/third_party`, `third_party/{absl,libsrtp,pffft,rnnoise}`): the only hits
-  left are history (this file, the bootstrap plan, `shared-swaps-ledger.md`) and the live paths under `jni/voip/webrtc/third_party`
+  left are history (this file, the bootstrap plan, `shared/ledger/android-swaps.md`) and the live paths under `jni/voip/webrtc/third_party`
   and `jni/third_party/xiph/rnnoise`. The tgcalls fork branch `nanogram-android` appears only as the historical source of 545f5ae.
 - `NANOGRAM-CHANGES.md`: the old "WebRTC" row (`Candidate::set_type`) became "WebRTC source" and "WebRTC dependencies"; the rnnoise
   row no longer says `jni/third_party/rnnoise` is kept. `AGENTS.md` layout names the WebRTC submodule. The shared manifest
@@ -529,7 +529,7 @@ Newest first: version, build number, date, commit; what changed and how.
   (contains Android's ca3594da) + the iOS host API commits (inert unless called) and `TELEGRAM_QJS_ENABLE_DUMPS` (dumps
   off unless defined; the Android build does not use them). Run `git submodule sync --recursive` so the nested url follows.
 - `assets/WidgetSandbox/*` and `manifest.txt` need no regeneration: the desktop bundles in widget-sandbox are unchanged
-  and equal the committed assets (proof in docs/nanogram/shared-swaps-ledger.md); QuickJS bytecode version stays 29.
+  and equal the committed assets (proof in shared/ledger/android-swaps.md); QuickJS bytecode version stays 29.
 - `check_shared` note: the manifest of nanogram-deps 7d5bd332 still says `pending` for twidget, widget-sandbox and quickjs
   with the old Android pins as transitional; the main session sets their commits to the pushed shas (a4f5391c, 1b21a48e,
   f6fc68b9) in nanogram-deps and moves `shared/` in all three apps.
@@ -540,7 +540,7 @@ Newest first: version, build number, date, commit; what changed and how.
   44ae85c7 (`.gitmodules` branch). The fork is the iOS pin (i582 e59e0d89) plus Android's features (key rotation preparation
   and preview, NFT transfer preparation, TON Connect envelope encrypt/decrypt), blob-identical to 5c65e47c for those files.
 - Deleted `jni/gram-wallet/wallet-engine.patch` (a reference copy of Android's delta; proof in
-  docs/nanogram/shared-swaps-ledger.md: it applies to i582 38147c2 and reproduces 5c65e47c, which the fork carries).
+  shared/ledger/android-swaps.md: it applies to i582 38147c2 and reproduces 5c65e47c, which the fork carries).
 - Recipient key (owner decision): the fork verifies a supplied comment recipient key by default (iOS behaviour). Android
   supplies the key it got from the server for rotated recipients, so `WalletEngineBridge.cpp` passes
   `trust_recipient_public_key = true` in `nativePrepareSend` and `nativeSend` (`create_encrypted_comment({..., recipient_key, true})`),
@@ -553,7 +553,7 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ### SQLite: klaipher/sqlcipher-amalgamation nanogram (9948d5af, SQLCipher 4.20.0 / SQLite 3.54.1), shared with iOS and macOS (W2.I3)
 - Deleted `TMessagesProj/jni/sqlite/sqlite3.{c,h}` (SQLite 3.39.3, byte-identical to the pristine sqlite.org amalgamation,
-  see docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/sqlite` =
+  see shared/ledger/android-swaps.md) and added the submodule `TMessagesProj/jni/third_party/sqlite` =
   klaipher/sqlcipher-amalgamation branch `nanogram` at 9948d5af, the amalgamation iOS ships. Android moves from SQLite
   3.39.3 to 3.54.1 (accepted behaviour jump; includes the 3.51.3 WAL-reset corruption fix).
 - `jni/CMakeLists.txt` `sqlite` target: compiles `third_party/sqlite/sqlite3.c` with the SQLCipher codec enabled against
@@ -585,7 +585,7 @@ Newest first: version, build number, date, commit; what changed and how.
 
 ### rnnoise: klaipher/rnnoise nanogram (d2d79970), the single source for iOS, macOS and Android (W2.I3)
 - Deleted the in-tree 2018 copy `TMessagesProj/jni/voip/rnnoise` (22 files, all unmodified xiph blobs, see
-  docs/nanogram/shared-swaps-ledger.md) and added the submodule `TMessagesProj/jni/third_party/xiph/rnnoise` =
+  shared/ledger/android-swaps.md) and added the submodule `TMessagesProj/jni/third_party/xiph/rnnoise` =
   klaipher/rnnoise branch `nanogram` at d2d79970 (xiph v0.2 + portability headers + `denoise.c` hardening + trimmed model).
   Not `jni/third_party/rnnoise`: that directory is Chromium's rnnoise-vad (`rnn_vad_weights`), a different library.
 - `voip/CMakeLists.txt` `rnnoise` target: sources are now the ten v0.2 files iOS builds (celt_lpc, denoise, kiss_fft, nnet,
