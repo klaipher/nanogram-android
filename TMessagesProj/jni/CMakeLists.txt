@@ -302,7 +302,7 @@ target_compile_options(${NATIVE_LIB} PUBLIC
         -ffast-math -O2 -funroll-loops -ffast-math -fno-strict-aliasing -fno-math-errno)
 
 target_compile_definitions(${NATIVE_LIB} PUBLIC
-        BSD=1 NULL=0 SOCKLEN_T=socklen_t ANDROID_NDK DISABLE_IMPORTGL AVOID_TABLES ANDROID_TILE_BASED_DECODE __STDC_CONSTANT_MACROS ANDROID_ARMV6_IDCT OPUS_BUILD FIXED_POINT USE_ALLOCA restrict= __EMX__ LOCALE_NOT_USED HAVE_LRINT HAVE_LRINTF)
+        BSD=1 NULL=0 SOCKLEN_T=socklen_t ANDROID_NDK DISABLE_IMPORTGL AVOID_TABLES ANDROID_TILE_BASED_DECODE __STDC_CONSTANT_MACROS ANDROID_ARMV6_IDCT OPUS_BUILD USE_ALLOCA restrict= __EMX__ LOCALE_NOT_USED HAVE_LRINT HAVE_LRINTF)
 
 target_sources(${NATIVE_LIB} PRIVATE
 
@@ -341,6 +341,9 @@ target_include_directories(${NATIVE_LIB} PUBLIC
 # Searching it after the system headers keeps <libavcodec/...> working without the clash.
 target_compile_options(${NATIVE_LIB} PUBLIC "-idirafter${CMAKE_CURRENT_SOURCE_DIR}/third_party/ffmpeg")
 
+# The linker map next to the library, for shared/opus/check-link-map.sh --osce (the OSCE weights are static arrays that a stripped
+# library no longer shows; the object names in the map do): sh shared/opus/check-link-map.sh --osce <ABI build dir>/${NATIVE_LIB}.map
+target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/${NATIVE_LIB}.map")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "-Wl,-z,common-page-size=16384")
 target_link_options(${NATIVE_LIB} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Wl,--pack-dyn-relocs=android+relr>")

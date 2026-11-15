@@ -347,6 +347,10 @@ def prebuild_key(abis: list[str]) -> str:
         else:
             out = subprocess.run(["git", "ls-tree", "HEAD", rel], cwd=ROOT, capture_output=True, text=True).stdout
             h.update(out.encode())
+    # The shared libopus options and model pin (nanogram-deps shared/opus, sourced by build_opus.sh): the submodule is not an
+    # input of its own (a bump of anything else in it must not rebuild everything), so these scripts are hashed by content.
+    for p in sorted((ROOT / "shared" / "opus").glob("*.sh")):
+        h.update(b"shared/opus/" + p.name.encode() + p.read_bytes())
     # Uncommitted script edits count too.
     for p in sorted((PREBUILD_SRC).glob("*.sh")) + sorted((PREBUILD_SRC / "patches").rglob("*")):
         if p.is_file():
