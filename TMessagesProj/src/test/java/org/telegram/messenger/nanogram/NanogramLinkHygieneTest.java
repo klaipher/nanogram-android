@@ -5,9 +5,70 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import org.junit.Test;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 public class NanogramLinkHygieneTest {
+
+    /** Gradle runs unit tests in the module directory, so the shared submodule is one level up. */
+    static File sharedData(String name) {
+        for (String root : new String[]{"../shared/data", "shared/data"}) {
+            final File file = new File(root, name);
+            if (file.isFile()) {
+                return file;
+            }
+        }
+        throw new AssertionError("shared/data/" + name + " not found: initialise the shared submodule (nanogram-deps)");
+    }
+
+    static String read(String name) throws Exception {
+        return new String(Files.readAllBytes(sharedData(name).toPath()), StandardCharsets.UTF_8);
+    }
+
+    @Test
+    public void rulesMatchTheSharedList() throws Exception {
+        final List<String> shared = new ArrayList<>();
+        for (String line : read("link-tracking-params.txt").split("\\R")) {
+            final String trimmed = line.trim();
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                shared.add(trimmed);
+            }
+        }
+        assertEquals(shared, Arrays.asList(NanogramLinkHygiene.RULES));
+    }
+
+    @Test
+    public void stripVectorsFromTheSharedData() throws Exception {
+        final JsonArray strip = JsonParser.parseString(read("link-hygiene-vectors.json")).getAsJsonObject().getAsJsonArray("strip");
+        assertTrue(strip.size() > 10);
+        for (JsonElement element : strip) {
+            final JsonObject vector = element.getAsJsonObject();
+            final String input = vector.get("input").getAsString();
+            assertEquals(input, vector.get("output").getAsString(), NanogramLinkHygiene.clean(input));
+        }
+    }
+
+    @Test
+    public void telegramVectorsFromTheSharedData() throws Exception {
+        final JsonArray telegram = JsonParser.parseString(read("link-hygiene-vectors.json")).getAsJsonObject().getAsJsonArray("telegram");
+        assertTrue(telegram.size() > 5);
+        for (JsonElement element : telegram) {
+            final JsonObject vector = element.getAsJsonObject();
+            final String input = vector.get("input").getAsString();
+            assertEquals(input, vector.get("telegram").getAsBoolean(), NanogramLinkHygiene.isTelegramLink(input));
+        }
+    }
 
     @Test
     public void stripsTrackingKeepsTheRest() {
@@ -41,8 +102,7 @@ public class NanogramLinkHygieneTest {
     }
 
     @Test
-    public void telegramAndOtherSchemesAreNeverChanged() {
-        assertEquals("https://t.me/bot?start=utm_x&utm_source=1", NanogramLinkHygiene.clean("https://t.me/bot?start=utm_x&utm_source=1"));
+    public void otherSchemesAreNeverChanged() {
         assertEquals("tg://resolve?domain=a&utm_source=1", NanogramLinkHygiene.clean("tg://resolve?domain=a&utm_source=1"));
         assertEquals("mailto:a@b.c?utm_source=1", NanogramLinkHygiene.clean("mailto:a@b.c?utm_source=1"));
         assertNull(NanogramLinkHygiene.clean(null));
@@ -50,13 +110,14 @@ public class NanogramLinkHygieneTest {
 
     @Test
     public void userInfoAndPortDoNotConfuseTheHost() {
-        assertEquals("https://t.me:443/x?utm_source=1", NanogramLinkHygiene.clean("https://t.me:443/x?utm_source=1"));
+        assertEquals("https://t.me:443/x", NanogramLinkHygiene.clean("https://t.me:443/x?utm_source=1"));
         assertEquals("https://u@example.com/a", NanogramLinkHygiene.clean("https://u@example.com/a?utm_source=1"));
     }
 
     @Test
     public void keepsEmptyAndValuelessParts() {
         assertEquals("https://e.com/?a&b=", NanogramLinkHygiene.clean("https://e.com/?a&utm_x=1&b="));
+        assertEquals("https://e.com/?&&k=1", NanogramLinkHygiene.clean("https://e.com/?&utm_source=x&&k=1"));
     }
 
     @Test
@@ -80,7 +141,9 @@ public class NanogramLinkHygieneTest {
         assertTrue(NanogramLinkHygiene.isTelegramLink("https://t.me/durov"));
         assertTrue(NanogramLinkHygiene.isTelegramLink("HTTP://T.ME/durov"));
         assertTrue(NanogramLinkHygiene.isTelegramLink("tg://join?invite=a"));
-        assertTrue(NanogramLinkHygiene.isTelegramLink("tg:resolve?domain=a"));
+        assertTrue(NanogramLinkHygiene.isTelegramLink("https://www.t.me/a"));
+        assertFalse(NanogramLinkHygiene.isTelegramLink("tg:resolve?domain=a"));
+        assertFalse(NanogramLinkHygiene.isTelegramLink("https://telesco.pe/a"));
         assertTrue(NanogramLinkHygiene.isTelegramLink("https://telegram.me/a"));
         assertFalse(NanogramLinkHygiene.isTelegramLink("https://example.com/t.me"));
         assertFalse(NanogramLinkHygiene.isTelegramLink("https://nott.me/a"));

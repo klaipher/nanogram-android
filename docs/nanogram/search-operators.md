@@ -1,7 +1,8 @@
 # Search operators (in-chat search)
 
-The grammar, date rules, type table and test vectors live in the shared spec: `docs/specs/search-operators.md` in the iOS
-worktree (ios-integration). iOS, Mac and Android implement it; `NanogramSearchOperatorsTest` runs the spec's vectors.
+The grammar, date rules and type table live in the shared spec `docs/specs/search-operators.md` in the iOS repository; the
+machine-readable test vectors are `data/search-operator-vectors.json` in nanogram-deps (the `shared` submodule). iOS, Mac and
+Android implement the grammar; `NanogramSearchOperatorsTest.sharedVectors` runs the shared vectors.
 
 ## Android mapping
 

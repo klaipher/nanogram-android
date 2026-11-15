@@ -7,7 +7,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * Search operators for in-chat search (shared grammar: ios-integration docs/specs/search-operators.md): from:, before:, after:, date:, type:.
+ * Search operators for in-chat search (shared grammar: iOS docs/specs/search-operators.md; shared vectors: nanogram-deps data/search-operator-vectors.json): from:, before:, after:, date:, type:.
  * Pure parser; the caller maps the result onto messages.search (from_id, min_date, max_date, filter).
  */
 public final class NanogramSearchOperators {

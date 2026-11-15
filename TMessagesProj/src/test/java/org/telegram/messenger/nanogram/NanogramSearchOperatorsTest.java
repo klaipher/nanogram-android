@@ -5,8 +5,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import org.junit.Test;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.TimeZone;
 
 public class NanogramSearchOperatorsTest {
@@ -192,5 +199,27 @@ public class NanogramSearchOperatorsTest {
         assertEquals("", r.text);
         assertTrue(r.hasOperators());
         assertNull(r.from);
+    }
+
+    private static int epoch(JsonElement element) {
+        return element.isJsonNull() ? 0 : (int) LocalDateTime.parse(element.getAsString().replace(' ', 'T')).toEpochSecond(ZoneOffset.UTC);
+    }
+
+    /** The shared vectors (nanogram-deps data/search-operator-vectors.json): the same cases iOS and the Mac run. Dates are UTC here. */
+    @Test
+    public void sharedVectors() throws Exception {
+        final JsonObject data = JsonParser.parseString(NanogramLinkHygieneTest.read("search-operator-vectors.json")).getAsJsonObject();
+        final long now = LocalDateTime.parse(data.get("now").getAsString()).toInstant(ZoneOffset.UTC).toEpochMilli();
+        assertTrue(data.getAsJsonArray("vectors").size() >= 17);
+        for (JsonElement element : data.getAsJsonArray("vectors")) {
+            final JsonObject vector = element.getAsJsonObject();
+            final String input = vector.get("input").getAsString();
+            final NanogramSearchOperators.Result r = NanogramSearchOperators.parse(input, UTC, now);
+            assertEquals(input, vector.get("text").getAsString(), r.text);
+            assertEquals(input, vector.get("from").isJsonNull() ? null : vector.get("from").getAsString(), r.from);
+            assertEquals(input, epoch(vector.get("min")), r.minDate);
+            assertEquals(input, epoch(vector.get("max")), r.maxDate);
+            assertEquals(input, vector.get("type").isJsonNull() ? null : vector.get("type").getAsString(), r.type == null ? null : r.type.name().toLowerCase(Locale.ROOT));
+        }
     }
 }
