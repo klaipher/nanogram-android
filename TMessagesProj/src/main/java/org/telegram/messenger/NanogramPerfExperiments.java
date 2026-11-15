@@ -9,11 +9,13 @@ public final class NanogramPerfExperiments {
 
     public enum Experiment {
         ADAPTIVE_REFRESH("adaptiveRefresh", "Adaptive refresh rate", "Android 15 or newer: the screen may drop below its top refresh rate when little moves, and rises while you scroll.", "Restart the app to apply.", Build.VERSION_CODES.VANILLA_ICE_CREAM, NanogramPerfStats.FRAME_TIME, NanogramPerfStats.FRAME_INTERVAL),
-        TELECOM("telecom", "System call integration", "Android 14 or newer: one-to-one calls are also registered with the phone's call system (Bluetooth, car, watch buttons).", "Applies to the next call.", Build.VERSION_CODES.UPSIDE_DOWN_CAKE, NanogramPerfStats.TELECOM_REGISTER, NanogramPerfStats.CALL_SETUP),
-        CAMERA2("camera2", "Camera2 capture", "Stories and the chat camera use the newer camera interface.", "Close and reopen the camera to apply.", 0, NanogramPerfStats.CAMERA_FIRST_FRAME),
+        TELECOM("telecom", "System call integration", "Android 14 or newer: one-to-one calls are also registered with the phone's call system (Bluetooth, car, watch buttons).", "Applies to the next call.", Build.VERSION_CODES.UPSIDE_DOWN_CAKE, NanogramPerfStats.TELECOM_REGISTER, NanogramPerfStats.CALL_SETUP, NanogramPerfStats.TELECOM_CALLS),
+        CAMERA2("camera2", "Camera2 capture", "Stories and the chat camera use the newer camera interface.", "Close and reopen the camera to apply.", 0, NanogramPerfStats.CAMERA_FIRST_FRAME, NanogramPerfStats.CAMERA2_OPENED, NanogramPerfStats.CAMERA2_UNAVAILABLE, NanogramPerfStats.CAMERA_EXTENSION_OPENED, NanogramPerfStats.CAMERA_EXTENSION_FAILED),
         GPU_PREUPLOAD("gpuPreupload", "Early image upload to the GPU", "Pictures are prepared for the screen while they load, so the first draw has less work.", "Restart the app to apply.", 0, NanogramPerfStats.IMAGE_UPLOAD),
         GIF_FAST_DECODE("gifFastDecode", "Lighter decoding for small GIFs", "Small GIFs (up to 320 px) decode faster, with slightly softer edges possible.", "Restart the app to apply.", 0, NanogramPerfStats.GIF_FRAME_DECODE),
-        DB_TUNING("dbTuning", "Database tuning", "A larger database cache and memory mapping for the local message database.", "Restart the app to apply.", 0);
+        DB_TUNING("dbTuning", "Database tuning", "A larger database cache and memory mapping for the local message database.", "Restart the app to apply.", 0),
+        PROGRESS_NOTIFICATIONS("progressNotifications", "Progress notifications", "Android 16 or newer: story uploads and video conversion show a progress-style notification that can be promoted to the status bar and lock screen.", "Applies to the next upload or conversion.", 36),
+        SYSTEM_PHOTO_PICKER("systemPhotoPicker", "System photo picker", "Android 13 or newer: the attach menu's \"open in\" entry and the avatar chooser use the system photo picker.", "Applies the next time you open the picker.", Build.VERSION_CODES.TIRAMISU);
 
         public final String id;
         public final String title;
@@ -53,6 +55,10 @@ public final class NanogramPerfExperiments {
                 return NanogramGifDecodeFlags.isEnabled();
             case DB_TUNING:
                 return NanogramDbTuning.isEnabled();
+            case PROGRESS_NOTIFICATIONS:
+                return NanogramExperiments.isEnabled(NanogramExperiments.PROGRESS_NOTIFICATIONS);
+            case SYSTEM_PHOTO_PICKER:
+                return NanogramExperiments.isEnabled(NanogramExperiments.SYSTEM_PHOTO_PICKER);
         }
         return false;
     }
@@ -106,6 +112,12 @@ public final class NanogramPerfExperiments {
                 break;
             case DB_TUNING:
                 NanogramDbTuning.setEnabled(enabled);
+                break;
+            case PROGRESS_NOTIFICATIONS:
+                NanogramExperiments.setEnabled(NanogramExperiments.PROGRESS_NOTIFICATIONS, enabled);
+                break;
+            case SYSTEM_PHOTO_PICKER:
+                NanogramExperiments.setEnabled(NanogramExperiments.SYSTEM_PHOTO_PICKER, enabled);
                 break;
         }
     }

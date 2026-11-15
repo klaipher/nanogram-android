@@ -37,14 +37,11 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.json.JSONObject;
 import org.telegram.messenger.nanogram.NanogramDiagnostics;
-import org.telegram.messenger.nanogram.NanogramNetworkState;
 import org.telegram.messenger.nanogram.NanogramStrictMode;
-import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.utils.Choreographer60FpsContent;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
-import org.telegram.utils.settings.StartupSettings;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Components.ForegroundDetector;
 import org.telegram.ui.Components.ItemOptions;
@@ -216,30 +213,24 @@ public class ApplicationLoader extends Application {
 
         try {
             connectivityManager = (ConnectivityManager) ApplicationLoader.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && NanogramSystemFlags.isEnabled(NanogramSystemFlags.NETWORK_CALLBACK)) {
-                registerNetworkStateCallback();
-            }
-        } catch (Throwable e) {
-            FileLog.e(e);
-        }
+            BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    try {
+                        currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
+                    } catch (Throwable ignore) {
 
-        try {
-            if (networkStateCallback == null) {
-                BroadcastReceiver networkStateReceiver = new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        try {
-                            currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
-                        } catch (Throwable ignore) {
-
-                        }
-
-                        checkConnectionForAccounts();
                     }
-                };
-                IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
-                ApplicationLoader.applicationContext.registerReceiver(networkStateReceiver, filter);
-            }
+
+                    boolean isSlow = isConnectionSlow();
+                    for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                        ConnectionsManager.getInstance(a).checkConnection();
+                        FileLoader.getInstance(a).onNetworkChanged(isSlow);
+                    }
+                }
+            };
+            IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+            ApplicationLoader.applicationContext.registerReceiver(networkStateReceiver, filter);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -267,12 +258,8 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
-        final boolean lazySlots = StartupSettings.lazyAccountSlots.get();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
             UserConfig.getInstance(a).loadConfig();
-            if (lazySlots && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
-                continue;
-            }
             MessagesController.getInstance(a);
             if (a == 0) {
                 SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
@@ -294,13 +281,10 @@ public class ApplicationLoader extends Application {
 
         MediaController.getInstance();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
-            if (lazySlots && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
-                continue;
-            }
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        if (BuildVars.IS_BILLING_UNAVAILABLE && (StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PLAY_BILLING) || StartupSettings.skipPlayBillingAtStartup.get())) {
+        if (BuildVars.IS_BILLING_UNAVAILABLE && StorePurchasePolicy.blocks(StorePurchasePolicy.Entry.PLAY_BILLING)) {
             BillingController.getInstance().deferConnection();
         } else {
             BillingController.getInstance().startConnection();
@@ -487,61 +471,6 @@ public class ApplicationLoader extends Application {
         return true;
     }
 
-    private static final NanogramNetworkState networkState = new NanogramNetworkState();
-    private static ConnectivityManager.NetworkCallback networkStateCallback;
-
-    @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
-    private static void registerNetworkStateCallback() {
-        final ConnectivityManager.NetworkCallback callback = new ConnectivityManager.NetworkCallback() {
-            @Override
-            public void onAvailable(@NonNull Network network) {
-                lastKnownNetworkType = -1;
-            }
-
-            @Override
-            public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
-                final int transport = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? 1 : capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? 2 : 3;
-                final boolean changed = networkState.onCapabilities(network, capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-                        !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED), !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING), transport);
-                if (changed) {
-                    onDefaultNetworkChanged();
-                }
-            }
-
-            @Override
-            public void onLost(@NonNull Network network) {
-                if (networkState.onLost(network)) {
-                    onDefaultNetworkChanged();
-                }
-            }
-        };
-        connectivityManager.registerDefaultNetworkCallback(callback);
-        networkStateCallback = callback;
-    }
-
-    private static void onDefaultNetworkChanged() {
-        lastKnownNetworkType = -1;
-        try {
-            currentNetworkInfo = connectivityManager.getActiveNetworkInfo();
-        } catch (Throwable ignore) {
-
-        }
-        AndroidUtilities.runOnUIThread(ApplicationLoader::checkConnectionForAccounts);
-    }
-
-    // one place for both network paths (broadcast and callback), so account-slot rules apply to both
-    private static void checkConnectionForAccounts() {
-        final boolean isSlow = isConnectionSlow();
-        final boolean lazy = StartupSettings.lazyAccountSlots.get();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (lazy && a != 0 && !UserConfig.getInstance(a).isClientActivated()) {
-                continue;
-            }
-            ConnectionsManager.getInstance(a).checkConnection();
-            FileLoader.getInstance(a).onNetworkChanged(isSlow);
-        }
-    }
-
     private static long lastNetworkCheck = -1;
     private static void ensureCurrentNetworkGet() {
         final long now = System.currentTimeMillis();
@@ -698,9 +627,6 @@ public class ApplicationLoader extends Application {
     }
 
     public static boolean isNetworkOnlineRealtime() {
-        if (networkStateCallback != null && networkState.isInitialized()) {
-            return networkState.isOnline();
-        }
         try {
             ConnectivityManager connectivityManager = (ConnectivityManager) ApplicationLoader.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connectivityManager.getActiveNetworkInfo();

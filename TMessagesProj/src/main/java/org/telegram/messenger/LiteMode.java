@@ -14,7 +14,6 @@ import androidx.annotation.RequiresApi;
 import androidx.core.math.MathUtils;
 
 import org.telegram.messenger.nanogram.NanogramPowerPolicy;
-import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
@@ -99,7 +98,6 @@ public class LiteMode {
 
     private static int powerSaverLevel;
     private static volatile boolean followSystemPowerSaver = true;
-    private static volatile boolean skipPercentWhileCharging;
     private static boolean lastPowerSaverApplied;
 
     private static int value;
@@ -140,7 +138,6 @@ public class LiteMode {
     private static boolean thermalPollScheduled;
     private static volatile boolean heavyWorkActive;
     private static PowerManager systemPowerManager;
-    private static volatile boolean charging;
 
     private static boolean isPowerSaverConditionMet() {
         if (NanogramPowerPolicy.systemSignal(followSystemPowerSaver, systemPowerSaver, thermalStatus, thermalForecastHot)) {
@@ -152,7 +149,7 @@ public class LiteMode {
         if (powerSaverLevel >= 100) {
             return true;
         }
-        return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), charging, skipPercentWhileCharging, false, false, 0);
+        return NanogramPowerPolicy.shouldApply(powerSaverLevel, getBatteryLevel(), false, false, 0);
     }
 
     // Heavy work (a call) lets the forecast lower the presets before the system reports severe heat.
@@ -278,12 +275,6 @@ public class LiteMode {
         }
         final int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
         final int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-        final int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        final boolean nowCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
-        if (nowCharging != charging) {
-            charging = nowCharging;
-            onSystemPowerSignalChanged();
-        }
         if (level >= 0 && scale > 0) {
             setBatteryLevel(MathUtils.clamp(Math.round(level * 100f / scale), 0, 100));
         }
@@ -450,7 +441,6 @@ public class LiteMode {
         }
         powerSaverLevel = preferences.getInt("lite_mode_battery_level", batteryDefaultValue);
         followSystemPowerSaver = preferences.getBoolean("lite_mode_follow_system", true);
-        skipPercentWhileCharging = NanogramSystemFlags.isEnabled(NanogramSystemFlags.POWER_SKIP_WHILE_CHARGING);
         loaded = true;
     }
 

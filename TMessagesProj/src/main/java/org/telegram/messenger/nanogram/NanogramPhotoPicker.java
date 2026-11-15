@@ -7,6 +7,7 @@ import android.os.Build;
 import android.provider.MediaStore;
 
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramExperiments;
 
 public final class NanogramPhotoPicker {
 
@@ -23,7 +24,7 @@ public final class NanogramPhotoPicker {
 
     public static Intent createIntent(Context context, boolean images, boolean video) {
         try {
-            if (context == null || !canUse(NanogramSystemFlags.isEnabled(NanogramSystemFlags.SYSTEM_PHOTO_PICKER), Build.VERSION.SDK_INT)) {
+            if (context == null || !canUse(NanogramExperiments.isEnabled(NanogramExperiments.SYSTEM_PHOTO_PICKER), Build.VERSION.SDK_INT)) {
                 return null;
             }
             final Intent intent = new Intent(MediaStore.ACTION_PICK_IMAGES);

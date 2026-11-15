@@ -7,11 +7,12 @@ import android.os.Build;
 import androidx.annotation.RequiresApi;
 
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NanogramExperiments;
 import org.telegram.messenger.R;
 
 /**
  * Android 16 progress-centric notification (Notification.ProgressStyle, promoted ongoing "Live Update") for uploads and
- * video conversion. Only with the "progress_notifications" experimental flag on API 36+; otherwise the notification is unchanged.
+ * video conversion. Only with the "Progress notifications" Debug experiment on API 36+; otherwise the notification is unchanged.
  */
 public final class NanogramProgressNotification {
 
@@ -22,7 +23,7 @@ public final class NanogramProgressNotification {
     }
 
     public static boolean isActive() {
-        return Build.VERSION.SDK_INT >= 36 && NanogramSystemFlags.isEnabled(NanogramSystemFlags.PROGRESS_NOTIFICATIONS);
+        return Build.VERSION.SDK_INT >= 36 && NanogramExperiments.isEnabled(NanogramExperiments.PROGRESS_NOTIFICATIONS);
     }
 
     /** setRequestPromotedOngoing arrived in API 36.1; Android 16.0 gets the progress style without promotion. */

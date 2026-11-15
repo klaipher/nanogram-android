@@ -96,7 +96,6 @@ import org.telegram.messenger.camera.CameraController;
 import org.telegram.messenger.camera.CameraInfo;
 import org.telegram.messenger.camera.CameraSession;
 import org.telegram.messenger.camera.Size;
-import org.telegram.messenger.nanogram.NanogramSystemFlags;
 import org.telegram.messenger.video.MP4Builder;
 import org.telegram.messenger.video.Mp4Movie;
 import org.telegram.messenger.video.RoundAudioTimeline;
@@ -1546,7 +1545,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
     private volatile int surfaceIndex;
 
     private boolean roundQualityBoosted() {
-        return RoundVideoEncodingPolicy.boosted(!NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_QUALITY_OFF), SharedConfig.getDevicePerformanceClass());
+        return RoundVideoEncodingPolicy.boosted(true, SharedConfig.getDevicePerformanceClass());
     }
 
     private int roundOutputSize() {
@@ -2306,7 +2305,7 @@ public class InstantCameraView extends InstantCameraViewBase implements Notifica
         private boolean skippedFirst;
 
         private long desyncTime;
-        private final boolean avSyncFix = !NanogramSystemFlags.isEnabled(NanogramSystemFlags.ROUND_AV_SYNC_OFF);
+        private static final boolean avSyncFix = true;
         private boolean videoClockOffsetKnown;
         private long videoClockOffsetNs;
         private long audioWaitStartUs = -1;

@@ -27,7 +27,7 @@ public class NanogramPerfExperimentsTest {
             assertFalse(e.description.isEmpty());
             assertFalse(e.applyHint.isEmpty());
         }
-        assertEquals(6, ids.size());
+        assertEquals(8, ids.size());
     }
 
     @Test
@@ -47,6 +47,26 @@ public class NanogramPerfExperimentsTest {
         assertEquals(NanogramPerfStats.IMAGE_UPLOAD, NanogramPerfExperiments.Experiment.GPU_PREUPLOAD.statKeys[0]);
         assertEquals(NanogramPerfStats.GIF_FRAME_DECODE, NanogramPerfExperiments.Experiment.GIF_FAST_DECODE.statKeys[0]);
         assertEquals(0, NanogramPerfExperiments.Experiment.DB_TUNING.statKeys.length);
+        assertEquals(NanogramPerfStats.TELECOM_CALLS, NanogramPerfExperiments.Experiment.TELECOM.statKeys[2]);
+        assertEquals(NanogramPerfStats.CAMERA2_OPENED, NanogramPerfExperiments.Experiment.CAMERA2.statKeys[1]);
+        assertEquals(0, NanogramPerfExperiments.Experiment.PROGRESS_NOTIFICATIONS.statKeys.length);
+        assertEquals(0, NanogramPerfExperiments.Experiment.SYSTEM_PHOTO_PICKER.statKeys.length);
+    }
+
+    @Test
+    public void sdkGatesOfMovedExperiments() {
+        assertFalse(NanogramPerfExperiments.Experiment.PROGRESS_NOTIFICATIONS.isSupported(35));
+        assertTrue(NanogramPerfExperiments.Experiment.PROGRESS_NOTIFICATIONS.isSupported(36));
+        assertFalse(NanogramPerfExperiments.Experiment.SYSTEM_PHOTO_PICKER.isSupported(32));
+        assertTrue(NanogramPerfExperiments.Experiment.SYSTEM_PHOTO_PICKER.isSupported(33));
+    }
+
+    @Test
+    public void countersAreReportedAsTimes() {
+        NanogramPerfStats.count(NanogramPerfStats.CAMERA2_OPENED);
+        NanogramPerfStats.count(NanogramPerfStats.CAMERA2_OPENED);
+        assertEquals("camera2Opened: 2 times", NanogramPerfStats.formatLine(NanogramPerfStats.CAMERA2_OPENED, NanogramPerfStats.snapshot().get(NanogramPerfStats.CAMERA2_OPENED)));
+        assertEquals("telecomCalls: 0 times", NanogramPerfStats.formatLine(NanogramPerfStats.TELECOM_CALLS, null));
     }
 
     @Test

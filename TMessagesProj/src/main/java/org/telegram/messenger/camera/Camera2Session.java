@@ -39,7 +39,7 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.video.RoundVideoEncodingPolicy;
 import org.telegram.messenger.MessagesController;
-import org.telegram.messenger.NanogramExperiments;
+import org.telegram.messenger.NanogramPerfStats;
 import org.telegram.messenger.nanogram.NanogramFeatures;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -418,7 +418,7 @@ public class Camera2Session {
             FileLog.e("Camera2Session extension " + NanogramCameraExtensions.name(ext) + " failed to start", e);
             requestedExtension = -1;
             sessionStarting = false;
-            NanogramExperiments.count("cameraExtensionFailed");
+            NanogramPerfStats.count(NanogramPerfStats.CAMERA_EXTENSION_FAILED);
             NanogramCameraExtensions.blacklist(cameraId, ext);
             return false;
         }
@@ -504,7 +504,7 @@ public class Camera2Session {
             }
             extensionSession = session;
             lastTime = System.currentTimeMillis();
-            NanogramExperiments.count("cameraExtensionOpened");
+            NanogramPerfStats.count(NanogramPerfStats.CAMERA_EXTENSION_OPENED);
             FileLog.d("Camera2Session camera #" + cameraId + " extension " + NanogramCameraExtensions.name(extension) + " configured" + latencyInfo());
             updateExtensionRequest();
             notifyReady();
@@ -518,7 +518,7 @@ public class Camera2Session {
             }
             sessionStarting = false;
             FileLog.e("Camera2Session camera #" + cameraId + " extension session failed to configure");
-            NanogramExperiments.count("cameraExtensionFailed");
+            NanogramPerfStats.count(NanogramPerfStats.CAMERA_EXTENSION_FAILED);
             NanogramCameraExtensions.blacklist(cameraId, extension);
             extensionSession = null;
             if (!isClosed) {
@@ -578,7 +578,7 @@ public class Camera2Session {
             if (!TAG_STILL.equals(request.getTag()) || failedHandled) return;
             failedHandled = true;
             FileLog.e("Camera2Session camera #" + cameraId + " extension capture failed");
-            NanogramExperiments.count("cameraExtensionFailed");
+            NanogramPerfStats.count(NanogramPerfStats.CAMERA_EXTENSION_FAILED);
             if (requestedExtension >= 0) {
                 NanogramCameraExtensions.blacklist(cameraId, requestedExtension);
             }

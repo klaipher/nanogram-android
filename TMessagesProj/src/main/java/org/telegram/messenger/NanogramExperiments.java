@@ -12,6 +12,8 @@ public final class NanogramExperiments {
     public static final String ADAPTIVE_REFRESH_RATE = "adaptiveRefreshRate";
     public static final String SELF_MANAGED_TELECOM = "selfManagedTelecom";
     public static final String CAMERA2_CAPTURE = "camera2Capture";
+    public static final String PROGRESS_NOTIFICATIONS = "progressNotifications";
+    public static final String SYSTEM_PHOTO_PICKER = "systemPhotoPicker";
 
     private static final String PREFS = "nanogram_experiments";
     private static final ConcurrentHashMap<String, Boolean> cache = new ConcurrentHashMap<>();
@@ -70,29 +72,6 @@ public final class NanogramExperiments {
             prefs.edit().putBoolean(key, enabled).apply();
         } catch (Throwable e) {
             FileLog.e(e);
-        }
-    }
-
-    public static boolean toggle(String key) {
-        boolean value = !isEnabled(key);
-        setEnabled(key, value);
-        return value;
-    }
-
-    public static void count(String key) {
-        try {
-            SharedPreferences prefs = ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            prefs.edit().putInt("count_" + key, prefs.getInt("count_" + key, 0) + 1).apply();
-        } catch (Throwable e) {
-            FileLog.e(e);
-        }
-    }
-
-    public static int getCount(String key) {
-        try {
-            return ApplicationLoader.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("count_" + key, 0);
-        } catch (Throwable e) {
-            return 0;
         }
     }
 }

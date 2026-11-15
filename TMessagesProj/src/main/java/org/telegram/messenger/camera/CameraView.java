@@ -2311,7 +2311,7 @@ public class CameraView extends FrameLayout implements TextureView.SurfaceTextur
             cameraOpenStartNanos[i] = System.nanoTime();
             final Camera2Session camera2 = useCamera2 && !optimizeForBarcode ? Camera2Session.create(i == 0 ? isFrontface : !isFrontface, surfaceWidth, surfaceHeight, 0, i == 0) : null;
             if (useCamera2 && !optimizeForBarcode) {
-                NanogramExperiments.count(camera2 != null ? "camera2Opened" : "camera2Unavailable");
+                NanogramPerfStats.count(camera2 != null ? NanogramPerfStats.CAMERA2_OPENED : NanogramPerfStats.CAMERA2_UNAVAILABLE);
             }
             if (camera2 != null) {
                 final Camera2Session session = camera2;

@@ -5024,7 +5024,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				}, startsIncoming, videoCall);
 				nanogramTelecom = call;
 				call.start(this, ContactsController.formatName(user.first_name, user.last_name));
-				NanogramExperiments.count("telecomCalls");
+				NanogramPerfStats.count(NanogramPerfStats.TELECOM_CALLS);
 				return;
 			}
 			switch (state) {

@@ -14,6 +14,12 @@ public final class NanogramPerfStats {
     public static final String CAMERA_FIRST_FRAME = "cameraFirstFrame";
     public static final String TELECOM_REGISTER = "telecomRegister";
     public static final String CALL_SETUP = "callSetup";
+    // Event counters (count only, no durations): recorded with count().
+    public static final String CAMERA2_OPENED = "camera2Opened";
+    public static final String CAMERA2_UNAVAILABLE = "camera2Unavailable";
+    public static final String CAMERA_EXTENSION_OPENED = "cameraExtensionOpened";
+    public static final String CAMERA_EXTENSION_FAILED = "cameraExtensionFailed";
+    public static final String TELECOM_CALLS = "telecomCalls";
 
     public static final long SLOW_FRAME_NANOS = 16_700_000L;
     public static final long VERY_SLOW_FRAME_NANOS = 33_400_000L;
@@ -88,6 +94,15 @@ public final class NanogramPerfStats {
         stat.add(nanos);
     }
 
+    /** Counts one event under {@code key}; shown as "n=..." only. */
+    public static void count(String key) {
+        record(key, 0);
+    }
+
+    public static boolean isCounter(String key) {
+        return CAMERA2_OPENED.equals(key) || CAMERA2_UNAVAILABLE.equals(key) || CAMERA_EXTENSION_OPENED.equals(key) || CAMERA_EXTENSION_FAILED.equals(key) || TELECOM_CALLS.equals(key);
+    }
+
     public static void recordSince(String key, long startNanos) {
         if (startNanos > 0) {
             record(key, System.nanoTime() - startNanos);
@@ -113,6 +128,9 @@ public final class NanogramPerfStats {
     }
 
     public static String formatLine(String key, Snapshot s) {
+        if (isCounter(key)) {
+            return key + ": " + (s == null ? 0 : s.count) + " times";
+        }
         if (s == null || s.count == 0) {
             return key + ": no samples";
         }

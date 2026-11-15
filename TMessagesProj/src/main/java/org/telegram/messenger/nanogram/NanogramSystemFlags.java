@@ -8,18 +8,12 @@ import org.telegram.messenger.ApplicationLoader;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Experimental switches for device-dependent or behaviour-changing system work. All default to off; the *_OFF keys are kill switches for fixes that are on by default.
- * Debug builds flip them in the "nanogram_experimental" preferences file; the cache is read once per key.
+ * Developer-only switch(es) in the "nanogram_experimental" preferences file (debuggable builds, set with adb run-as). User-visible experiments live in
+ * {@link org.telegram.messenger.NanogramExperiments} and the Debug settings list.
  */
 public final class NanogramSystemFlags {
 
-    public static final String NETWORK_CALLBACK = "net_callback";
-    public static final String POWER_SKIP_WHILE_CHARGING = "power_skip_charging";
     public static final String STRICT_MODE = "strictmode";
-    public static final String PROGRESS_NOTIFICATIONS = "progress_notifications";
-    public static final String SYSTEM_PHOTO_PICKER = "photo_picker";
-    public static final String ROUND_QUALITY_OFF = "round_quality_off";
-    public static final String ROUND_AV_SYNC_OFF = "round_av_sync_off";
 
     private static final String PREFS = "nanogram_experimental";
     private static final ConcurrentHashMap<String, Boolean> cache = new ConcurrentHashMap<>();
