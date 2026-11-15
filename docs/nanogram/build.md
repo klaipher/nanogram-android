@@ -39,6 +39,17 @@ then `Tools/dev/ng build release`. Push notifications need our Firebase config a
 | Uncompressed, 16 KB-aligned native libraries | app `packaging.jniLibs`, `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES` | no extracted copy on the device, ready for 16 KB-page devices |
 | Shallow submodules | `ng setup` | pinned commits only |
 
+## libopus (float, with OSCE)
+
+`prebuild/build_opus.sh` builds libopus 1.6.1 with opus's own CMake and the options of the shared `shared/opus/opus-options.sh`
+(floating point, NEON intrinsics, OSCE LACE + NoLACE + bandwidth extension, no deep PLC, no DRED). The model weights are
+fetched by `shared/opus/fetch-models.sh` (pinned sha256, cache `~/.cache/nanogram-deps/opus-models`, first prebuild needs the
+network for about 135 MB) into a copy of the opus submodule. The decoder only runs OSCE when a caller raises its complexity:
+the "Enhance voice messages" switch does (`NanogramOpusDecoder`, voice-message playback only); calls and recording stay at
+complexity 0. After a release build check the link map: `sh shared/opus/check-link-map.sh --osce
+<TMessagesProj/.cxx/.../<ABI>/tmessages.49.map>` (lace, nolace, bbwenet and osce linked, no fargan/plc/pitchdnn).
+The libopus part of `libtmessages.so` is about 2.4 to 2.5 MB per ABI (was 0.14 MB fixed point); 2.26 MB of it are the weights.
+
 ## Native speed flags
 
 Hot code (tgnet, sqlite, image/gif/lottie glue, opus, FFmpeg, libvpx) is built for speed (-O2, no `--enable-small`);

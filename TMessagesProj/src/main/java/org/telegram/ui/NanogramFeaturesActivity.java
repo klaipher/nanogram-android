@@ -48,6 +48,7 @@ public class NanogramFeaturesActivity extends UniversalFragment {
     private static final int ID_ENHANCED_PHOTOS = 11;
     private static final int ID_ENHANCED_PHOTO_MODE = 12;
     private static final int ID_VOICE_ENHANCEMENT = 13;
+    private static final int ID_ENHANCE_VOICE_MESSAGES = 14;
 
     // Feature C turns this on when its recorder button lands; until then its row stays hidden.
     private static final boolean RECORDER_MIC_SWITCH_AVAILABLE = true;
@@ -176,6 +177,10 @@ public class NanogramFeaturesActivity extends UniversalFragment {
         items.add(UItem.asCheck(ID_VOICE_ENHANCEMENT, getString(R.string.NanogramVoiceEnhancement)).setChecked(NanogramFeatures.headsetVoiceEnhancement()));
         items.add(UItem.asShadow(getString(R.string.NanogramVoiceEnhancementInfo)));
 
+        items.add(UItem.asHeader(getString(R.string.NanogramFeaturesPlayback)));
+        items.add(UItem.asCheck(ID_ENHANCE_VOICE_MESSAGES, getString(R.string.NanogramEnhanceVoiceMessages)).setChecked(NanogramFeatures.enhanceVoiceMessages()));
+        items.add(UItem.asShadow(getString(R.string.NanogramEnhanceVoiceMessagesInfo)));
+
         items.add(UItem.asHeader(getString(R.string.NanogramFeaturesCamera)));
         items.add(UItem.asCheck(ID_ROUND_WIDE_ANGLE, getString(R.string.NanogramRoundWideAngle)).setChecked(NanogramFeatures.roundWideAngle()));
         items.add(UItem.asCheck(ID_ENHANCED_PHOTOS, getString(R.string.NanogramEnhancedPhotos)).setChecked(NanogramFeatures.enhancedPhotos()));
@@ -297,6 +302,9 @@ public class NanogramFeaturesActivity extends UniversalFragment {
                 break;
             case ID_VOICE_ENHANCEMENT:
                 NanogramFeatures.setHeadsetVoiceEnhancement(!NanogramFeatures.headsetVoiceEnhancement());
+                break;
+            case ID_ENHANCE_VOICE_MESSAGES:
+                NanogramFeatures.setEnhanceVoiceMessages(!NanogramFeatures.enhanceVoiceMessages());
                 break;
             case ID_ENHANCED_PHOTOS:
                 if (!NanogramFeatures.enhancedPhotos() && !enhancedPhotosSupported()) {

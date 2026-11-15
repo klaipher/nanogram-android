@@ -1554,6 +1554,188 @@ VIDEO_DECODER_FUNC(
     return VIDEO_DECODER_ERROR_OTHER;
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Nanogram: voice-message playback through FFmpeg's libopus decoder, with libopus 1.6 speech enhancement (LACE/NoLACE,
+// bandwidth extension). The class is org.telegram.messenger.nanogram.NanogramOpusDecoder; ExoPlayer's own FfmpegAudioDecoder
+// natives above are not touched. libopus runs the enhancement only when the decoder complexity is raised, which is the
+// libopus decoder's private options osce_complexity / osce_bwe (klaipher/FFmpeg libopusdec.c).
+//
+// The context is recreated on every reset (seek) instead of avcodec_flush_buffers(): flush makes libopusdec skip pre_skip
+// samples again (FFmpeg's own trimming is off, AV_CODEC_FLAG2_SKIP_MANUAL) and keeps bandwidth-extension history across a reset, while the Java side already implements the
+// pre-skip / seek pre-roll trimming (OpusSkip) and needs a decoder that starts clean. Output is 16-bit interleaved PCM at
+// 48 kHz, one packet in, one frame out, so the Java caller can hand in a buffer of the largest Opus frame (120 ms) and no
+// callback is needed.
+// ---------------------------------------------------------------------------------------------------------------------
+namespace {
+
+struct NanogramOpusContext {
+    AVCodecContext* codec = nullptr;
+    uint8_t* extraData = nullptr;
+    int extraDataSize = 0;
+    int complexity = 0;
+    bool bandwidthExtension = false;
+};
+
+void nanogramOpusCloseCodec(NanogramOpusContext* c) {
+    if (c->codec) {
+        avcodec_free_context(&c->codec);
+    }
+}
+
+// Opens a fresh libopus decoder from the stored header and options. Returns false (and logs) on failure.
+bool nanogramOpusOpenCodec(NanogramOpusContext* c) {
+    const AVCodec* codec = avcodec_find_decoder_by_name("libopus");
+    if (!codec) {
+        LOGE("libopus decoder is not in this FFmpeg build.");
+        return false;
+    }
+    AVCodecContext* context = avcodec_alloc_context3(codec);
+    if (!context) {
+        LOGE("Failed to allocate the Opus context.");
+        return false;
+    }
+    context->request_sample_fmt = AV_SAMPLE_FMT_S16;
+    context->extradata = static_cast<uint8_t*>(
+            av_mallocz(static_cast<size_t>(c->extraDataSize) + AV_INPUT_BUFFER_PADDING_SIZE));
+    if (!context->extradata) {
+        avcodec_free_context(&context);
+        return false;
+    }
+    memcpy(context->extradata, c->extraData, static_cast<size_t>(c->extraDataSize));
+    context->extradata_size = c->extraDataSize;
+    context->err_recognition = AV_EF_IGNORE_ERR;
+
+    AVDictionary* options = nullptr;
+    av_dict_set_int(&options, "osce_complexity", c->complexity, 0);
+    av_dict_set_int(&options, "osce_bwe", c->bandwidthExtension ? 1 : 0, 0);
+    // libopusdec sets avctx->delay = pre_skip and avcodec_open2 turns that into skip_samples; the Java side trims instead.
+    context->flags2 |= AV_CODEC_FLAG2_SKIP_MANUAL;
+    const int result = avcodec_open2(context, codec, &options);
+    av_dict_free(&options);
+    if (result < 0) {
+        logError("avcodec_open2 (libopus)", result);
+        avcodec_free_context(&context);
+        return false;
+    }
+    c->codec = context;
+    return true;
+}
+
+jlong nanogramOpusCreate(JNIEnv* env, jclass, jbyteArray header, jint complexity, jboolean bandwidthExtension) {
+    if (!header) {
+        return 0L;
+    }
+    const jsize size = env->GetArrayLength(header);
+    if (size < 19) {
+        LOGE("Opus header is too short: %d", static_cast<int>(size));
+        return 0L;
+    }
+    NanogramOpusContext* c = new (std::nothrow) NanogramOpusContext();
+    if (!c) {
+        return 0L;
+    }
+    c->extraData = static_cast<uint8_t*>(malloc(static_cast<size_t>(size)));
+    if (!c->extraData) {
+        delete c;
+        return 0L;
+    }
+    env->GetByteArrayRegion(header, 0, size, reinterpret_cast<jbyte*>(c->extraData));
+    if (env->ExceptionCheck()) {
+        free(c->extraData);
+        delete c;
+        return 0L;
+    }
+    c->extraDataSize = size;
+    c->complexity = complexity < 0 ? 0 : (complexity > 10 ? 10 : complexity);
+    c->bandwidthExtension = bandwidthExtension == JNI_TRUE;
+    if (!nanogramOpusOpenCodec(c)) {
+        free(c->extraData);
+        delete c;
+        return 0L;
+    }
+    return reinterpret_cast<jlong>(c);
+}
+
+// Returns the number of bytes written (16-bit interleaved PCM), 0 when the packet produced no audio, -1 for invalid
+// data (non-fatal, the Java side skips the buffer) and -2 for a fatal error.
+jint nanogramOpusDecode(JNIEnv* env, jclass, jlong handle, jobject input, jint inputSize, jobject output, jint outputCapacity) {
+    NanogramOpusContext* c = reinterpret_cast<NanogramOpusContext*>(handle);
+    if (!c || !c->codec || !input || !output || inputSize < 0 || outputCapacity < 0) {
+        return -2;
+    }
+    uint8_t* in = static_cast<uint8_t*>(env->GetDirectBufferAddress(input));
+    uint8_t* out = static_cast<uint8_t*>(env->GetDirectBufferAddress(output));
+    if (!in || !out) {
+        return -2;
+    }
+    if (inputSize == 0) {
+        return -1;  // an empty packet is a lost packet: skip it like MediaCodec, do not stop playback
+    }
+    AVPacket* packet = av_packet_alloc();
+    if (!packet) {
+        return -2;
+    }
+    packet->data = in;
+    packet->size = inputSize;
+    int result = avcodec_send_packet(c->codec, packet);
+    av_packet_free(&packet);
+    if (result < 0) {
+        logError("avcodec_send_packet (libopus)", result);
+        return result == AVERROR_INVALIDDATA ? -1 : -2;
+    }
+    AVFrame* frame = av_frame_alloc();
+    if (!frame) {
+        return -2;
+    }
+    int written = 0;
+    while (true) {
+        result = avcodec_receive_frame(c->codec, frame);
+        if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
+            break;
+        }
+        if (result < 0) {
+            logError("avcodec_receive_frame (libopus)", result);
+            av_frame_free(&frame);
+            return result == AVERROR_INVALIDDATA ? -1 : -2;
+        }
+        const int bytes = frame->nb_samples * c->codec->ch_layout.nb_channels * 2;
+        if (written + bytes > outputCapacity) {
+            LOGE("Opus frame does not fit the output buffer (%d + %d > %d).", written, bytes, outputCapacity);
+            av_frame_free(&frame);
+            return -2;
+        }
+        memcpy(out + written, frame->data[0], static_cast<size_t>(bytes));
+        written += bytes;
+        av_frame_unref(frame);
+    }
+    av_frame_free(&frame);
+    return written;
+}
+
+// Starts again from a clean decoder with the same header and options. Returns false when that failed (the context is then
+// unusable and the Java side reports an error).
+jboolean nanogramOpusReset(JNIEnv*, jclass, jlong handle) {
+    NanogramOpusContext* c = reinterpret_cast<NanogramOpusContext*>(handle);
+    if (!c) {
+        return JNI_FALSE;
+    }
+    nanogramOpusCloseCodec(c);
+    return nanogramOpusOpenCodec(c) ? JNI_TRUE : JNI_FALSE;
+}
+
+void nanogramOpusRelease(JNIEnv*, jclass, jlong handle) {
+    NanogramOpusContext* c = reinterpret_cast<NanogramOpusContext*>(handle);
+    if (!c) {
+        return;
+    }
+    nanogramOpusCloseCodec(c);
+    free(c->extraData);
+    delete c;
+}
+
+}  // namespace
+
 extern "C" int ffmpegOnJNILoad(JavaVM *vm, JNIEnv *env) {
     jclass clazz =
             env->FindClass(
@@ -1625,6 +1807,33 @@ extern "C" int ffmpegOnJNILoad(JavaVM *vm, JNIEnv *env) {
             sizeof(kFfmpegLibraryMethods) /
             sizeof(kFfmpegLibraryMethods[0])) < 0) {
         LOGE("JNI_OnLoad: RegisterNatives failed for FfmpegLibrary");
+        return -1;
+    }
+
+    jclass opusClazz =
+            env->FindClass("org/telegram/messenger/nanogram/NanogramOpusDecoder");
+    if (!opusClazz) {
+        LOGE("JNI_OnLoad: FindClass failed for NanogramOpusDecoder");
+        return -1;
+    }
+
+    static const JNINativeMethod kNanogramOpusDecoderMethods[] = {
+            {"nativeCreate", "([BIZ)J",
+                    reinterpret_cast<void*>(nanogramOpusCreate)},
+            {"nativeDecode", "(JLjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;I)I",
+                    reinterpret_cast<void*>(nanogramOpusDecode)},
+            {"nativeReset", "(J)Z",
+                    reinterpret_cast<void*>(nanogramOpusReset)},
+            {"nativeRelease", "(J)V",
+                    reinterpret_cast<void*>(nanogramOpusRelease)},
+    };
+
+    if (env->RegisterNatives(
+            opusClazz,
+            kNanogramOpusDecoderMethods,
+            sizeof(kNanogramOpusDecoderMethods) /
+            sizeof(kNanogramOpusDecoderMethods[0])) < 0) {
+        LOGE("JNI_OnLoad: RegisterNatives failed for NanogramOpusDecoder");
         return -1;
     }
 

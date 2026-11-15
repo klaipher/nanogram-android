@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Build static libopus for Android.
+# Build static libopus for Android: floating point, with Opus 1.6 speech enhancement (OSCE: LACE, NoLACE and bandwidth
+# extension) compiled in. The decoder runs it only when a caller raises the decoder complexity (FFmpeg's libopus decoder
+# options osce_complexity / osce_bwe, set by the opt-in "Enhance voice messages" switch), so every other decode, including
+# calls, stays at complexity 0.
 #
 # Expected layout:
 #
@@ -9,6 +12,7 @@
 #         opus/
 #     prebuild/
 #       build_opus.sh
+#   ../../shared/opus/   (the nanogram-deps submodule: opus-options.sh, fetch-models.sh, check-link-map.sh)
 #
 # Result:
 #
@@ -17,21 +21,21 @@
 #   jni/prebuild/lib/x86_64/libopus.a
 #   jni/prebuild/lib/x86/libopus.a
 #
-# build_opus/ is used as temporary workspace and is removed after a successful
-# build. Sources are never copied.
+# build_opus/ is the temporary workspace and is removed after a successful build. The submodule checkout is never
+# written: the build works on a COPY of the opus tree (the model weights are extracted into it).
 #
-# Why an explicit source list instead of opus's own CMake:
-# for the FIXED_POINT ARM path, opus's CMake defines
-# OPUS_ARM_MAY_HAVE_NEON / OPUS_ARM_PRESUME_NEON, which make the code reference
-# celt_pitch_xcorr_neon -- a symbol provided only by celt/arm/celt_pitch_xcorr_arm.s.
-# Instead, this build enables only the NEON intrinsic sources/macros, avoiding
-# the asm-only symbol while still retaining NEON acceleration.
+# One shared source: the CMake options, the C flags and the pinned model archive are nanogram-deps opus/opus-options.sh
+# (the same file iOS and macOS source); opus/fetch-models.sh downloads and sha256-verifies the weights (cache
+# ~/.cache/nanogram-deps/opus-models). This script used to be a FIXED_POINT build from an explicit source list, because
+# the fixed-point ARM path of opus's CMake references the asm-only celt_pitch_xcorr_neon; the float build has no such
+# symbol (CMake builds the NEON intrinsics, OPUS_PRESUME_NEON=ON).
 #
 # Optional environment overrides:
 #   OPUS_SOURCE_DIR=/path/to/opus
+#   SHARED_OPUS_DIR=/path/to/nanogram-deps/opus
 #   ANDROID_NDK_HOME=/path/to/ndk
 #   ANDROID_SDK_ROOT=/path/to/sdk
-#   NDK_VERSION=27.2.12479018
+#   NDK_VERSION=30.0.16248370
 #   API=31
 #   ABIS="arm64-v8a armeabi-v7a x86_64 x86"
 #   JOBS=16
@@ -42,158 +46,50 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 OPUS_SRC="${OPUS_SOURCE_DIR:-$SCRIPT_DIR/../third_party/xiph/opus}"
+SHARED_OPUS_DIR="${SHARED_OPUS_DIR:-$JNI_DIR/../../shared/opus}"
 BUILD_DIR="$SCRIPT_DIR/build/opus"
-GEN_DIR="$BUILD_DIR/cmake"
+# The copy of the opus tree that the build reads (the models are extracted into it, never into the submodule).
+OPUS_BUILD_SRC="$BUILD_DIR/src"
+# The release tarball ships package_version; a git checkout would ask git, which fails in a copy without .git
+# (iOS and macOS write the same constant).
+OPUS_VERSION="1.6.1"
 
 require_ndk
 require_cmake_ninja
-require_command awk
 
-# Extract a make-style:
-#
-#   VAR = a \
-#         b \
-#         c
-#
-# list from one of Opus's *.mk files.
-mkvar() {
-    awk -v v="$2" '
-        $0 ~ "^"v"[ \t]*=" {
-            f=1
-            sub("^"v"[ \t]*=[ \t]*","")
-        }
-        f {
-            cont = sub(/\\[ \t]*$/,"")
-            gsub(/^[ \t]+|[ \t]+$/,"")
-            if ($0 != "") print $0
-            if (!cont) exit
-        }
-    ' "$1"
+[[ -f "$OPUS_SRC/CMakeLists.txt" ]] || {
+    echo "ERROR: missing $OPUS_SRC/CMakeLists.txt" >&2
+    echo "       Set OPUS_SOURCE_DIR if the source tree is elsewhere." >&2
+    exit 1
+}
+[[ -f "$SHARED_OPUS_DIR/opus-options.sh" && -f "$SHARED_OPUS_DIR/fetch-models.sh" ]] || {
+    echo "ERROR: missing the shared opus options in $SHARED_OPUS_DIR" >&2
+    echo "       Run: git submodule update --init shared   (or set SHARED_OPUS_DIR)" >&2
+    exit 1
 }
 
-# Convert newline-separated relative source paths into a semicolon-separated
-# list of absolute paths suitable for passing to CMake.
-to_cmake_list() {
-    local out="" f
-    while IFS= read -r f; do
-        [ -n "$f" ] && out="$out;$OPUS_SRC/$f"
-    done
-    echo "${out#;}"
-}
-
-OPUS_MK="$OPUS_SRC/opus_sources.mk"
-CELT_MK="$OPUS_SRC/celt_sources.mk"
-SILK_MK="$OPUS_SRC/silk_sources.mk"
-
-for m in "$OPUS_MK" "$CELT_MK" "$SILK_MK"; do
-    [ -f "$m" ] || {
-        echo "ERROR: missing $m" >&2
-        echo "       Set OPUS_SOURCE_DIR if the source tree is elsewhere." >&2
-        exit 1
-    }
-done
-
-BASE_LIST="$({
-    mkvar "$OPUS_MK" OPUS_SOURCES
-    mkvar "$OPUS_MK" OPUS_SOURCES_FLOAT
-    mkvar "$CELT_MK" CELT_SOURCES
-    mkvar "$SILK_MK" SILK_SOURCES
-    mkvar "$SILK_MK" SILK_SOURCES_FIXED
-} | to_cmake_list)"
-
-NEON_LIST="$({
-    mkvar "$CELT_MK" CELT_SOURCES_ARM_NEON_INTR
-    mkvar "$SILK_MK" SILK_SOURCES_ARM_NEON_INTR
-    mkvar "$SILK_MK" SILK_SOURCES_FIXED_ARM_NEON_INTR
-} | to_cmake_list)"
-
-INCLUDES="$OPUS_SRC;$OPUS_SRC/include;$OPUS_SRC/celt;$OPUS_SRC/silk;$OPUS_SRC/silk/fixed"
-
-BASE_DEFS="OPUS_BUILD;FIXED_POINT;USE_ALLOCA;restrict=;LOCALE_NOT_USED;HAVE_LRINT;HAVE_LRINTF"
-
-# Opt-in: Opus 1.6 neural bandwidth extension (OSCE) in the decoder. Off by default: the shipped build is unchanged.
-# It needs the dnn sources and the model weight files (dnn/*_data.c, fetched by opus's dnn/download_model.sh), and it
-# grows the library by the model size. Run: OPUS_ENABLE_OSCE=1 ng prebuild
-if [ "${OPUS_ENABLE_OSCE:-0}" = "1" ]; then
-    DNN_MK="$OPUS_SRC/lpcnet_sources.mk"
-    [ -f "$DNN_MK" ] || { echo "ERROR: OPUS_ENABLE_OSCE=1 needs $DNN_MK (Opus 1.5 or newer)" >&2; exit 1; }
-    for f in lace_data.c nolace_data.c bbwenet_data.c fargan_data.c plc_data.c pitchdnn_data.c; do
-        [ -f "$OPUS_SRC/dnn/$f" ] || {
-            echo "ERROR: OPUS_ENABLE_OSCE=1 needs the model file dnn/$f: run dnn/download_model.sh in $OPUS_SRC" >&2
-            exit 1
-        }
-    done
-    # The model *_data.c files are part of these two lists already.
-    DNN_LIST="$({
-        mkvar "$DNN_MK" DEEP_PLC_SOURCES
-        mkvar "$DNN_MK" OSCE_SOURCES
-    } | to_cmake_list)"
-    [ -n "$DNN_LIST" ] || { echo "ERROR: no OSCE sources found in $DNN_MK" >&2; exit 1; }
-    BASE_LIST="$BASE_LIST;$DNN_LIST"
-    BASE_DEFS="$BASE_DEFS;ENABLE_DEEP_PLC;ENABLE_OSCE;ENABLE_OSCE_BWE"
-    INCLUDES="$INCLUDES;$OPUS_SRC/dnn"
-fi
-
-# Enable only intrinsic NEON support: no plain NEON macros, no RTCD and no
-# hand-written ARM assembly dependency.
-NEON_DEFS="OPUS_ARM_MAY_HAVE_NEON_INTR;OPUS_ARM_PRESUME_NEON_INTR"
+# OPUS_COMMON_ARGS, OPUS_OSCE_ARGS, OPUS_OSCE_C_FLAGS (see that file for what each flag does).
+. "$SHARED_OPUS_DIR/opus-options.sh"
 
 rm -rf "$BUILD_DIR"
-mkdir -p "$GEN_DIR"
+mkdir -p "$OPUS_BUILD_SRC"
 
-cat > "$GEN_DIR/CMakeLists.txt" <<'CMAKE'
-cmake_minimum_required(VERSION 3.18)
+echo "==> Copying the opus tree to $OPUS_BUILD_SRC"
+tar -C "$OPUS_SRC" --exclude=.git -cf - . | tar -C "$OPUS_BUILD_SRC" -xf -
+echo "PACKAGE_VERSION=\"$OPUS_VERSION\"" > "$OPUS_BUILD_SRC/package_version"
 
-project(opus_static C)
-
-add_library(opus STATIC ${OPUS_SOURCES})
-
-set_target_properties(opus PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-)
-
-target_compile_definitions(opus PRIVATE
-    ${OPUS_DEFS}
-)
-
-target_include_directories(opus PRIVATE
-    ${OPUS_INCLUDES}
-)
-
-target_compile_options(opus PRIVATE
-    -std=c11
-    -O2
-    -g0
-    -ffast-math
-    -funroll-loops
-    -fno-strict-aliasing
-    -fno-math-errno
-    -ffunction-sections
-    -fdata-sections
-    -fvisibility=hidden
-    -w
-)
-CMAKE
+sh "$SHARED_OPUS_DIR/fetch-models.sh" "$OPUS_BUILD_SRC"
 
 for abi in $ABIS; do
     ABI_BUILD="$BUILD_DIR/$abi"
     ABI_OUT="$(abi_output_dir "$abi")"
-
-    srcs="$BASE_LIST"
-    defs="$BASE_DEFS"
     extra=()
 
     case "$abi" in
-        arm64-v8a)
-            srcs="$BASE_LIST;$NEON_LIST"
-            defs="$BASE_DEFS;$NEON_DEFS"
+        arm64-v8a|x86_64|x86)
             ;;
         armeabi-v7a)
-            srcs="$BASE_LIST;$NEON_LIST"
-            defs="$BASE_DEFS;$NEON_DEFS"
             extra+=(-DANDROID_ARM_NEON=ON)
-            ;;
-        x86|x86_64)
             ;;
         *)
             echo "ERROR: unsupported ABI: $abi" >&2
@@ -202,22 +98,25 @@ for abi in $ABIS; do
     esac
 
     echo
-    echo "==> Building Opus for $abi (API=$API)"
+    echo "==> Building Opus $OPUS_VERSION (float, OSCE + BWE, no deep PLC) for $abi (API=$API)"
 
+    # Appended to CMAKE_C_FLAGS_RELEASE (the shared file says so), not to CMAKE_C_FLAGS. -w: the vendor code's warnings
+    # are not ours. -ffast-math is not used: the float build is the one iOS and macOS ship and the one the models were
+    # verified against.
+    # shellcheck disable=SC2086
     "$CMAKE_BIN" \
-        -S "$GEN_DIR" \
+        -S "$OPUS_BUILD_SRC" \
         -B "$ABI_BUILD" \
         -G Ninja \
         -DCMAKE_MAKE_PROGRAM="$NINJA_BIN" \
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
-        -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_FLAGS="$CMAKE_REPRO_C_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="-O2 -DNDEBUG -w -fvisibility=hidden -ffunction-sections -fdata-sections $OPUS_OSCE_C_FLAGS" \
         -DANDROID_ABI="$abi" \
         -DANDROID_PLATFORM="android-$API" \
         ${extra[@]+"${extra[@]}"} \
-        -DOPUS_SOURCES="$srcs" \
-        -DOPUS_DEFS="$defs" \
-        -DOPUS_INCLUDES="$INCLUDES"
+        $OPUS_COMMON_ARGS \
+        $OPUS_OSCE_ARGS
 
     "$CMAKE_BIN" --build "$ABI_BUILD" --parallel "$JOBS"
 

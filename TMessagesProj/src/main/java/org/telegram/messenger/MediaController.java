@@ -4084,6 +4084,10 @@ public class MediaController implements AudioManager.OnAudioFocusChangeListener,
             }
             try {
                 audioPlayer = new VideoPlayer();
+                // "Enhance voice messages" (Settings > Nanogram features): our Opus decoder with speech enhancement for a voice
+                // message; off, or any other audio, plays exactly as before.
+                audioPlayer.setEnhanceVoice(org.telegram.messenger.nanogram.NanogramOpusEnhancement.shouldUse(
+                        org.telegram.messenger.nanogram.NanogramFeatures.enhanceVoiceMessages(), messageObject.isVoice()));
                 int tag = ++playerNum;
                 audioPlayer.setDelegate(new VideoPlayer.VideoPlayerDelegate() {
                     @Override
