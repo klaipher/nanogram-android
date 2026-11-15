@@ -34,15 +34,6 @@ public final class RoundVideoZoomPlan {
         return new float[]{1f};
     }
 
-    /** Returns the stop after the one nearest to the current ratio, wrapping around. */
-    public static float nextStop(float current, @NonNull float[] stops) {
-        int nearest = 0;
-        for (int i = 1; i < stops.length; i++) {
-            if (Math.abs(stops[i] - current) < Math.abs(stops[nearest] - current)) nearest = i;
-        }
-        return stops[(nearest + 1) % stops.length];
-    }
-
     /** Formats a ratio with at most one decimal, independent of the default locale. */
     @NonNull
     public static String labelFor(float ratio) {

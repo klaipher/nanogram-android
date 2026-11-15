@@ -81,7 +81,7 @@ public class NanogramPerfExperimentsTest {
         NanogramPerfStats.record(NanogramPerfStats.GIF_FRAME_DECODE, 3_000_000L);
         EnumMap<NanogramPerfExperiments.Experiment, Boolean> states = new EnumMap<>(NanogramPerfExperiments.Experiment.class);
         states.put(NanogramPerfExperiments.Experiment.GIF_FAST_DECODE, true);
-        String report = NanogramPerfExperiments.report("Google Pixel 8", 33, states, NanogramPerfStats.snapshot());
+        String report = NanogramPerfExperiments.report("Google Pixel 8", 33, states, NanogramPerfStats.snapshot(), null);
         assertTrue(report.contains("device: Google Pixel 8\n"));
         assertTrue(report.contains("Lighter decoding for small GIFs: ON\n  gifFrameDecode: n=1, average 3.0 ms, longest 3.0 ms\n"));
         assertTrue(report.contains("Adaptive refresh rate: not available (needs API 35)\n"));

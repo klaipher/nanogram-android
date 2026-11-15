@@ -648,17 +648,6 @@ public final class AudioInputPreference {
         }
     }
 
-    private static volatile AudioRouteInfo.State routeState = AudioRouteInfo.State.PHONE;
-
-    /** What the system really routes to now (the last checked recording), for the recorder UI. */
-    public static AudioRouteInfo.State currentRouteState() {
-        return routeState;
-    }
-
-    static void setRouteState(AudioRouteInfo.State state) {
-        routeState = state;
-    }
-
     /**
      * Activates the Bluetooth communication device when the resolved choice needs one. Call it on the recorder's own
      * worker thread before creating the AudioRecord: it waits for the route (up to 2 s, plus a retry) and never

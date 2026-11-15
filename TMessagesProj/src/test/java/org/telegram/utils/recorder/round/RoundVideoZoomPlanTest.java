@@ -47,15 +47,6 @@ public class RoundVideoZoomPlanTest {
     }
 
     @Test
-    public void nextStopToggles() {
-        float[] stops = {0.5f, 1f};
-        assertEquals(1f, RoundVideoZoomPlan.nextStop(0.5f, stops), 0f);
-        assertEquals(0.5f, RoundVideoZoomPlan.nextStop(1f, stops), 0f);
-        assertEquals(1f, RoundVideoZoomPlan.nextStop(0.6f, stops), 0f);
-        assertEquals(1f, RoundVideoZoomPlan.nextStop(1f, new float[]{1f}), 0f);
-    }
-
-    @Test
     public void labels() {
         assertEquals("0.7x", RoundVideoZoomPlan.labelFor(0.7f));
         assertEquals("1x", RoundVideoZoomPlan.labelFor(1f));

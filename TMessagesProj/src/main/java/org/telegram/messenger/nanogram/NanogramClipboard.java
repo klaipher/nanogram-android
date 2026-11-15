@@ -36,10 +36,6 @@ public final class NanogramClipboard {
         return copy(link, isPrivateInviteLink(link));
     }
 
-    public static boolean copySensitive(CharSequence text) {
-        return copy(text, true);
-    }
-
     private static boolean copy(CharSequence text, boolean sensitive) {
         try {
             final ClipboardManager clipboard = (ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);

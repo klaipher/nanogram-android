@@ -56,10 +56,6 @@ public final class NanogramPowerPolicy {
         private boolean hot;
         private long hotSince;
 
-        public boolean isHot() {
-            return hot;
-        }
-
         /** Returns the new state. A NaN reading changes nothing while work is active; without active work the signal is released after the hold time. */
         public boolean update(float headroom, boolean workActive, long nowMs) {
             if (!hot) {

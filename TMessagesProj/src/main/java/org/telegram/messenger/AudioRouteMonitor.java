@@ -132,7 +132,6 @@ public final class AudioRouteMonitor implements AudioRecord.OnRoutingChangedList
         if (sink != null) {
             sink.accept(line);
         }
-        AudioInputPreference.setRouteState(state);
     }
 
     /** Stop before releasing the record. Writes the last route as the recording's summary. */

@@ -176,10 +176,6 @@ public class NanogramUpdater {
         return buildNumber;
     }
 
-    public long getApkSize() {
-        return apkSize;
-    }
-
     public boolean isChecking() {
         return checking;
     }

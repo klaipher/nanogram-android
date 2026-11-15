@@ -33,7 +33,6 @@ public final class NanogramMediaCapabilities {
 
     private static final ConcurrentHashMap<String, String> encoderNames = new ConcurrentHashMap<>();
     private static final java.util.Set<String> pickedHardware = ConcurrentHashMap.newKeySet();
-    private static volatile int av1 = -1;
 
     private NanogramMediaCapabilities() {
     }
@@ -91,31 +90,6 @@ public final class NanogramMediaCapabilities {
 
     public static boolean hasHardwareDecoder(String mime, int width, int height, int fps) {
         return findHardware(mime, false, width, height, fps) != null;
-    }
-
-    public static boolean hasHardwareEncoder(String mime, int width, int height, int fps) {
-        return findHardware(mime, true, width, height, fps) != null;
-    }
-
-    public static boolean isAv1HardwareDecodeAvailable() {
-        int value = av1;
-        if (value == -1) {
-            av1 = value = hasHardwareDecoder("video/av01", 0, 0, 0) ? 1 : 0;
-        }
-        return value == 1;
-    }
-
-    public static boolean isHardwareDecoderName(String codecName, String mime) {
-        try {
-            for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
-                if (!info.isEncoder() && info.getName().equals(codecName) && supportsType(info, mime)) {
-                    return isHardware(info.isHardwareAccelerated(), info.isSoftwareOnly());
-                }
-            }
-        } catch (Throwable e) {
-            FileLog.e(e, false);
-        }
-        return false;
     }
 
     /** The platform default encoder when it is already hardware (today's behaviour); a hardware encoder by name only when the default is software. */

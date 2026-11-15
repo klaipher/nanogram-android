@@ -159,10 +159,6 @@ public final class NanogramPerfExperiments {
         return report(deviceLine(), Build.VERSION.SDK_INT, states, NanogramPerfStats.snapshot(), e -> NanogramHealth.experimentText(e.id));
     }
 
-    public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot) {
-        return report(device, sdkInt, states, snapshot, null);
-    }
-
     public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot, java.util.function.Function<Experiment, String> health) {
         StringBuilder sb = new StringBuilder("Performance experiments (since each switch last changed; durations only)\n");
         sb.append("device: ").append(device).append('\n');

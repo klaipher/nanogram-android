@@ -49,15 +49,6 @@ public final class NanogramExitInfo {
         }
     }
 
-    public static Record newestProblem(List<Record> records) {
-        for (Record record : records) {
-            if (record.problem) {
-                return record;
-            }
-        }
-        return null;
-    }
-
     public static boolean hasTrace(Record record) {
         return record.raw != null && (record.reason == ApplicationExitInfo.REASON_ANR || record.reason == ApplicationExitInfo.REASON_CRASH_NATIVE);
     }
