@@ -60,7 +60,7 @@ public final class NanogramOpusAudioRenderer extends DecoderAudioRenderer<Nanogr
         TraceUtil.beginSection("createNanogramOpusDecoder");
         try {
             return new NanogramOpusDecoder(NUM_BUFFERS, INITIAL_INPUT_BUFFER_SIZE, format.initializationData,
-                    NanogramOpusEnhancement.options(true, true));
+                    NanogramOpusEnhancement.options(true, true), getStreamOffsetUs());
         } finally {
             TraceUtil.endSection();
         }

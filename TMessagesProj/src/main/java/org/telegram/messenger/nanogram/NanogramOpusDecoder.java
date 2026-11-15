@@ -16,8 +16,8 @@ import java.util.List;
  * Settings > Nanogram features > "Enhance voice messages" is on. Output is 16-bit PCM at 48 kHz.
  *
  * It follows media3's own decoder_opus {@code OpusDecoder}: the trimming of the pre-skip and of the seek pre-roll happens
- * here ({@link NanogramOpusSkip}), because FFmpeg's decoder does not get the skip side data from ExoPlayer. The native
- * context is recreated on every reset (see ffmpeg_jni.cc), so FFmpeg never trims on its own.
+ * here ({@link NanogramOpusSkip}), because FFmpeg's decoder does not get the skip side data from ExoPlayer. FFmpeg's own
+ * trimming is switched off (AV_CODEC_FLAG2_SKIP_MANUAL in ffmpeg_jni.cc), and the native context is recreated on every reset.
  */
 @UnstableApi
 public final class NanogramOpusDecoder
@@ -37,6 +37,8 @@ public final class NanogramOpusDecoder
     private final int seekPreRollSamples;
     private final int maxOutputBytes;
     private int skipSamples;
+    /** Added by the renderer to every buffer time; a seek to the start has timeUs == streamOffsetUs. */
+    private final long streamOffsetUs;
     private long nativeContext;
 
     /** True when the native library with the decoder is loaded (never true on the JVM). */
@@ -63,7 +65,8 @@ public final class NanogramOpusDecoder
             int numBuffers,
             int initialInputBufferSize,
             List<byte[]> initializationData,
-            NanogramOpusEnhancement.Options options) throws NanogramOpusDecoderException {
+            NanogramOpusEnhancement.Options options,
+            long streamOffsetUs) throws NanogramOpusDecoderException {
         super(new DecoderInputBuffer[numBuffers], new SimpleDecoderOutputBuffer[numBuffers]);
         if (!isAvailable()) {
             throw new NanogramOpusDecoderException("The native Opus decoder is not loaded");
@@ -79,6 +82,7 @@ public final class NanogramOpusDecoder
         preSkipSamples = NanogramOpusSkip.preSkipSamples(initializationData);
         seekPreRollSamples = NanogramOpusSkip.seekPreRollSamples(initializationData);
         skipSamples = preSkipSamples;
+        this.streamOffsetUs = streamOffsetUs;
         maxOutputBytes = MAX_FRAME_SAMPLES * channelCount * BYTES_PER_SAMPLE;
         nativeContext = nativeCreate(header, options.complexity, options.bandwidthExtension);
         if (nativeContext == 0) {
@@ -120,7 +124,7 @@ public final class NanogramOpusDecoder
                 return new NanogramOpusDecoderException("Error resetting (see logcat)");
             }
             // To the start: the delay in the header. Anywhere else: the seek pre-roll.
-            skipSamples = NanogramOpusSkip.skipAfterReset(inputBuffer.timeUs, preSkipSamples, seekPreRollSamples);
+            skipSamples = NanogramOpusSkip.skipAfterReset(inputBuffer.timeUs, streamOffsetUs, preSkipSamples, seekPreRollSamples);
         }
         ByteBuffer inputData = Util.castNonNull(inputBuffer.data);
         ByteBuffer outputData = outputBuffer.init(inputBuffer.timeUs, maxOutputBytes);

@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * The Opus pre-skip and seek pre-roll arithmetic of {@link NanogramOpusDecoder}, as plain functions so the JVM can test it.
  *
- * FFmpeg's libopus decoder trims the encoder delay only when the packet carries AV_PKT_DATA_SKIP_SAMPLES side data, which
- * ExoPlayer never sends, and it restarts the trimming on every flush. So the trimming is done here, the way media3's own
+ * ExoPlayer never sends AV_PKT_DATA_SKIP_SAMPLES side data, and FFmpeg's own pre-skip trimming (it restarts on every
+ * open or flush) is switched off with AV_CODEC_FLAG2_SKIP_MANUAL in ffmpeg_jni.cc. So the trimming is done here, the way media3's own
  * decoder_opus {@code OpusDecoder} does it (lines for preSkipSamples, seekPreRollSamples and skipSamples there): the first
  * {@code preSkip} samples after the start of the stream are decoder delay, and after a seek the first {@code seekPreRoll}
  * samples are decoded only to warm the decoder up, and are not played.
@@ -67,8 +67,9 @@ public final class NanogramOpusSkip {
     }
 
     /** Samples to skip after the decoder was reset: the pre-skip when seeking to the start, the seek pre-roll otherwise. */
-    public static int skipAfterReset(long timeUs, int preSkipSamples, int seekPreRollSamples) {
-        return timeUs == 0 ? preSkipSamples : seekPreRollSamples;
+    public static int skipAfterReset(long timeUs, long streamOffsetUs, int preSkipSamples, int seekPreRollSamples) {
+        // BaseRenderer.readSource adds the stream offset (1e12 us for the first period) to every buffer time.
+        return timeUs - streamOffsetUs <= 0 ? preSkipSamples : seekPreRollSamples;
     }
 
     /**

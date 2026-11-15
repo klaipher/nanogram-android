@@ -81,9 +81,11 @@ public class NanogramOpusSkipTest {
 
     @Test
     public void resetToTheStartSkipsTheDelayAndAnySeekSkipsThePreRoll() {
-        assertEquals(312, NanogramOpusSkip.skipAfterReset(0, 312, 3840));
-        assertEquals(3840, NanogramOpusSkip.skipAfterReset(1, 312, 3840));
-        assertEquals(3840, NanogramOpusSkip.skipAfterReset(5_000_000, 312, 3840));
+        long offset = 1_000_000_000_000L;
+        assertEquals(312, NanogramOpusSkip.skipAfterReset(offset, offset, 312, 3840));
+        assertEquals(3840, NanogramOpusSkip.skipAfterReset(offset + 1, offset, 312, 3840));
+        assertEquals(3840, NanogramOpusSkip.skipAfterReset(offset + 5_000_000, offset, 312, 3840));
+        assertEquals(312, NanogramOpusSkip.skipAfterReset(0, 0, 312, 3840));
     }
 
     @Test

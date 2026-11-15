@@ -1562,7 +1562,7 @@ VIDEO_DECODER_FUNC(
 // libopus decoder's private options osce_complexity / osce_bwe (klaipher/FFmpeg libopusdec.c).
 //
 // The context is recreated on every reset (seek) instead of avcodec_flush_buffers(): flush makes libopusdec skip pre_skip
-// samples again and keeps bandwidth-extension history across a reset, while the Java side already implements the
+// samples again (FFmpeg's own trimming is off, AV_CODEC_FLAG2_SKIP_MANUAL) and keeps bandwidth-extension history across a reset, while the Java side already implements the
 // pre-skip / seek pre-roll trimming (OpusSkip) and needs a decoder that starts clean. Output is 16-bit interleaved PCM at
 // 48 kHz, one packet in, one frame out, so the Java caller can hand in a buffer of the largest Opus frame (120 ms) and no
 // callback is needed.
@@ -1609,6 +1609,8 @@ bool nanogramOpusOpenCodec(NanogramOpusContext* c) {
     AVDictionary* options = nullptr;
     av_dict_set_int(&options, "osce_complexity", c->complexity, 0);
     av_dict_set_int(&options, "osce_bwe", c->bandwidthExtension ? 1 : 0, 0);
+    // libopusdec sets avctx->delay = pre_skip and avcodec_open2 turns that into skip_samples; the Java side trims instead.
+    context->flags2 |= AV_CODEC_FLAG2_SKIP_MANUAL;
     const int result = avcodec_open2(context, codec, &options);
     av_dict_free(&options);
     if (result < 0) {
@@ -1666,6 +1668,9 @@ jint nanogramOpusDecode(JNIEnv* env, jclass, jlong handle, jobject input, jint i
     uint8_t* out = static_cast<uint8_t*>(env->GetDirectBufferAddress(output));
     if (!in || !out) {
         return -2;
+    }
+    if (inputSize == 0) {
+        return -1;  // an empty packet is a lost packet: skip it like MediaCodec, do not stop playback
     }
     AVPacket* packet = av_packet_alloc();
     if (!packet) {
