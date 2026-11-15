@@ -41,7 +41,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** Battery Saver on drops FLAG_* effects; `cmd thermalservice override-status 3` during a 10 min compression.
 - **Effort:** small
-- **Status:** implemented (nanogram/mod-system f84d087); percent trigger skip-while-charging behind flag `power_skip_charging`, default off. Setting "Follow system Battery Saver and heat" under the Power Saver slider, default on, takes precedence over the system signals
+- **Status:** implemented (nanogram/mod-system f84d087); the experimental percent-trigger skip-while-charging was removed on 2026-11-15 (no measurement path). Setting "Follow system Battery Saver and heat" under the Power Saver slider, default on, takes precedence over the system signals
 
 ### ANDROID-IMG-1: All non-thumbnail disk-cache decodes run on one thread
 - **Severity:** medium
@@ -61,7 +61,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low to medium (VPN, Wi-Fi without internet).
 - **Measurement:** Wi-Fi to cellular during a download: time to state flip; binder calls.
 - **Effort:** medium
-- **Status:** implemented behind flag `net_callback`, default off (cb13a57)
+- **Status:** implemented behind flag `net_callback` (cb13a57), removed on 2026-11-15 (no measurement path; the legacy receiver stays)
 
 ### ANDROID-ML-1: QR scanning and face detection use retired Mobile Vision
 - **Severity:** low
@@ -91,7 +91,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** medium (partial-grant UI in several pickers).
 - **Measurement:** Android 14/15: grant 'Select photos', only those show, sending works.
 - **Effort:** medium
-- **Status:** partly implemented behind flag `photo_picker` (default off): system Photo Picker for the "open in" entries. Not done: READ_MEDIA_VISUAL_USER_SELECTED and the partial-grant UI (declaring it ends compatibility mode, so it needs the PhotoAttachPermissionCell, DialogsActivity, CameraScanActivity and QrScanOverlay states and a device test first)
+- **Status:** partly implemented as the Debug experiment "System photo picker" (default off): system Photo Picker for the "open in" entries. Not done: READ_MEDIA_VISUAL_USER_SELECTED and the partial-grant UI (declaring it ends compatibility mode, so it needs the PhotoAttachPermissionCell, DialogsActivity, CameraScanActivity and QrScanOverlay states and a device test first)
 
 ### ANDROID-TELECOM-1: Telecom integration is hard-disabled
 - **Severity:** medium (impact) with high correctness risk
@@ -131,7 +131,7 @@ Repo: `klaipher/nanogram-android` (local `~/Projects/nanogram-android`). Base: `
 - **Risk:** low.
 - **Measurement:** Android 16: status-bar chip and lock-screen progress during a story upload.
 - **Effort:** small
-- **Status:** implemented behind flag `progress_notifications`, default off (943022a)
+- **Status:** implemented as the Debug experiment "Progress notifications", default off (943022a)
 
 ### ANDROID-MANIFEST-1: Obsolete permissions and legacy storage flags
 - **Severity:** low
