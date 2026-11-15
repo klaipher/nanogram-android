@@ -355,7 +355,7 @@ public final class NanogramDiagnostics {
                 + NanogramSystemInfo.summaryLine() + "\n\n"
                 + "One report with everything; each part below is a file or folder in this zip.\n\nFiles\n"
                 + "  device-info.txt    device, Android version, power and network state, permissions, notification channel states, memory\n"
-                + "  performance-experiments.txt  switch states and durations of the performance experiments since each switch last changed (no content)\n"
+                + "  performance-experiments.txt  switch states and durations and event counts of the performance experiments since each switch last changed (no content)\n"
                 + "  health-energy.txt  CPU time, wakelocks, network and energy numbers of Nanogram since app start and since each switch change; phone energy only on phones with power monitors (Android 15+); battery and heat (counts and durations only)\n"
                 + "  exit-history.txt   why earlier Nanogram processes ended (Android 11+) and how they started (Android 15+)\n"
                 + "  audio-route.txt    microphone route of the latest voice and round video recordings: requested and actual input type, sample rates, codec class (no audio, no names)\n"

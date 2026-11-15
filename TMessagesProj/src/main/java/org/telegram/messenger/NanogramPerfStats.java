@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Durations of the performance experiments since the experiment's switch last changed. Durations only: no content, ids or numbers. */
+/** Durations of the performance experiments since the experiment's switch last changed. Durations and event counts only: no content or ids. */
 public final class NanogramPerfStats {
 
     public static final String FRAME_TIME = "frameTime";
@@ -94,7 +94,7 @@ public final class NanogramPerfStats {
         stat.add(nanos);
     }
 
-    /** Counts one event under {@code key}; shown as "n=..." only. */
+    /** Counts one event under {@code key}; shown as "n times". */
     public static void count(String key) {
         record(key, 0);
     }

@@ -160,7 +160,7 @@ public final class NanogramPerfExperiments {
     }
 
     public static String report(String device, int sdkInt, Map<Experiment, Boolean> states, Map<String, NanogramPerfStats.Snapshot> snapshot, java.util.function.Function<Experiment, String> health) {
-        StringBuilder sb = new StringBuilder("Performance experiments (since each switch last changed; durations only)\n");
+        StringBuilder sb = new StringBuilder("Performance experiments (since each switch last changed; durations and event counts)\n");
         sb.append("device: ").append(device).append('\n');
         for (Experiment experiment : Experiment.values()) {
             boolean supported = experiment.isSupported(sdkInt);

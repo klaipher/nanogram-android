@@ -4,7 +4,7 @@ For testers with a **Pixel** (or another Android phone). No computer, no develop
 total, spread over a day or two. Each experiment is tested twice: first with its switch **off** (A), then **on** (B).
 Please say which phone you used: Pixels differ a lot (Pixel 6 and 7 Tensor, Pixel 8 and 9 newer Tensor, Pixel 10).
 
-Six experiments, each with its own switch:
+Eight experiments, each with its own switch:
 
 | Switch | What it changes | What you test |
 |---|---|---|
@@ -14,6 +14,8 @@ Six experiments, each with its own switch:
 | Early image upload to the GPU | Pictures are prepared for the screen while they load | Test 4: photos |
 | Lighter decoding for small GIFs | Small GIFs decode faster | Test 5: GIFs |
 | Database tuning | Bigger cache for the local message database | Test 6: big chats and search |
+| Progress notifications | Android 16 or newer: uploads and downloads show as live progress notifications | Test 7: start a big upload or download and watch the notification |
+| System photo picker | Android 13 or newer: the attach button uses the system photo picker | Test 8: attach photos from the chat and from the profile |
 
 If a switch says "not available on this phone", your Android is too old for it. Skip that test and say so.
 
@@ -124,6 +126,16 @@ This switch has no measured numbers.
 3. Open your biggest chat and jump to the oldest message from the top bar or by scrolling for one minute.
 4. Search in the chat list for a common word. Write down if results appear fast or after a pause.
 
+## Test 7: progress notifications (switch "Progress notifications", Android 16 or newer)
+
+Start a large upload or download (a few hundred MB) and pull down the notification shade. With the switch on, the
+transfer should show as a live progress notification; with it off, as the normal one. Report: works / wrong / not tested.
+
+## Test 8: system photo picker (switch "System photo picker", Android 13 or newer)
+
+Tap the attach button in a chat and pick two photos, then change your profile photo. With the switch on, the system
+photo picker opens; with it off, Nanogram's own gallery. Report: works / wrong / not tested.
+
 ## Battery, CPU, energy and heat (every run)
 
 For each experiment and state (A, B) do one 10-minute session that repeats that test's script:
@@ -171,6 +183,8 @@ For each experiment, and for A and B separately, send the project owner (a messa
   longest time per frame, per GIF frame, per camera start, per call setup, plus the CPU and energy lines. A second file, `health-energy.txt`, has the detailed CPU,
   wakelock, network, energy and heat numbers. Only durations, counts and the phone model are in these files. The zip also holds
   the normal logs (device state, error log), so send it only if you are fine with that.
+
+Under Camera2 capture and System call integration you also see counter lines such as "Camera2 opened: 5 times"; they are in `performance-experiments.txt` too.
 
 The same numbers show in grey under the switches in the Debug Menu (close and reopen the screen to refresh). Numbers reset every time the app restarts or you flip that experiment's switch, so take the zip before either.
 

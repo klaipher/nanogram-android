@@ -33,7 +33,7 @@ public class NanogramPowerPolicyTest {
     }
 
     @Test
-    public void systemSignalsBeatChargingSkip() {
+    public void systemSignalsBeatBatterySaverState() {
         assertTrue(NanogramPowerPolicy.shouldApply(20, 9, true, true, 0));
         assertTrue(NanogramPowerPolicy.shouldApply(20, 9, true, false, 4));
     }
